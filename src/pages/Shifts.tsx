@@ -6,7 +6,7 @@ import {
   CalendarDays, Clock, Plus, X,
   ChevronLeft, ChevronRight,
   User, Building2, AlertCircle, Loader2,
-  Stethoscope, Heart, Baby, Pill, Microscope,
+  Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ type ShiftRow = {
 
 type ProfileOption = { id: string; full_name: string }
 type DeptOption    = { id: string; name: string }
-type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory'
+type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception'
 type ScheduleType  = 'regular' | 'duty'
 type ViewMode      = 'week' | 'month'
 type NavStep       = 'group' | 'specialty' | 'calendar'
@@ -46,6 +46,7 @@ const GROUPS: {
   { name: 'Midwives',        icon: Baby,        color: 'purple', description: 'Midwifery staff' },
   { name: 'Pharmacy',        icon: Pill,        color: 'amber',  description: 'Pharmacists & technicians' },
   { name: 'Laboratory',      icon: Microscope,  color: 'teal',   description: 'Lab technicians' },
+  { name: 'Reception',       icon: PhoneCall,   color: 'pink',   description: 'Reception & front desk' },
 ]
 
 const GROUP_CONFIG: Record<GroupName, {
@@ -70,6 +71,7 @@ const GROUP_CONFIG: Record<GroupName, {
   },
   'Pharmacy':   { departmentName: 'Pharmacy',   specialties: [], skipLevel2: true },
   'Laboratory': { departmentName: 'Laboratory', specialties: [], skipLevel2: true },
+  'Reception':  { departmentName: 'Reception',  specialties: [], skipLevel2: true },
 }
 
 const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
@@ -78,6 +80,7 @@ const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
   purple: { card: 'border-purple-200 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:border-purple-700', icon: 'text-purple-500' },
   amber:  { card: 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-700', icon: 'text-amber-500' },
   teal:   { card: 'border-teal-200 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/20 dark:border-teal-700',     icon: 'text-teal-500' },
+  pink:   { card: 'border-pink-200 bg-pink-50 hover:bg-pink-100 dark:bg-pink-900/20 dark:border-pink-700',     icon: 'text-pink-500' },
 }
 
 const CAN_ADD_SHIFT = [
