@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { User, Lock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { User, Lock, CheckCircle2, AlertCircle, Loader2, Info } from 'lucide-react'
 
 // ─── Role badge colour ────────────────────────────────────────────────────────
 
@@ -19,37 +19,17 @@ const ROLE_COLOR: Record<string, string> = {
   staff:            'bg-gray-100 text-gray-600',
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Read-only field ──────────────────────────────────────────────────────────
 
-function Field({
-  label, value, editable = false,
-  type = 'text', onChange,
-}: {
-  label: string
-  value: string
-  editable?: boolean
-  type?: string
-  onChange?: (v: string) => void
-}) {
+function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
         {label}
       </label>
-      {editable ? (
-        <input
-          type={type}
-          value={value}
-          onChange={e => onChange?.(e.target.value)}
-          className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm
-                     bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-        />
-      ) : (
-        <p className="text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50
-                      rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700">
-          {value || <span className="text-gray-400 italic">—</span>}
-        </p>
-      )}
+      <p className="text-sm text-gray-800 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+        {value || <span className="text-gray-400 italic">—</span>}
+      </p>
     </div>
   )
 }
@@ -58,7 +38,6 @@ function Field({
 
 export default function Profile() {
   const profile = useAuthStore(s => s.profile)
-  const setProfile = useAuthStore(s => s.setProfile)
 
   // Department name lookup
   const [deptName, setDeptName] = useState<string>('')
@@ -72,43 +51,21 @@ export default function Profile() {
       .then(({ data }) => { if (data?.name) setDeptName(data.name) })
   }, [profile?.department_id])
 
-  // Phone edit
-  const [phone, setPhone]           = useState(profile?.phone ?? '')
-  const [savingPhone, setSavingPhone] = useState(false)
-  const [phoneMsg, setPhoneMsg]     = useState<{ ok: boolean; text: string } | null>(null)
-
   // Password change
-  const [currentPw,  setCurrentPw]  = useState('')
-  const [newPw,      setNewPw]      = useState('')
-  const [confirmPw,  setConfirmPw]  = useState('')
-  const [savingPw,   setSavingPw]   = useState(false)
-  const [pwMsg,      setPwMsg]      = useState<{ ok: boolean; text: string } | null>(null)
-
-  const savePhone = async () => {
-    setSavingPhone(true)
-    setPhoneMsg(null)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ phone: phone.trim() || null })
-      .eq('id', profile!.id)
-    setSavingPhone(false)
-    if (error) {
-      setPhoneMsg({ ok: false, text: error.message })
-    } else {
-      setProfile({ ...profile!, phone: phone.trim() || null })
-      setPhoneMsg({ ok: true, text: 'Phone number updated.' })
-    }
-  }
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw,     setNewPw]     = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [savingPw,  setSavingPw]  = useState(false)
+  const [pwMsg,     setPwMsg]     = useState<{ ok: boolean; text: string } | null>(null)
 
   const changePassword = async () => {
     setPwMsg(null)
-    if (newPw.length < 8)       return setPwMsg({ ok: false, text: 'New password must be at least 8 characters.' })
-    if (newPw !== confirmPw)     return setPwMsg({ ok: false, text: 'Passwords do not match.' })
-    if (!currentPw)              return setPwMsg({ ok: false, text: 'Please enter your current password.' })
+    if (!currentPw)          return setPwMsg({ ok: false, text: 'Please enter your current password.' })
+    if (newPw.length < 8)    return setPwMsg({ ok: false, text: 'New password must be at least 8 characters.' })
+    if (newPw !== confirmPw) return setPwMsg({ ok: false, text: 'Passwords do not match.' })
 
     setSavingPw(true)
 
-    // Re-authenticate with current password first
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email:    profile?.email ?? '',
       password: currentPw,
@@ -119,7 +76,6 @@ export default function Profile() {
       return
     }
 
-    // Update to new password
     const { error: updateErr } = await supabase.auth.updateUser({ password: newPw })
     setSavingPw(false)
     if (updateErr) {
@@ -130,13 +86,10 @@ export default function Profile() {
     }
   }
 
-  // Initials for avatar
+  // Avatar initials
   const initials = (profile?.full_name ?? '')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(w => w[0].toUpperCase())
-    .join('')
+    .split(' ').filter(Boolean).slice(0, 2)
+    .map(w => w[0].toUpperCase()).join('')
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
@@ -148,7 +101,7 @@ export default function Profile() {
           {initials || <User className="w-7 h-7" />}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-gray-900">
             {profile?.full_name ?? 'My Profile'}
           </h1>
           {profile?.role && (
@@ -161,59 +114,35 @@ export default function Profile() {
       </div>
 
       {/* ── My Profile ── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
           <User className="w-4 h-4 text-teal-500" />
-          <h2 className="text-base font-semibold text-gray-800 dark:text-white">My Profile</h2>
+          <h2 className="text-base font-semibold text-gray-800">My Profile</h2>
         </div>
 
         <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Full Name"   value={profile?.full_name   ?? ''} />
-          <Field label="Email"       value={profile?.email       ?? ''} />
-          <Field label="Employee ID" value={profile?.employee_id ?? ''} />
-          <Field label="Department"  value={deptName} />
+          <Field label="Full Name"    value={profile?.full_name   ?? ''} />
+          <Field label="Email"        value={profile?.email       ?? ''} />
+          <Field label="Employee ID"  value={profile?.employee_id ?? ''} />
+          <Field label="Department"   value={deptName} />
+          <Field label="Role"         value={profile?.role?.replace(/_/g, ' ') ?? ''} />
+          <Field label="Phone Number" value={profile?.phone ?? ''} />
+        </div>
 
-          {/* Phone — editable */}
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Phone Number
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => { setPhone(e.target.value); setPhoneMsg(null) }}
-                placeholder="+251…"
-                className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm
-                           bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-              />
-              <button
-                onClick={savePhone}
-                disabled={savingPhone}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-teal-600
-                           hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors"
-              >
-                {savingPhone && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                Save
-              </button>
-            </div>
-            {phoneMsg && (
-              <p className={`flex items-center gap-1.5 text-xs mt-2 ${phoneMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
-                {phoneMsg.ok
-                  ? <CheckCircle2 className="w-3.5 h-3.5" />
-                  : <AlertCircle  className="w-3.5 h-3.5" />}
-                {phoneMsg.text}
-              </p>
-            )}
-          </div>
+        {/* HR note */}
+        <div className="mx-5 mb-5 flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+          <Info className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-gray-500">
+            To update your personal information, please contact HR or your system administrator.
+          </p>
         </div>
       </div>
 
       {/* ── Change Password ── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
           <Lock className="w-4 h-4 text-teal-500" />
-          <h2 className="text-base font-semibold text-gray-800 dark:text-white">Change Password</h2>
+          <h2 className="text-base font-semibold text-gray-800">Change Password</h2>
         </div>
 
         <div className="px-5 py-5 space-y-4">
@@ -230,11 +159,11 @@ export default function Profile() {
             </div>
           )}
 
-          {[
-            { label: 'Current Password',     value: currentPw, set: setCurrentPw },
-            { label: 'New Password',          value: newPw,     set: setNewPw     },
-            { label: 'Confirm New Password',  value: confirmPw, set: setConfirmPw },
-          ].map(({ label, value, set }) => (
+          {([
+            { label: 'Current Password',    value: currentPw, set: setCurrentPw },
+            { label: 'New Password',         value: newPw,     set: setNewPw     },
+            { label: 'Confirm New Password', value: confirmPw, set: setConfirmPw },
+          ] as const).map(({ label, value, set }) => (
             <div key={label}>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                 {label}
@@ -243,8 +172,8 @@ export default function Profile() {
                 type="password"
                 value={value}
                 onChange={e => { set(e.target.value); setPwMsg(null) }}
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm
-                           bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
+                           bg-white focus:ring-2 focus:ring-teal-500 outline-none"
               />
             </div>
           ))}
