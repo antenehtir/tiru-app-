@@ -18,9 +18,9 @@ type ShiftRow = {
   id: string
   user_id: string
   department_id: string | null
-  shift_date: string
-  start_time: string
-  end_time: string
+  starts_at: string
+  ends_at: string
+  shift_type: string | null
   notes: string | null
   created_at: string
   user: { full_name: string } | null
@@ -80,8 +80,8 @@ export default function Shifts() {
     const { data, error: err } = await supabase
       .from('shifts')
       .select(`*, user:profiles!shifts_user_id_fkey(full_name), department:departments(name)`)
-      .gte('shift_date', from).lte('shift_date', to)
-      .order('start_time', { ascending: true })
+      .gte('starts_at', from + 'T00:00:00').lte('starts_at', to + 'T23:59:59')
+      .order('starts_at', { ascending: true })
     if (err) setError(err.message)
     else setShifts((data as ShiftRow[]) ?? [])
     setLoading(false)
@@ -115,9 +115,11 @@ export default function Shifts() {
     if (form.start_time >= form.end_time) return setFormError('End time must be after start time.')
     setSaving(true)
     const { error: err } = await supabase.from('shifts').insert({
-      user_id: form.user_id, department_id: form.department_id || null,
-      shift_date: form.shift_date, start_time: form.start_time + ':00',
-      end_time: form.end_time + ':00', notes: form.notes || null,
+      user_id:       form.user_id,
+      department_id: form.department_id || null,
+      starts_at:     form.shift_date + 'T' + form.start_time + ':00',
+      ends_at:       form.shift_date + 'T' + form.end_time + ':00',
+      notes:         form.notes || null,
     })
     setSaving(false)
     if (err) setFormError(err.message)
@@ -126,8 +128,9 @@ export default function Shifts() {
 
   const shiftsByDate: Record<string, ShiftRow[]> = {}
   for (const s of shifts) {
-    if (!shiftsByDate[s.shift_date]) shiftsByDate[s.shift_date] = []
-    shiftsByDate[s.shift_date].push(s)
+    const key = s.starts_at.split('T')[0]
+    if (!shiftsByDate[key]) shiftsByDate[key] = []
+    shiftsByDate[key].push(s)
   }
 
   const canAdd = CAN_ADD_SHIFT.includes(role)
@@ -265,9 +268,9 @@ function ShiftChip({ shift }: { shift: ShiftRow }) {
   const colorClass = colors[shift.user_id.charCodeAt(0) % colors.length]
   return (
     <div className={`rounded-md px-1.5 py-1 text-[10px] leading-tight ${colorClass} cursor-default`}
-      title={`${shift.user?.full_name ?? 'Unknown'}\n${fmt12(shift.start_time)} – ${fmt12(shift.end_time)}${shift.notes ? '\n' + shift.notes : ''}`}>
+      title={`${shift.user?.full_name ?? 'Unknown'}\n${fmt12(shift.starts_at.split('T')[1].substring(0,5))} – ${fmt12(shift.ends_at.split('T')[1].substring(0,5))}${shift.notes ? '\n' + shift.notes : ''}`}>
       <div className="font-semibold truncate">{shift.user?.full_name ?? '—'}</div>
-      <div className="opacity-75">{fmt12(shift.start_time)} – {fmt12(shift.end_time)}</div>
+      <div className="opacity-75">{fmt12(shift.starts_at.split('T')[1].substring(0,5))} – {fmt12(shift.ends_at.split('T')[1].substring(0,5))}</div>
       {shift.department?.name && <div className="opacity-60 truncate">{shift.department.name}</div>}
     </div>
   )

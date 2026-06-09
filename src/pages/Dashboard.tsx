@@ -76,6 +76,21 @@ export default function Dashboard() {
   const greeting = hour < 12 ? 'Good morning'
     : hour < 17 ? 'Good afternoon' : 'Good evening'
 
+  const MEDICAL_ROLES = ['physician', 'medical_director', 'surgeon', 'doctor']
+  function greetingName(fullName: string | null | undefined, role: string | null | undefined): string {
+    if (!fullName) return 'there'
+    const parts = fullName.trim().split(/\s+/)
+    if (role && MEDICAL_ROLES.includes(role)) {
+      // For "Dr. Abebe Girma" → "Dr. Abebe"; for "Yonas Tadesse" → "Yonas"
+      if (parts[0].toLowerCase().replace('.', '') === 'dr' && parts.length >= 2) {
+        return `${parts[0]} ${parts[1]}`
+      }
+      return parts[0]
+    }
+    // Non-medical: just the first name
+    return parts[0]
+  }
+
   const severityColors: Record<string, string> = {
     low: 'bg-gray-100 text-gray-600',
     medium: 'bg-amber-100 text-amber-700',
@@ -102,7 +117,7 @@ export default function Dashboard() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
-          {greeting}, {profile?.full_name?.split(' ')[0] ?? 'Doctor'}
+          {greeting}, {greetingName(profile?.full_name, profile?.role)}
         </h1>
         <span className="inline-block mt-2 px-3 py-1 rounded-full text-sm font-medium bg-teal-50 text-teal-700 border border-teal-200 capitalize">
           {profile?.role?.replace(/_/g, ' ')}
