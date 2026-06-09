@@ -23,7 +23,15 @@ const PILOT_USERS = [
   { email: 'meddir@amc.et',      password: 'Test1234!', full_name: 'Dr. Yonas Tadesse', role: 'medical_director', employee_id: 'AMC-005', department: 'Administration' },
   { email: 'ceo@amc.et',         password: 'Test1234!', full_name: 'Akeza Teame',        role: 'ceo',              employee_id: 'AMC-006', department: 'Administration' },
   { email: 'coordinator@amc.et', password: 'Test1234!', full_name: 'Sara Alemu',         role: 'coordinator',      employee_id: 'AMC-007', department: 'Administration' },
-  { email: 'gm@amc.et',         password: 'Test1234!', full_name: 'Melat Abate',         role: 'general_manager',  employee_id: 'AMC-008', department: 'Administration' },
+  { email: 'gm@amc.et',                   password: 'Test1234!', full_name: 'Melat Abate',        role: 'general_manager',  employee_id: 'AMC-008', department: 'Administration'    },
+  { email: 'depthead.doctors@amc.et',     password: 'Test1234!', full_name: 'Dr. Fitsum Dagmawi', role: 'department_head',  employee_id: 'AMC-009', department: 'Internal Medicine' },
+  { email: 'depthead.nursing@amc.et',     password: 'Test1234!', full_name: 'Sr. Almaz Bekele',   role: 'department_head',  employee_id: 'AMC-010', department: 'Nursing'           },
+  { email: 'nurse2@amc.et',               password: 'Test1234!', full_name: 'Meron Tadesse',       role: 'nurse',            employee_id: 'AMC-011', department: 'Nursing'           },
+  { email: 'depthead.midwifery@amc.et',   password: 'Test1234!', full_name: 'Sr. Tigist Alemu',   role: 'department_head',  employee_id: 'AMC-012', department: 'Midwifery'         },
+  { email: 'depthead.pharmacy@amc.et',    password: 'Test1234!', full_name: 'Dawit Haile',         role: 'department_head',  employee_id: 'AMC-013', department: 'Pharmacy'          },
+  { email: 'pharmacist@amc.et',           password: 'Test1234!', full_name: 'Selam Girma',         role: 'pharmacist',       employee_id: 'AMC-014', department: 'Pharmacy'          },
+  { email: 'depthead.lab@amc.et',         password: 'Test1234!', full_name: 'Biniam Tesfaye',      role: 'department_head',  employee_id: 'AMC-015', department: 'Laboratory'        },
+  { email: 'depthead.reception@amc.et',   password: 'Test1234!', full_name: 'Rahel Mekonen',       role: 'department_head',  employee_id: 'AMC-016', department: 'Reception'         },
 ]
 
 async function seed() {
@@ -57,6 +65,11 @@ async function seed() {
         email:         user.email,
         password:      user.password,
         email_confirm: true,
+        user_metadata: {
+          full_name:   user.full_name,
+          role:        user.role,
+          facility_id: FACILITY_ID,
+        },
       })
       if (authErr) { console.error(`  ❌ Auth error: ${authErr.message}`); continue }
       userId = authData?.user?.id
