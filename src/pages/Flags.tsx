@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
@@ -93,6 +94,16 @@ export default function Flags() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
 
+  type Period = 'today' | 'week' | 'month'
+  const [period, setPeriod] = useState<Period>('today')
+
+  const PERIODS: { value: Period; label: string; subtitle: string }[] = [
+    { value: 'today', label: 'Today',      subtitle: 'No data yet — today'      },
+    { value: 'week',  label: 'This Week',  subtitle: 'No data yet — this week'  },
+    { value: 'month', label: 'This Month', subtitle: 'No data yet — this month' },
+  ]
+  const currentPeriod = PERIODS.find(p => p.value === period)!
+
   // Access guard
   if (!ALLOWED_ROLES.includes(role)) {
     return (
@@ -118,6 +129,23 @@ export default function Flags() {
         </p>
       </div>
 
+      {/* ── Period filter ── */}
+      <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-sm w-fit">
+        {PERIODS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setPeriod(value)}
+            className={`px-4 py-1.5 font-medium transition-colors ${
+              period === value
+                ? 'bg-teal-600 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {SUMMARY_CARDS.map(({ label, icon: Icon, card, icon_, count, zero }) => (
@@ -130,7 +158,7 @@ export default function Flags() {
               <Icon className={`w-5 h-5 ${icon_}`} />
             </div>
             <p className={`text-3xl font-bold ${count}`}>0</p>
-            <p className={`text-xs font-medium ${zero}`}>No data yet</p>
+            <p className={`text-xs font-medium ${zero}`}>{currentPeriod.subtitle}</p>
           </div>
         ))}
       </div>
