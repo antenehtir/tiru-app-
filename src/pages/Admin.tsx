@@ -101,10 +101,11 @@ function UsersSection() {
   const [depts,    setDepts]    = useState<DeptOption[]>([])
 
   // Invite modal
-  const [inviteOpen, setInviteOpen] = useState(false)
-  const [saving,     setSaving]     = useState(false)
-  const [formErr,    setFormErr]    = useState<string | null>(null)
-  const [inviteForm, setInviteForm] = useState({
+  const [inviteOpen,  setInviteOpen]  = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [formErr,     setFormErr]     = useState<string | null>(null)
+  const [successMsg,  setSuccessMsg]  = useState<string | null>(null)
+  const [inviteForm,  setInviteForm]  = useState({
     full_name: '', email: '', phone: '', role: 'staff',
     department_id: '', employee_id: '',
   })
@@ -133,6 +134,25 @@ function UsersSection() {
       .then(({ data }) => setDepts((data as DeptOption[]) ?? []))
   }, [])
 
+  const openInviteModal = async () => {
+    setFormErr(null)
+    setSuccessMsg(null)
+
+    // Auto-generate next AMC-XXX employee ID
+    const { data: empData } = await supabase
+      .from('profiles')
+      .select('employee_id')
+      .like('employee_id', 'AMC-%')
+    const nums = ((empData ?? []) as { employee_id: string | null }[])
+      .map(p => parseInt(p.employee_id?.replace('AMC-', '') ?? '0', 10))
+      .filter(n => !isNaN(n) && n > 0)
+    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 9
+    const nextId = 'AMC-' + String(nextNum).padStart(3, '0')
+
+    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId })
+    setInviteOpen(true)
+  }
+
   const sendInvite = async () => {
     setFormErr(null)
     if (!inviteForm.full_name.trim()) return setFormErr('Full name is required.')
@@ -140,44 +160,32 @@ function UsersSection() {
 
     setSaving(true)
 
-    // Create auth user via Supabase admin invite
-    const { data: authData, error: authErr } = await supabase.auth.admin.inviteUserByEmail(
-      inviteForm.email.trim(),
-      { data: { full_name: inviteForm.full_name.trim() } }
-    )
+    // Insert profile with a fresh UUID (no auth user required upfront)
+    const { error: profileErr } = await supabase.from('profiles').insert({
+      id:            crypto.randomUUID(),
+      full_name:     inviteForm.full_name.trim(),
+      email:         inviteForm.email.trim(),
+      phone:         inviteForm.phone.trim() || null,
+      role:          inviteForm.role,
+      department_id: inviteForm.department_id || null,
+      employee_id:   inviteForm.employee_id.trim() || null,
+      is_active:     true,
+      facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
+    })
 
-    if (authErr) {
-      // Fallback: insert profile directly (works when using service role or RLS off)
-      const { error: profileErr } = await supabase.from('profiles').insert({
-        full_name:     inviteForm.full_name.trim(),
-        email:         inviteForm.email.trim(),
-        phone:         inviteForm.phone.trim() || null,
-        role:          inviteForm.role,
-        department_id: inviteForm.department_id || null,
-        employee_id:   inviteForm.employee_id.trim() || null,
-        is_active:     true,
-      })
-      setSaving(false)
-      if (profileErr) { setFormErr(profileErr.message); return }
-    } else {
-      // Update profile with extra fields
-      if (authData?.user?.id) {
-        await supabase.from('profiles').upsert({
-          id:            authData.user.id,
-          full_name:     inviteForm.full_name.trim(),
-          email:         inviteForm.email.trim(),
-          phone:         inviteForm.phone.trim() || null,
-          role:          inviteForm.role,
-          department_id: inviteForm.department_id || null,
-          employee_id:   inviteForm.employee_id.trim() || null,
-          is_active:     true,
-        })
-      }
-      setSaving(false)
-    }
+    setSaving(false)
 
+    if (profileErr) { setFormErr(profileErr.message); return }
+
+    // Send password-setup email so the staff member can create their account
+    await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
+      redirectTo: window.location.origin + '/reset-password',
+    })
+
+    const email = inviteForm.email.trim()
     setInviteOpen(false)
-    setInviteForm({ full_name:'', email:'', phone:'', role:'staff', department_id:'', employee_id:'' })
+    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '' })
+    setSuccessMsg(`Staff member added. A password setup email has been sent to ${email}.`)
     fetchUsers()
   }
 
@@ -205,7 +213,7 @@ function UsersSection() {
           <UserPlus className="w-5 h-5 text-teal-500" />Staff Accounts
           <span className="text-sm font-normal text-gray-400">({users.length})</span>
         </h2>
-        <button onClick={() => { setFormErr(null); setInviteOpen(true) }}
+        <button onClick={openInviteModal}
           className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
           <UserPlus className="w-4 h-4" />Invite Staff
         </button>
@@ -214,6 +222,12 @@ function UsersSection() {
       {error && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-3">
           <AlertCircle className="w-4 h-4" />{error}
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm mb-3">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />{successMsg}
         </div>
       )}
 
