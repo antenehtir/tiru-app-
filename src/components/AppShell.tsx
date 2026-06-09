@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, UserCheck, Umbrella,
-  Users, AlertTriangle, Settings, LogOut,
+  Users, AlertTriangle, Bell, Settings, LogOut,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/leave',      label: 'Leave',      icon: Umbrella },
   { to: '/staff',      label: 'Staff',      icon: Users },
   { to: '/incidents',  label: 'Incidents',  icon: AlertTriangle },
+  { to: '/notices',    label: 'Notices',    icon: Bell },
 ]
 
 const MOBILE_ITEMS = NAV_ITEMS.slice(0, 5)

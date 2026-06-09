@@ -1,15 +1,329 @@
-import { UserCheck } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../hooks/useAuth'
+import {
+  QrCode, MapPin, CheckCircle2, XCircle, Clock,
+  AlertTriangle, Loader2, Wifi, WifiOff, History,
+} from 'lucide-react'
+
+const FACILITY_LAT  = 9.0054
+const FACILITY_LNG  = 38.7636
+const GEOFENCE_M    = 150
+const OFFLINE_KEY   = 'tiru_attendance_queue'
+
+type AttendanceType = 'clock_in' | 'clock_out'
+
+type QueuedLog = {
+  id: string
+  user_id: string
+  qr_code_id: string | null
+  scanned_at: string
+  latitude: number | null
+  longitude: number | null
+  within_geofence: boolean | null
+  attendance_type: AttendanceType
+  notes: string | null
+}
+
+type LogRow = {
+  id: string
+  scanned_at: string
+  attendance_type: string
+  within_geofence: boolean | null
+  latitude: number | null
+  longitude: number | null
+}
+
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000
+  const φ1 = (lat1 * Math.PI) / 180
+  const φ2 = (lat2 * Math.PI) / 180
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+
+function localId() {
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+}
+
+function loadQueue(): QueuedLog[] {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_KEY) ?? '[]') } catch { return [] }
+}
+
+function saveQueue(q: QueuedLog[]) {
+  localStorage.setItem(OFFLINE_KEY, JSON.stringify(q))
+}
 
 export default function Attendance() {
+  const { profile } = useAuth()
+  const videoRef  = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const rafRef    = useRef<number>(0)
+  const streamRef = useRef<MediaStream | null>(null)
+  const jsQRRef   = useRef<((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null>(null)
+
+  const [scannerActive, setScannerActive] = useState(false)
+  const [scanResult,    setScanResult]    = useState<'success'|'error'|'geofence_warn'|null>(null)
+  const [scanMessage,   setScanMessage]   = useState('')
+  const [scanning,      setScanning]      = useState(false)
+  const [attType,       setAttType]       = useState<AttendanceType>('clock_in')
+  const [gpsStatus,     setGpsStatus]     = useState<'idle'|'fetching'|'ok'|'denied'>('idle')
+  const [coords,        setCoords]        = useState<{lat:number;lng:number}|null>(null)
+  const [insideGeofence,setInsideGeofence]= useState<boolean|null>(null)
+  const [online,        setOnline]        = useState(navigator.onLine)
+  const [queueCount,    setQueueCount]    = useState(() => loadQueue().length)
+  const [recentLogs,    setRecentLogs]    = useState<LogRow[]>([])
+  const [logsLoading,   setLogsLoading]   = useState(false)
+
+  useEffect(() => {
+    const up = () => setOnline(true); const down = () => setOnline(false)
+    window.addEventListener('online', up); window.addEventListener('offline', down)
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down) }
+  }, [])
+
+  useEffect(() => { if (online) flushQueue() }, [online]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if ((window as any).jsQR) { jsQRRef.current = (window as any).jsQR; return }
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
+    script.async = true
+    script.onload = () => { jsQRRef.current = (window as any).jsQR }
+    document.head.appendChild(script)
+  }, [])
+
+  const fetchRecentLogs = useCallback(async () => {
+    if (!profile?.id) return
+    setLogsLoading(true)
+    const { data } = await supabase
+      .from('attendance_logs')
+      .select('id, scanned_at, attendance_type, within_geofence, latitude, longitude')
+      .eq('user_id', profile.id)
+      .order('scanned_at', { ascending: false })
+      .limit(10)
+    setRecentLogs((data as LogRow[]) ?? [])
+    setLogsLoading(false)
+  }, [profile?.id])
+
+  useEffect(() => { fetchRecentLogs() }, [fetchRecentLogs])
+
+  const captureGPS = useCallback((): Promise<{lat:number;lng:number}|null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve(null); return }
+      setGpsStatus('fetching')
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude; const lng = pos.coords.longitude
+          const dist = haversineM(lat, lng, FACILITY_LAT, FACILITY_LNG)
+          setCoords({ lat, lng }); setInsideGeofence(dist <= GEOFENCE_M); setGpsStatus('ok')
+          resolve({ lat, lng })
+        },
+        () => { setGpsStatus('denied'); resolve(null) },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      )
+    })
+  }, [])
+
+  const tick = useCallback(() => {
+    const video = videoRef.current; const canvas = canvasRef.current
+    if (!video || !canvas || !jsQRRef.current) { rafRef.current = requestAnimationFrame(tick); return }
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) { rafRef.current = requestAnimationFrame(tick); return }
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const code = jsQRRef.current(imageData.data, imageData.width, imageData.height)
+    if (code) { stopCamera(); handleQRResult(code.data) }
+    else rafRef.current = requestAnimationFrame(tick)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startCamera = async () => {
+    setScanResult(null); setScanMessage(''); setScanning(false)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      streamRef.current = stream
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play() }
+      setScannerActive(true); captureGPS(); tick()
+    } catch {
+      setScanResult('error'); setScanMessage('Camera access denied. Please allow camera permission.')
+    }
+  }
+
+  const stopCamera = () => {
+    cancelAnimationFrame(rafRef.current)
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null; setScannerActive(false)
+  }
+
+  useEffect(() => () => stopCamera(), [])
+
+  const handleQRResult = async (qrData: string) => {
+    setScanning(true); setScanResult(null)
+    let qrCodeId: string | null = null
+    if (qrData.match(/^[0-9a-f-]{36}$/i)) {
+      const { data: qrRow } = await supabase
+        .from('entrance_qr_codes').select('id, is_active').eq('id', qrData).single()
+      if (!qrRow || !qrRow.is_active) {
+        setScanning(false); setScanResult('error')
+        setScanMessage('QR code not recognised or has been deactivated.'); return
+      }
+      qrCodeId = qrRow.id
+    }
+    const log: QueuedLog = {
+      id: localId(), user_id: profile!.id, qr_code_id: qrCodeId,
+      scanned_at: new Date().toISOString(), latitude: coords?.lat ?? null,
+      longitude: coords?.lng ?? null, within_geofence: insideGeofence,
+      attendance_type: attType, notes: null,
+    }
+    await persistLog(log); setScanning(false)
+  }
+
+  const persistLog = async (log: QueuedLog) => {
+    const { id: _localId, ...insertPayload } = log
+    if (!online) { enqueue(log); setScanResult('success'); setScanMessage('Saved offline — will sync when connected.'); return }
+    const { error } = await supabase.from('attendance_logs').insert(insertPayload)
+    if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save — queued for retry. ' + error.message) }
+    else {
+      if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded ✓ — GPS shows you may be outside the facility.') }
+      else { setScanResult('success'); setScanMessage(attType === 'clock_in' ? 'Clocked in successfully!' : 'Clocked out successfully!') }
+      fetchRecentLogs()
+    }
+  }
+
+  const enqueue = (log: QueuedLog) => {
+    const q = loadQueue()
+    if (!q.find(x => x.id === log.id)) q.push(log)
+    saveQueue(q); setQueueCount(q.length)
+  }
+
+  const flushQueue = async () => {
+    const q = loadQueue(); if (q.length === 0) return
+    const remaining: QueuedLog[] = []
+    for (const log of q) {
+      const { id: _localId, ...payload } = log
+      const { error } = await supabase.from('attendance_logs').insert(payload)
+      if (error) remaining.push(log)
+    }
+    saveQueue(remaining); setQueueCount(remaining.length)
+    if (remaining.length < q.length) fetchRecentLogs()
+  }
+
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-1">
-        <UserCheck size={22} className="text-teal-700" />
-        <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
+    <div className="p-6 space-y-6 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <QrCode className="w-6 h-6 text-teal-500" />Attendance
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Scan entrance QR code to record attendance</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          {online
+            ? <span className="flex items-center gap-1 text-green-600"><Wifi className="w-4 h-4" />Online</span>
+            : <span className="flex items-center gap-1 text-orange-500"><WifiOff className="w-4 h-4" />Offline</span>
+          }
+          {queueCount > 0 && (
+            <span className="bg-orange-100 text-orange-700 rounded-full px-2 py-0.5 font-medium">{queueCount} queued</span>
+          )}
+        </div>
       </div>
-      <p className="text-gray-500 text-sm mb-6">Track daily attendance and clock-ins.</p>
-      <div className="bg-white border border-gray-200 rounded-lg p-6 text-gray-400 text-sm">
-        Attendance content coming soon.
+
+      <div className="flex gap-2">
+        {(['clock_in','clock_out'] as AttendanceType[]).map(t => (
+          <button key={t} onClick={() => setAttType(t)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${attType === t ? 'bg-teal-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}>
+            {t === 'clock_in' ? '🟢 Clock In' : '🔴 Clock Out'}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-600 overflow-hidden bg-gray-50 dark:bg-gray-800">
+        {!scannerActive ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <QrCode className="w-16 h-16 text-gray-300" />
+            <p className="text-sm text-gray-400">Camera is off</p>
+            <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
+              Start Scanner
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <video ref={videoRef} className="w-full aspect-video object-cover" playsInline muted />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-48 h-48 border-4 border-teal-400 rounded-xl opacity-80" />
+            </div>
+            {scanning && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-white animate-spin" />
+              </div>
+            )}
+            <button onClick={stopCamera} className="absolute top-3 right-3 bg-black/50 text-white rounded-lg px-3 py-1.5 text-xs hover:bg-black/70">Stop</button>
+          </div>
+        )}
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+
+      {scanResult && (
+        <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm
+          ${scanResult === 'success'       ? 'bg-green-50 border border-green-200 text-green-800' : ''}
+          ${scanResult === 'geofence_warn' ? 'bg-amber-50 border border-amber-200 text-amber-800' : ''}
+          ${scanResult === 'error'         ? 'bg-red-50 border border-red-200 text-red-700' : ''}
+        `}>
+          {scanResult === 'success'       && <CheckCircle2  className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          {scanResult === 'geofence_warn' && <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          {scanResult === 'error'         && <XCircle       className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          <span>{scanMessage}</span>
+        </div>
+      )}
+
+      {gpsStatus !== 'idle' && (
+        <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2
+          ${gpsStatus === 'ok' ? (insideGeofence ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700') : ''}
+          ${gpsStatus === 'fetching' ? 'bg-gray-100 text-gray-500' : ''}
+          ${gpsStatus === 'denied'   ? 'bg-gray-100 text-gray-400' : ''}
+        `}>
+          <MapPin className="w-3.5 h-3.5" />
+          {gpsStatus === 'fetching' && 'Fetching GPS…'}
+          {gpsStatus === 'denied'   && 'GPS unavailable (advisory only)'}
+          {gpsStatus === 'ok' && insideGeofence  && `GPS: inside facility (${Math.round(haversineM(coords!.lat, coords!.lng, FACILITY_LAT, FACILITY_LNG))} m)`}
+          {gpsStatus === 'ok' && !insideGeofence && `GPS: ${Math.round(haversineM(coords!.lat, coords!.lng, FACILITY_LAT, FACILITY_LNG))} m from facility`}
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <History className="w-4 h-4" />My Recent Attendance
+        </h2>
+        {logsLoading ? (
+          <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
+            <Loader2 className="w-4 h-4 animate-spin" />Loading…
+          </div>
+        ) : recentLogs.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4">No attendance records yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {recentLogs.map(log => (
+              <div key={log.id} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <div className="text-sm font-medium text-gray-800 dark:text-gray-100 capitalize">
+                      {log.attendance_type?.replace('_',' ')}
+                    </div>
+                    <div className="text-xs text-gray-400">{new Date(log.scanned_at).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {log.within_geofence === true  && <span className="text-green-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />In</span>}
+                  {log.within_geofence === false && <span className="text-amber-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />Out</span>}
+                  {log.within_geofence === null  && <span className="text-gray-300 text-xs">—</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,16 +1,300 @@
-import { Umbrella } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../hooks/useAuth'
+import {
+  CalendarOff, Plus, X, Loader2, AlertCircle,
+  CheckCircle2, XCircle, Clock, FileText, ChevronDown, ChevronUp,
+} from 'lucide-react'
+
+type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'recorded'
+type LeaveType   = 'annual' | 'sick' | 'emergency' | 'maternity' | 'paternity' | 'unpaid' | 'other'
+
+type LeaveRequest = {
+  id: string
+  user_id: string
+  leave_type: LeaveType
+  start_date: string
+  end_date: string
+  reason: string | null
+  status: LeaveStatus
+  medical_director_note: string | null
+  hr_note: string | null
+  created_at: string
+  requester: { full_name: string; role: string } | null
+}
+
+const LEADERSHIP = ['ceo','general_manager','super_admin']
+const CAN_APPROVE = ['medical_director']
+const CAN_RECORD  = ['hr']
+
+const STATUS_COLOR: Record<LeaveStatus, string> = {
+  pending:  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  recorded: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+}
+
+const LEAVE_TYPES: LeaveType[] = ['annual','sick','emergency','maternity','paternity','unpaid','other']
 
 export default function Leave() {
+  const { profile } = useAuth()
+  const role = profile?.role ?? ''
+  const isLeadership = LEADERSHIP.includes(role)
+  const isMedDir     = CAN_APPROVE.includes(role)
+  const isHR         = CAN_RECORD.includes(role)
+  const canSeeAll    = isLeadership || isMedDir || isHR
+
+  type TabKey = 'mine' | 'pending' | 'all'
+  const defaultTab: TabKey = isMedDir ? 'pending' : (canSeeAll ? 'all' : 'mine')
+  const [tab, setTab] = useState<TabKey>(defaultTab)
+
+  const [requests, setRequests] = useState<LeaveRequest[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [formErr,   setFormErr]   = useState<string | null>(null)
+  const [form, setForm] = useState({
+    leave_type: 'annual' as LeaveType,
+    start_date: '', end_date: '', reason: '',
+  })
+
+  type ActionMode = { id: string; action: 'approve' | 'reject' | 'record' } | null
+  const [actionMode,     setActionMode]     = useState<ActionMode>(null)
+  const [actionNote,     setActionNote]     = useState('')
+  const [actioning,      setActioning]      = useState(false)
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true); setError(null)
+    let query = supabase
+      .from('leave_requests')
+      .select(`*, requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
+      .order('created_at', { ascending: false })
+    if (tab === 'mine')    query = query.eq('user_id', profile!.id)
+    if (tab === 'pending') query = query.eq('status', 'pending')
+    const { data, error: err } = await query
+    if (err) setError(err.message)
+    else setRequests((data as LeaveRequest[]) ?? [])
+    setLoading(false)
+  }, [tab, profile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchRequests() }, [fetchRequests])
+
+  const submitRequest = async () => {
+    setFormErr(null)
+    if (!form.start_date || !form.end_date) return setFormErr('Please set start and end dates.')
+    if (form.start_date > form.end_date)    return setFormErr('End date must be after start date.')
+    setSaving(true)
+    const { error: err } = await supabase.from('leave_requests').insert({
+      user_id: profile!.id, leave_type: form.leave_type,
+      start_date: form.start_date, end_date: form.end_date,
+      reason: form.reason || null, status: 'pending',
+    })
+    setSaving(false)
+    if (err) { setFormErr(err.message); return }
+    setModalOpen(false)
+    setTab('mine')
+    fetchRequests()
+  }
+
+  const applyAction = async () => {
+    if (!actionMode) return
+    setActioning(true)
+    const updates: Record<string, unknown> = {}
+    if (actionMode.action === 'approve') { updates.status = 'approved'; updates.medical_director_note = actionNote || null }
+    else if (actionMode.action === 'reject') { updates.status = 'rejected'; updates.medical_director_note = actionNote || null }
+    else if (actionMode.action === 'record') { updates.status = 'recorded'; updates.hr_note = actionNote || null }
+    const { error: err } = await supabase.from('leave_requests').update(updates).eq('id', actionMode.id)
+    setActioning(false)
+    if (!err) { setActionMode(null); setActionNote(''); fetchRequests() }
+  }
+
+  const toggleExpand = (id: string) =>
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const tabs: { key: TabKey; label: string; show: boolean }[] = [
+    { key: 'mine',    label: 'My Requests',     show: true },
+    { key: 'pending', label: 'Pending Approval', show: isMedDir },
+    { key: 'all',     label: 'All Requests',     show: canSeeAll },
+  ]
+
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-1">
-        <Umbrella size={22} className="text-teal-700" />
-        <h1 className="text-2xl font-bold text-gray-900">Leave</h1>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <CalendarOff className="w-6 h-6 text-teal-500" />Leave Requests
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Submit and track leave applications</p>
+        </div>
+        <button
+          onClick={() => { setFormErr(null); setForm({ leave_type:'annual', start_date:'', end_date:'', reason:'' }); setModalOpen(true) }}
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <Plus className="w-4 h-4" />New Request
+        </button>
       </div>
-      <p className="text-gray-500 text-sm mb-6">Request and approve staff leave.</p>
-      <div className="bg-white border border-gray-200 rounded-lg p-6 text-gray-400 text-sm">
-        Leave content coming soon.
+
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+        {tabs.filter(t => t.show).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? 'border-teal-500 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          <AlertCircle className="w-4 h-4" />{error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading…
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="text-center py-20 text-gray-400">
+          <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />No leave requests found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map(req => {
+            const isOpen = expanded.has(req.id)
+            const isOwn  = req.user_id === profile?.id
+            return (
+              <div key={req.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => toggleExpand(req.id)}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm text-gray-900 dark:text-white">
+                        {req.requester?.full_name ?? (isOwn ? profile?.full_name : '—')}
+                      </span>
+                      <span className="text-xs text-gray-400 capitalize">{req.leave_type}</span>
+                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${STATUS_COLOR[req.status]}`}>{req.status}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />{req.start_date} → {req.end_date}
+                      &nbsp;·&nbsp;
+                      {Math.max(1, Math.round((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1)} day(s)
+                    </div>
+                  </div>
+                  {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                </div>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
+                    {req.reason && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-semibold">Reason:</span> {req.reason}</p>}
+                    {req.medical_director_note && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-semibold">Medical Director note:</span> {req.medical_director_note}</p>}
+                    {req.hr_note && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-semibold">HR note:</span> {req.hr_note}</p>}
+                    <p className="text-xs text-gray-400">Submitted: {new Date(req.created_at).toLocaleString()}</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {isMedDir && req.status === 'pending' && (
+                        <>
+                          <button onClick={() => setActionMode({ id: req.id, action: 'approve' })}
+                            className="flex items-center gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                            <CheckCircle2 className="w-3.5 h-3.5" />Approve
+                          </button>
+                          <button onClick={() => setActionMode({ id: req.id, action: 'reject' })}
+                            className="flex items-center gap-1.5 text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                            <XCircle className="w-3.5 h-3.5" />Reject
+                          </button>
+                        </>
+                      )}
+                      {isHR && req.status === 'approved' && (
+                        <button onClick={() => setActionMode({ id: req.id, action: 'record' })}
+                          className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                          <FileText className="w-3.5 h-3.5" />Mark Recorded
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-lg font-semibold">New Leave Request</h2>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {formErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4" />{formErr}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Leave Type</label>
+                <select value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value as LeaveType }))}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                  {LEAVE_TYPES.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Date *</label>
+                  <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Date *</label>
+                  <input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
+                <textarea rows={3} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+                  placeholder="Optional…"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={submitRequest} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submitting…' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {actionMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-lg font-semibold capitalize">{actionMode.action === 'record' ? 'Mark as Recorded' : actionMode.action}</h2>
+              <button onClick={() => { setActionMode(null); setActionNote('') }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
+              <textarea rows={3} value={actionNote} onChange={e => setActionNote(e.target.value)}
+                placeholder="Add a note…"
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => { setActionMode(null); setActionNote('') }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={applyAction} disabled={actioning}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-60
+                  ${actionMode.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : ''}
+                  ${actionMode.action === 'reject'  ? 'bg-red-600 hover:bg-red-700' : ''}
+                  ${actionMode.action === 'record'  ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                `}>
+                {actioning && <Loader2 className="w-4 h-4 animate-spin" />}Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

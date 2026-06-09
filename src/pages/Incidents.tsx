@@ -1,16 +1,385 @@
-import { AlertTriangle } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../hooks/useAuth'
+import {
+  ShieldAlert, Plus, X, Loader2, AlertCircle,
+  ChevronDown, ChevronUp, Clock, CheckCircle2, Eye, Filter,
+} from 'lucide-react'
+
+type Severity         = 'low' | 'medium' | 'high' | 'critical'
+type IncidentStatus   = 'submitted' | 'under_review' | 'resolved' | 'dismissed'
+type IncidentCategory = 'patient_safety'|'medication_error'|'equipment_failure'|'staff_conduct'|'security'|'facility'|'other'
+
+type IncidentReport = {
+  id: string
+  reporter_id: string
+  title: string
+  description: string
+  severity: Severity
+  category: IncidentCategory
+  status: IncidentStatus
+  location: string | null
+  occurred_at: string | null
+  resolution_note: string | null
+  anonymous: boolean
+  created_at: string
+  reporter: { full_name: string; role: string } | null
+}
+
+const LEADERSHIP = ['ceo','general_manager','medical_director','hr','super_admin']
+
+const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; dot: string }> = {
+  low:      { label:'Low',      color:'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',            dot:'bg-gray-400' },
+  medium:   { label:'Medium',   color:'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',     dot:'bg-amber-400' },
+  high:     { label:'High',     color:'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', dot:'bg-orange-500' },
+  critical: { label:'Critical', color:'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',             dot:'bg-red-600' },
+}
+
+const STATUS_CONFIG: Record<IncidentStatus, { label: string; color: string }> = {
+  submitted:    { label:'Submitted',    color:'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  under_review: { label:'Under Review', color:'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
+  resolved:     { label:'Resolved',     color:'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  dismissed:    { label:'Dismissed',    color:'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' },
+}
+
+const CATEGORIES: { value: IncidentCategory; label: string }[] = [
+  { value:'patient_safety',    label:'Patient Safety' },
+  { value:'medication_error',  label:'Medication Error' },
+  { value:'equipment_failure', label:'Equipment Failure' },
+  { value:'staff_conduct',     label:'Staff Conduct' },
+  { value:'security',          label:'Security' },
+  { value:'facility',          label:'Facility / Infrastructure' },
+  { value:'other',             label:'Other' },
+]
+
+const SEVERITIES: Severity[] = ['low','medium','high','critical']
 
 export default function Incidents() {
+  const { profile } = useAuth()
+  const role = profile?.role ?? ''
+  const isLeadership = LEADERSHIP.includes(role)
+
+  type TabKey = 'mine' | 'all'
+  const [tab, setTab] = useState<TabKey>(isLeadership ? 'all' : 'mine')
+
+  const [reports,     setReports]     = useState<IncidentReport[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState<string | null>(null)
+  const [expanded,    setExpanded]    = useState<Set<string>>(new Set())
+  const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all')
+  const [filterStatus,   setFilterStatus]   = useState<IncidentStatus | 'all'>('all')
+  const [showFilters,    setShowFilters]     = useState(false)
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [formErr,   setFormErr]   = useState<string | null>(null)
+  const [form, setForm] = useState({
+    title:'', description:'', severity:'medium' as Severity,
+    category:'other' as IncidentCategory, location:'', occurred_at:'', anonymous: false,
+  })
+
+  type ReviewMode = { id: string; currentStatus: IncidentStatus } | null
+  const [reviewMode,     setReviewMode]     = useState<ReviewMode>(null)
+  const [reviewStatus,   setReviewStatus]   = useState<IncidentStatus>('under_review')
+  const [resolutionNote, setResolutionNote] = useState('')
+  const [reviewing,      setReviewing]      = useState(false)
+
+  const fetchReports = useCallback(async () => {
+    setLoading(true); setError(null)
+    let query = supabase
+      .from('incident_reports')
+      .select(`*, reporter:profiles!incident_reports_reporter_id_fkey(full_name, role)`)
+      .order('created_at', { ascending: false })
+    if (tab === 'mine') query = query.eq('reporter_id', profile!.id)
+    if (filterSeverity !== 'all') query = query.eq('severity', filterSeverity)
+    if (filterStatus   !== 'all') query = query.eq('status',   filterStatus)
+    const { data, error: err } = await query
+    if (err) setError(err.message)
+    else setReports((data as IncidentReport[]) ?? [])
+    setLoading(false)
+  }, [tab, profile?.id, filterSeverity, filterStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchReports() }, [fetchReports])
+
+  const resetForm = () => setForm({
+    title:'', description:'', severity:'medium', category:'other',
+    location:'', occurred_at:'', anonymous: false,
+  })
+
+  const submitReport = async () => {
+    setFormErr(null)
+    if (!form.title.trim())       return setFormErr('Title is required.')
+    if (!form.description.trim()) return setFormErr('Description is required.')
+    setSaving(true)
+    const { error: err } = await supabase.from('incident_reports').insert({
+      reporter_id: profile!.id, title: form.title.trim(),
+      description: form.description.trim(), severity: form.severity,
+      category: form.category, location: form.location.trim() || null,
+      occurred_at: form.occurred_at || null, anonymous: form.anonymous, status: 'submitted',
+    })
+    setSaving(false)
+    if (err) { setFormErr(err.message); return }
+    setModalOpen(false); resetForm(); fetchReports()
+  }
+
+  const applyReview = async () => {
+    if (!reviewMode) return
+    setReviewing(true)
+    const { error: err } = await supabase.from('incident_reports')
+      .update({ status: reviewStatus, resolution_note: resolutionNote.trim() || null })
+      .eq('id', reviewMode.id)
+    setReviewing(false)
+    if (!err) { setReviewMode(null); setResolutionNote(''); fetchReports() }
+  }
+
+  const deleteNotice = async (id: string, reporterId: string) => {
+    if (profile!.id !== reporterId && role !== 'super_admin') return
+    if (!confirm('Delete this report?')) return
+    await supabase.from('incident_reports').delete().eq('id', id)
+    setReports(prev => prev.filter(r => r.id !== id))
+  }
+
+  const toggleExpand = (id: string) =>
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const tabs: { key: TabKey; label: string; show: boolean }[] = [
+    { key: 'mine', label: 'My Reports',  show: true },
+    { key: 'all',  label: 'All Reports', show: isLeadership },
+  ]
+
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-1">
-        <AlertTriangle size={22} className="text-teal-700" />
-        <h1 className="text-2xl font-bold text-gray-900">Incidents</h1>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <ShieldAlert className="w-6 h-6 text-teal-500" />Incident Reports
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Report and track facility incidents</p>
+        </div>
+        <button onClick={() => { setFormErr(null); resetForm(); setModalOpen(true) }}
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <Plus className="w-4 h-4" />Report Incident
+        </button>
       </div>
-      <p className="text-gray-500 text-sm mb-6">Log and review facility incidents.</p>
-      <div className="bg-white border border-gray-200 rounded-lg p-6 text-gray-400 text-sm">
-        Incidents content coming soon.
+
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-1">
+          {tabs.filter(t => t.show).map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? 'border-teal-500 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {isLeadership && tab === 'all' && (
+          <button onClick={() => setShowFilters(f => !f)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 pb-2">
+            <Filter className="w-4 h-4" />Filters
+          </button>
+        )}
       </div>
+
+      {isLeadership && tab === 'all' && showFilters && (
+        <div className="flex gap-3 flex-wrap">
+          <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value as Severity | 'all')}
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+            <option value="all">All severities</option>
+            {SEVERITIES.map(s => <option key={s} value={s}>{SEVERITY_CONFIG[s].label}</option>)}
+          </select>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as IncidentStatus | 'all')}
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+            <option value="all">All statuses</option>
+            {(Object.keys(STATUS_CONFIG) as IncidentStatus[]).map(s => (
+              <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          <AlertCircle className="w-4 h-4" />{error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading…
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="text-center py-20 text-gray-400">
+          <ShieldAlert className="w-10 h-10 mx-auto mb-3 opacity-40" />No incident reports found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {reports.map(rep => {
+            const sev    = SEVERITY_CONFIG[rep.severity]
+            const stat   = STATUS_CONFIG[rep.status]
+            const isOpen = expanded.has(rep.id)
+            const reporter = rep.anonymous && tab === 'all' ? 'Anonymous' : (rep.reporter?.full_name ?? 'Unknown')
+            return (
+              <div key={rep.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => toggleExpand(rep.id)}>
+                  <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${sev.dot}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm text-gray-900 dark:text-white">{rep.title}</span>
+                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${sev.color}`}>{sev.label}</span>
+                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${stat.color}`}>{stat.label}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span className="capitalize">{rep.category.replace('_',' ')}</span>
+                      {isLeadership && <span>· {reporter}</span>}
+                      <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{new Date(rep.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                </div>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{rep.description}</p>
+                    {rep.location    && <p className="text-xs text-gray-500"><span className="font-semibold">Location:</span> {rep.location}</p>}
+                    {rep.occurred_at && <p className="text-xs text-gray-500"><span className="font-semibold">Occurred:</span> {new Date(rep.occurred_at).toLocaleString()}</p>}
+                    {rep.resolution_note && (
+                      <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                        <span className="font-semibold block mb-0.5">Resolution note:</span>{rep.resolution_note}
+                      </p>
+                    )}
+                    <div className="flex gap-2 flex-wrap">
+                      {isLeadership && rep.status !== 'resolved' && rep.status !== 'dismissed' && (
+                        <button onClick={() => { setReviewMode({ id: rep.id, currentStatus: rep.status }); setReviewStatus('under_review') }}
+                          className="flex items-center gap-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                          <Eye className="w-3.5 h-3.5" />Review / Update Status
+                        </button>
+                      )}
+                      {isLeadership && (rep.status === 'resolved' || rep.status === 'dismissed') && (
+                        <span className="flex items-center gap-1.5 text-xs text-green-600">
+                          <CheckCircle2 className="w-3.5 h-3.5" />Closed
+                        </span>
+                      )}
+                      {(profile!.id === rep.reporter_id || role === 'super_admin') && (
+                        <button onClick={() => deleteNotice(rep.id, rep.reporter_id)}
+                          className="text-xs text-red-400 hover:text-red-600 transition-colors ml-auto">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <h2 className="text-lg font-semibold">Report an Incident</h2>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {formErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4" />{formErr}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Title *</label>
+                <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Brief summary of the incident"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Category</label>
+                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as IncidentCategory }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Severity</label>
+                  <select value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value as Severity }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                    {SEVERITIES.map(s => <option key={s} value={s}>{SEVERITY_CONFIG[s].label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description *</label>
+                <textarea rows={4} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe what happened in detail…"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Location</label>
+                  <input type="text" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                    placeholder="e.g. Ward 3, Pharmacy"
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">When it occurred</label>
+                  <input type="datetime-local" value={form.occurred_at} onChange={e => setForm(f => ({ ...f, occurred_at: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div onClick={() => setForm(f => ({ ...f, anonymous: !f.anonymous }))}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${form.anonymous ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.anonymous ? 'translate-x-5' : ''}`} />
+                </div>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Submit anonymously</span>
+                <span className="text-xs text-gray-400">(your name hidden from leadership)</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={submitReport} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submitting…' : 'Submit Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reviewMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-lg font-semibold">Update Status</h2>
+              <button onClick={() => { setReviewMode(null); setResolutionNote('') }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Status</label>
+                <select value={reviewStatus} onChange={e => setReviewStatus(e.target.value as IncidentStatus)}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  <option value="under_review">Under Review</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Resolution / Note</label>
+                <textarea rows={3} value={resolutionNote} onChange={e => setResolutionNote(e.target.value)}
+                  placeholder="Add a note or resolution detail…"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => { setReviewMode(null); setResolutionNote('') }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={applyReview} disabled={reviewing}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {reviewing && <Loader2 className="w-4 h-4 animate-spin" />}Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

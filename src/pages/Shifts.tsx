@@ -1,237 +1,274 @@
-import { useEffect, useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Calendar } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../store/authStore'
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../hooks/useAuth'
+import {
+  CalendarDays,
+  Clock,
+  Plus,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Building2,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react'
 
-interface Shift {
+type ShiftRow = {
   id: string
-  shift_type: string
-  starts_at: string
-  ends_at: string
-  status: string
-  profile: { full_name: string | null } | null
+  user_id: string
+  department_id: string | null
+  shift_date: string
+  start_time: string
+  end_time: string
+  notes: string | null
+  created_at: string
+  user: { full_name: string } | null
+  department: { name: string } | null
 }
 
-const SHIFT_COLORS: Record<string, string> = {
-  morning:   'bg-amber-50  border-amber-200  text-amber-900',
-  afternoon: 'bg-blue-50   border-blue-200   text-blue-900',
-  night:     'bg-indigo-50 border-indigo-200 text-indigo-900',
-}
-const SHIFT_DEFAULT = 'bg-gray-50 border-gray-200 text-gray-800'
+type ProfileOption = { id: string; full_name: string }
+type DeptOption    = { id: string; name: string }
 
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: 'bg-sky-100   text-sky-700',
-  active:    'bg-green-100 text-green-700',
-  changed:   'bg-amber-100 text-amber-700',
-  covered:   'bg-teal-100  text-teal-700',
-  completed: 'bg-gray-100  text-gray-500',
-}
+const CAN_ADD_SHIFT = [
+  'super_admin','ceo','general_manager','medical_director',
+  'hr','department_head','coordinator',
+]
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const ROLES_CAN_ADD = ['super_admin', 'admin', 'department_head', 'coordinator']
-
-function weekStart(date: Date): Date {
-  const d = new Date(date)
-  const dow = d.getDay()
-  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1))
-  d.setHours(0, 0, 0, 0)
-  return d
+function fmt12(time: string) {
+  const [hStr, mStr] = time.split(':')
+  const h = parseInt(hStr, 10)
+  const suffix = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${h12}:${mStr} ${suffix}`
 }
 
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d)
-  r.setDate(r.getDate() + n)
-  return r
+function isoDate(d: Date) { return d.toISOString().split('T')[0] }
+
+function addDays(d: Date, n: number) {
+  const copy = new Date(d); copy.setDate(copy.getDate() + n); return copy
 }
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], {
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  })
+function weekStart(d: Date) {
+  const copy = new Date(d); copy.setDate(copy.getDate() - copy.getDay()); return copy
 }
 
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
+const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 export default function Shifts() {
-  const { profile } = useAuthStore()
-  const [shifts,    setShifts]    = useState<Shift[]>([])
-  const [weekBegin, setWeekBegin] = useState(() => weekStart(new Date()))
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState('')
+  const { profile } = useAuth()
+  const role = profile?.role ?? ''
+  const [weekBase, setWeekBase] = useState(() => weekStart(new Date()))
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekBase, i))
+  const [shifts, setShifts] = useState<ShiftRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [profiles, setProfiles] = useState<ProfileOption[]>([])
+  const [departments, setDepartments] = useState<DeptOption[]>([])
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    user_id:'', department_id:'', shift_date: isoDate(new Date()),
+    start_time:'08:00', end_time:'17:00', notes:'',
+  })
+
+  const fetchShifts = useCallback(async () => {
+    setLoading(true); setError(null)
+    const from = isoDate(weekDays[0])
+    const to   = isoDate(weekDays[6])
+    const { data, error: err } = await supabase
+      .from('shifts')
+      .select(`*, user:profiles!shifts_user_id_fkey(full_name), department:departments(name)`)
+      .gte('shift_date', from).lte('shift_date', to)
+      .order('start_time', { ascending: true })
+    if (err) setError(err.message)
+    else setShifts((data as ShiftRow[]) ?? [])
+    setLoading(false)
+  }, [weekBase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchShifts() }, [fetchShifts])
 
   useEffect(() => {
-    const fid = profile?.facility_id
-    if (!fid) return
+    const channel = supabase.channel('shifts-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => fetchShifts())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchShifts])
 
-    setLoading(true)
-    setError('')
+  const openModal = async () => {
+    setFormError(null)
+    setForm({ user_id:'', department_id:'', shift_date: isoDate(new Date()), start_time:'08:00', end_time:'17:00', notes:'' })
+    const [{ data: pData }, { data: dData }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name').order('full_name'),
+      supabase.from('departments').select('id, name').order('name'),
+    ])
+    setProfiles((pData as ProfileOption[]) ?? [])
+    setDepartments((dData as DeptOption[]) ?? [])
+    setModalOpen(true)
+  }
 
-    const from = weekBegin.toISOString()
-    const to   = addDays(weekBegin, 7).toISOString()
+  const saveShift = async () => {
+    setFormError(null)
+    if (!form.user_id) return setFormError('Please select a staff member.')
+    if (!form.shift_date) return setFormError('Please pick a date.')
+    if (form.start_time >= form.end_time) return setFormError('End time must be after start time.')
+    setSaving(true)
+    const { error: err } = await supabase.from('shifts').insert({
+      user_id: form.user_id, department_id: form.department_id || null,
+      shift_date: form.shift_date, start_time: form.start_time + ':00',
+      end_time: form.end_time + ':00', notes: form.notes || null,
+    })
+    setSaving(false)
+    if (err) setFormError(err.message)
+    else { setModalOpen(false); fetchShifts() }
+  }
 
-    supabase
-      .from('shifts')
-      .select('id, shift_type, starts_at, ends_at, status, profile:profiles(full_name)')
-      .eq('facility_id', fid)
-      .gte('starts_at', from)
-      .lt('starts_at', to)
-      .order('starts_at', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) { setError(error.message); setLoading(false); return }
-        setShifts((data as unknown as Shift[]) ?? [])
-        setLoading(false)
-      })
-  }, [profile?.facility_id, weekBegin])
+  const shiftsByDate: Record<string, ShiftRow[]> = {}
+  for (const s of shifts) {
+    if (!shiftsByDate[s.shift_date]) shiftsByDate[s.shift_date] = []
+    shiftsByDate[s.shift_date].push(s)
+  }
 
-  const weekDays = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekBegin, i)),
-    [weekBegin],
-  )
+  const canAdd = CAN_ADD_SHIFT.includes(role)
 
-  const shiftsByDay = useMemo(() => {
-    const map: Record<string, Shift[]> = {}
-    for (const d of weekDays) map[d.toDateString()] = []
-    for (const s of shifts) {
-      const key = new Date(s.starts_at).toDateString()
-      map[key]?.push(s)
-    }
-    return map
-  }, [shifts, weekDays])
-
-  const today        = new Date().toDateString()
-  const canAdd       = profile?.role ? ROLES_CAN_ADD.includes(profile.role) : false
-  const weekLabel    = `${fmtDate(weekBegin)} – ${fmtDate(addDays(weekBegin, 6))}`
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-  if (loading) return (
-    <div className="flex items-center justify-center h-48">
-      <div className="w-6 h-6 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
-
-  // ── Error ──────────────────────────────────────────────────────────────────
-  if (error) return (
-    <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-700 font-medium">Error loading shifts</p>
-        <p className="text-red-600 text-sm mt-1">{error}</p>
-      </div>
-    </div>
-  )
-
-  // ── Page ───────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 md:p-6">
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <Calendar size={22} className="text-teal-700" />
-          <h1 className="text-2xl font-bold text-gray-900">Shifts</h1>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <CalendarDays className="w-6 h-6 text-teal-500" />Shifts
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Weekly schedule overview</p>
         </div>
         {canAdd && (
-          <button className="flex items-center gap-2 px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-sm font-medium rounded-lg transition-colors">
-            <Plus size={15} />
-            Add Shift
+          <button onClick={openModal} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />Add Shift
           </button>
         )}
       </div>
 
-      {/* Week navigation */}
-      <div className="flex items-center gap-2 mb-5">
-        <button
-          onClick={() => setWeekBegin(w => addDays(w, -7))}
-          aria-label="Previous week"
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-        >
-          <ChevronLeft size={20} />
+      <div className="flex items-center gap-4">
+        <button onClick={() => setWeekBase(w => addDays(w, -7))} className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+          <ChevronLeft className="w-5 h-5" />
         </button>
-
-        <span className="text-sm font-medium text-gray-700 w-40 text-center">
-          {weekLabel}
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[220px] text-center">
+          {weekDays[0].toLocaleDateString('en-US', { month:'short', day:'numeric' })}
+          {' – '}
+          {weekDays[6].toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
         </span>
-
-        <button
-          onClick={() => setWeekBegin(w => addDays(w, 7))}
-          aria-label="Next week"
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-        >
-          <ChevronRight size={20} />
+        <button onClick={() => setWeekBase(w => addDays(w, 7))} className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+          <ChevronRight className="w-5 h-5" />
         </button>
-
-        <button
-          onClick={() => setWeekBegin(weekStart(new Date()))}
-          className="ml-1 px-2.5 py-1 text-xs font-medium text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors"
-        >
-          Today
-        </button>
+        <button onClick={() => setWeekBase(weekStart(new Date()))} className="ml-2 text-xs text-teal-600 hover:underline">This week</button>
       </div>
 
-      {/* Week grid — horizontal scroll on mobile */}
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-2" style={{ minWidth: '560px' }}>
-          {weekDays.map((day, i) => {
-            const key       = day.toDateString()
-            const isToday   = key === today
-            const dayShifts = shiftsByDay[key] ?? []
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+        </div>
+      )}
 
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
+        </div>
+      ) : (
+        <div className="grid grid-cols-7 gap-2">
+          {weekDays.map((day) => {
+            const key = isoDate(day)
+            const isToday = key === isoDate(new Date())
+            const dayShifts = shiftsByDate[key] ?? []
             return (
-              <div key={key} className="flex-1 min-w-[120px] flex flex-col">
-
-                {/* Day column header */}
-                <div className={`text-center rounded-lg py-2 mb-2 select-none ${
-                  isToday ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide">
-                    {DAY_LABELS[i]}
-                  </p>
-                  <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-white' : 'text-gray-800'}`}>
-                    {fmtDate(day)}
-                  </p>
+              <div key={key} className={`min-h-[160px] rounded-xl border p-2 flex flex-col gap-1.5 ${isToday ? 'border-teal-400 bg-teal-50 dark:bg-teal-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                <div className="text-center mb-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{DAY_LABELS[day.getDay()]}</div>
+                  <div className={`text-sm font-bold ${isToday ? 'text-teal-600' : 'text-gray-700 dark:text-gray-200'}`}>{day.getDate()}</div>
                 </div>
-
-                {/* Shift cards */}
-                <div className="flex flex-col gap-2 flex-1">
-                  {dayShifts.length === 0 ? (
-                    <p className="text-center text-xs text-gray-300 py-6">No shifts</p>
-                  ) : (
-                    dayShifts.map((shift) => (
-                      <div
-                        key={shift.id}
-                        className={`border rounded-lg p-2.5 text-xs ${SHIFT_COLORS[shift.shift_type] ?? SHIFT_DEFAULT}`}
-                      >
-                        {/* Staff name */}
-                        <p className="font-semibold truncate leading-snug">
-                          {shift.profile?.full_name ?? 'Unknown'}
-                        </p>
-
-                        {/* Shift type */}
-                        <p className="capitalize opacity-70 mt-0.5">
-                          {shift.shift_type}
-                        </p>
-
-                        {/* Time range */}
-                        <p className="font-mono mt-1">
-                          {fmtTime(shift.starts_at)}–{fmtTime(shift.ends_at)}
-                        </p>
-
-                        {/* Status badge */}
-                        <span className={`inline-block mt-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${STATUS_COLORS[shift.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {shift.status}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-
+                {dayShifts.length === 0
+                  ? <div className="flex-1 flex items-center justify-center text-[10px] text-gray-300 dark:text-gray-600">No shifts</div>
+                  : dayShifts.map(s => <ShiftChip key={s.id} shift={s} />)
+                }
               </div>
             )
           })}
         </div>
-      </div>
+      )}
 
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Add Shift</h2>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {formError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{formError}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5"><User className="inline w-3.5 h-3.5 mr-1" />Staff Member *</label>
+                <select value={form.user_id} onChange={e => setForm(f => ({ ...f, user_id: e.target.value }))} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  <option value="">— Select staff —</option>
+                  {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5"><Building2 className="inline w-3.5 h-3.5 mr-1" />Department</label>
+                <select value={form.department_id} onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  <option value="">— None —</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date *</label>
+                <input type="date" value={form.shift_date} onChange={e => setForm(f => ({ ...f, shift_date: e.target.value }))} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5"><Clock className="inline w-3.5 h-3.5 mr-1" />Start *</label>
+                  <input type="time" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End *</label>
+                  <input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes</label>
+                <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes…" className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={saveShift} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : 'Save Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ShiftChip({ shift }: { shift: ShiftRow }) {
+  const colors = [
+    'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+    'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+    'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+    'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+  ]
+  const colorClass = colors[shift.user_id.charCodeAt(0) % colors.length]
+  return (
+    <div className={`rounded-md px-1.5 py-1 text-[10px] leading-tight ${colorClass} cursor-default`}
+      title={`${shift.user?.full_name ?? 'Unknown'}\n${fmt12(shift.start_time)} – ${fmt12(shift.end_time)}${shift.notes ? '\n' + shift.notes : ''}`}>
+      <div className="font-semibold truncate">{shift.user?.full_name ?? '—'}</div>
+      <div className="opacity-75">{fmt12(shift.start_time)} – {fmt12(shift.end_time)}</div>
+      {shift.department?.name && <div className="opacity-60 truncate">{shift.department.name}</div>}
     </div>
   )
 }
