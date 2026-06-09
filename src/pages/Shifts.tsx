@@ -276,6 +276,20 @@ export default function Shifts() {
     setError(null)
   }
 
+  function goBack() {
+    if (!selectedGroup) return resetToLevel1()
+    const config = GROUP_CONFIG[selectedGroup]
+    // If the group has specialties, calendar → specialty; otherwise calendar → group
+    if (!config.skipLevel2) {
+      setSelectedSpecialty(null)
+      setNavStep('specialty')
+      setShifts([])
+      setError(null)
+    } else {
+      resetToLevel1()
+    }
+  }
+
   // ── Modal ──
   const openModal = async () => {
     setFormError(null)
@@ -410,8 +424,15 @@ export default function Shifts() {
       {/* ── Header: breadcrumb + Add Shift ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          {/* Breadcrumb */}
+          {/* Back + Breadcrumb */}
           <div className="flex items-center gap-1 flex-wrap text-sm mb-1">
+            <button
+              onClick={goBack}
+              className="flex items-center gap-0.5 text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors mr-1"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span className="text-xs">Back</span>
+            </button>
             {breadcrumbParts.map((part, i) => (
               <span key={part} className="flex items-center gap-1">
                 {i > 0 && <span className="text-gray-400 select-none">›</span>}
