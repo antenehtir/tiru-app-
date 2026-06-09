@@ -36,9 +36,10 @@ export default function AppShell() {
   const canAdmin      = CAN_ADMIN.includes(role)
   const canFlags      = CAN_FLAGS.includes(role)
 
-  const [drawerOpen,      setDrawerOpen]      = useState(false)
-  const [unreadNotices,   setUnreadNotices]   = useState(0)
-  const [openIncidents,   setOpenIncidents]   = useState(0)
+  const [drawerOpen,        setDrawerOpen]      = useState(false)
+  const [unreadNotices,     setUnreadNotices]   = useState(0)
+  const [openIncidents,     setOpenIncidents]   = useState(0)
+  const [signOutConfirm,    setSignOutConfirm]  = useState(false)
   const navigate = useNavigate()
 
   const fetchCounts = useCallback(async () => {
@@ -83,8 +84,13 @@ export default function AppShell() {
     navigate(path)
   }
 
-  const signOut = () => {
+  const confirmSignOut = () => {
     closeDrawer()
+    setSignOutConfirm(true)
+  }
+
+  const doSignOut = () => {
+    setSignOutConfirm(false)
     supabase.auth.signOut()
   }
 
@@ -150,7 +156,7 @@ export default function AppShell() {
             </div>
           </button>
           <button
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => setSignOutConfirm(true)}
             className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors"
           >
             <LogOut size={15} />
@@ -290,12 +296,46 @@ export default function AppShell() {
 
               {/* Sign out */}
               <button
-                onClick={signOut}
+                onClick={confirmSignOut}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-red-50 transition-colors text-left"
               >
                 <LogOut size={20} className="text-red-500" />
                 <span className="text-sm font-medium text-red-500">Sign out</span>
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Sign-out confirmation dialog ── */}
+      {signOutConfirm && (
+        <>
+          {/* Overlay */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => setSignOutConfirm(false)}
+          />
+          {/* Card */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 pointer-events-auto">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Sign Out?</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to sign out of Tiru?
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setSignOutConfirm(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={doSignOut}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
             </div>
           </div>
         </>
