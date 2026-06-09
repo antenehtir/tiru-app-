@@ -138,16 +138,28 @@ function UsersSection() {
     setFormErr(null)
     setSuccessMsg(null)
 
-    // Auto-generate next AMC-XXX employee ID
+    // Auto-generate next AMC-XXX employee ID (sorted desc, limit 1 = efficient)
     const { data: empData } = await supabase
       .from('profiles')
       .select('employee_id')
       .like('employee_id', 'AMC-%')
-    const nums = ((empData ?? []) as { employee_id: string | null }[])
-      .map(p => parseInt(p.employee_id?.replace('AMC-', '') ?? '0', 10))
-      .filter(n => !isNaN(n) && n > 0)
-    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 9
-    const nextId = 'AMC-' + String(nextNum).padStart(3, '0')
+      .order('employee_id', { ascending: false })
+      .limit(1)
+    const lastNum = parseInt(
+      ((empData?.[0] as { employee_id: string | null } | undefined)?.employee_id ?? 'AMC-008')
+        .replace('AMC-', ''),
+      10,
+    )
+    const nextId = 'AMC-' + String((isNaN(lastNum) ? 8 : lastNum) + 1).padStart(3, '0')
+
+    // Fetch departments and prepend synthetic GP entry if not already present
+    const { data: deptData } = await supabase
+      .from('departments')
+      .select('id, name')
+      .order('name')
+    const fetched = (deptData as DeptOption[]) ?? []
+    const hasGP = fetched.some(d => d.name.toLowerCase().includes('general practice'))
+    setDepts(hasGP ? fetched : [{ id: 'gp', name: 'General Practice (GP)' }, ...fetched])
 
     setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId })
     setInviteOpen(true)
@@ -160,17 +172,22 @@ function UsersSection() {
 
     setSaving(true)
 
-    // Insert profile with a fresh UUID (no auth user required upfront)
+    const newId = crypto.randomUUID()
+    // 'gp' is a synthetic UI-only entry — pass null to the DB
+    const deptId = inviteForm.department_id === 'gp' || !inviteForm.department_id
+      ? null
+      : inviteForm.department_id
+
     const { error: profileErr } = await supabase.from('profiles').insert({
-      id:            crypto.randomUUID(),
+      id:            newId,
       full_name:     inviteForm.full_name.trim(),
       email:         inviteForm.email.trim(),
       phone:         inviteForm.phone.trim() || null,
       role:          inviteForm.role,
-      department_id: inviteForm.department_id || null,
+      department_id: deptId,
       employee_id:   inviteForm.employee_id.trim() || null,
-      is_active:     true,
       facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
+      is_active:     true,
     })
 
     setSaving(false)
@@ -185,7 +202,7 @@ function UsersSection() {
     const email = inviteForm.email.trim()
     setInviteOpen(false)
     setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '' })
-    setSuccessMsg(`Staff member added. A password setup email has been sent to ${email}.`)
+    setSuccessMsg(`Staff member added successfully. A password setup email has been sent to ${email}.`)
     fetchUsers()
   }
 
