@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export interface Profile {
   id: string
   full_name: string | null
+  email: string | null
   role: string | null
   facility_id: string | null
   department_id: string | null
