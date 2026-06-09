@@ -172,37 +172,46 @@ function UsersSection() {
 
     setSaving(true)
 
-    const newId = crypto.randomUUID()
-    // 'gp' is a synthetic UI-only entry — pass null to the DB
-    const deptId = inviteForm.department_id === 'gp' || !inviteForm.department_id
-      ? null
-      : inviteForm.department_id
+    // Step 1: Create auth user via signUp — the DB trigger auto-creates the profile
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email:    inviteForm.email.trim(),
+      password: 'TiruAMC2026!' + Math.random().toString(36).slice(2),
+      options:  {
+        data: {
+          full_name: inviteForm.full_name.trim(),
+          role:      inviteForm.role,
+        },
+      },
+    })
 
-    const { error: profileErr } = await supabase.from('profiles').insert({
-      id:            newId,
-      full_name:     inviteForm.full_name.trim(),
-      email:         inviteForm.email.trim(),
-      phone:         inviteForm.phone.trim() || null,
-      role:          inviteForm.role,
-      department_id: deptId,
-      employee_id:   inviteForm.employee_id.trim() || null,
-      facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
-      is_active:     true,
+    if (signUpError) { setSaving(false); setFormErr(signUpError.message); return }
+
+    // Step 2: Update the auto-created profile with remaining fields
+    if (signUpData?.user?.id) {
+      const deptId = inviteForm.department_id === 'gp' || !inviteForm.department_id
+        ? null
+        : inviteForm.department_id
+
+      await supabase.from('profiles').update({
+        full_name:     inviteForm.full_name.trim(),
+        role:          inviteForm.role,
+        phone:         inviteForm.phone.trim() || null,
+        department_id: deptId,
+        employee_id:   inviteForm.employee_id.trim() || null,
+        facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
+      }).eq('id', signUpData.user.id)
+    }
+
+    // Step 3: Send password-setup email
+    await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
+      redirectTo: window.location.origin + '/set-password',
     })
 
     setSaving(false)
-
-    if (profileErr) { setFormErr(profileErr.message); return }
-
-    // Send password-setup email so the staff member can create their account
-    await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
-      redirectTo: window.location.origin + '/reset-password',
-    })
-
-    const email = inviteForm.email.trim()
+    const name = inviteForm.full_name.trim()
     setInviteOpen(false)
     setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '' })
-    setSuccessMsg(`Staff member added successfully. A password setup email has been sent to ${email}.`)
+    setSuccessMsg(`Account created for ${name}. They will receive an email to set their password.`)
     fetchUsers()
   }
 
