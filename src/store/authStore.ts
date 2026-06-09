@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { Session } from '@supabase/supabase-js'
 
 export interface Profile {
   id: string
@@ -14,14 +15,22 @@ export interface Profile {
 
 interface AuthStore {
   profile: Profile | null
+  session: Session | null
+  loading: boolean
   profileReady: boolean
   setProfile: (profile: Profile | null) => void
+  setSession: (session: Session | null) => void
+  setLoading: (loading: boolean) => void
   setProfileReady: (ready: boolean) => void
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
   profile: null,
+  session: null,
+  loading: true,
   profileReady: false,
   setProfile: (profile) => set({ profile }),
+  setSession: (session) => set({ session }),
+  setLoading: (loading) => set({ loading }),
   setProfileReady: (ready) => set({ profileReady: ready }),
 }))
