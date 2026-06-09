@@ -184,7 +184,16 @@ function UsersSection() {
       },
     })
 
-    if (signUpError) { setSaving(false); setFormErr(signUpError.message); return }
+    if (signUpError) {
+      setSaving(false)
+      const msg = signUpError.message.toLowerCase()
+      setFormErr(
+        msg.includes('rate limit') || msg.includes('email rate')
+          ? 'Email sending limit reached. Please wait 1 hour and try again, or contact Supabase support to upgrade email limits.'
+          : signUpError.message
+      )
+      return  // modal stays open, form stays filled
+    }
 
     // Step 2: Update the auto-created profile with remaining fields
     if (signUpData?.user?.id) {
