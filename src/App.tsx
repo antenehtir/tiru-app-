@@ -12,6 +12,7 @@ import Leave from './pages/Leave'
 import Staff from './pages/Staff'
 import Incidents from './pages/Incidents'
 import Notices from './pages/Notices'
+import Flags from './pages/Flags'
 import Admin from './pages/Admin'
 
 const Spinner = () => (
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/staff"      element={<Staff />} />
           <Route path="/incidents"  element={<Incidents />} />
           <Route path="/notices"    element={<Notices />} />
+          <Route path="/flags"      element={<Flags />} />
           <Route path="/admin"      element={<Admin />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

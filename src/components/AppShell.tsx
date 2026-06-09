@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
-  Users, ShieldAlert, Bell, Settings, LogOut, MoreHorizontal,
+  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -19,6 +19,7 @@ const MOBILE_MAIN = NAV_ITEMS
 
 const LEADERSHIP = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
 const CAN_ADMIN  = ['super_admin', 'ceo', 'general_manager']
+const CAN_FLAGS  = ['super_admin', 'ceo', 'general_manager', 'medical_director']
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -34,6 +35,7 @@ export default function AppShell() {
   const isSuperAdmin  = role === 'super_admin'
   const isLeadership  = LEADERSHIP.includes(role)
   const canAdmin      = CAN_ADMIN.includes(role)
+  const canFlags      = CAN_FLAGS.includes(role)
 
   const [drawerOpen,      setDrawerOpen]      = useState(false)
   const [unreadNotices,   setUnreadNotices]   = useState(0)
@@ -110,6 +112,12 @@ export default function AppShell() {
             <Bell size={18} />
             Notices
           </NavLink>
+          {canFlags && (
+            <NavLink to="/flags" className={navClass}>
+              <AlertTriangle size={18} />
+              Flags
+            </NavLink>
+          )}
           {isSuperAdmin && (
             <NavLink to="/admin" className={navClass}>
               <Settings size={18} />
@@ -217,6 +225,17 @@ export default function AppShell() {
                   </span>
                 )}
               </button>
+
+              {/* Flags (leadership) */}
+              {canFlags && (
+                <button
+                  onClick={() => go('/flags')}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                >
+                  <AlertTriangle size={20} className="text-red-500" />
+                  <span className="text-sm font-medium text-gray-800">Flags &amp; Alerts</span>
+                </button>
+              )}
 
               {/* Admin (conditional) */}
               {canAdmin && (
