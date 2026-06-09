@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Phone, Search, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../store/authStore'
 
 interface StaffMember {
   id: string
@@ -18,7 +17,6 @@ interface Department {
 }
 
 export default function Staff() {
-  const { profile } = useAuthStore()
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [deptMap, setDeptMap] = useState<Record<string, string>>({})
   const [query, setQuery] = useState('')
@@ -26,21 +24,16 @@ export default function Staff() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const fid = profile?.facility_id
-    if (!fid) return
-
     async function fetchData() {
       const [staffRes, deptRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, full_name, role, department_id, phone, employee_id')
-          .eq('facility_id', fid)
           .eq('is_active', true)
           .order('full_name', { ascending: true }),
         supabase
           .from('departments')
-          .select('id, name')
-          .eq('facility_id', fid),
+          .select('id, name'),
       ])
 
       if (staffRes.error) { setError(staffRes.error.message); setLoading(false); return }
@@ -57,7 +50,7 @@ export default function Staff() {
     }
 
     fetchData()
-  }, [profile?.facility_id])
+  }, [])
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim()
