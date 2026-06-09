@@ -32,7 +32,6 @@ function navClass({ isActive }: { isActive: boolean }) {
 export default function AppShell() {
   const profile  = useAuthStore((s) => s.profile)
   const role     = profile?.role ?? ''
-  const isSuperAdmin  = role === 'super_admin'
   const isLeadership  = LEADERSHIP.includes(role)
   const canAdmin      = CAN_ADMIN.includes(role)
   const canFlags      = CAN_FLAGS.includes(role)
@@ -118,7 +117,7 @@ export default function AppShell() {
               Flags
             </NavLink>
           )}
-          {isSuperAdmin && (
+          {canAdmin && (
             <NavLink to="/admin" className={navClass}>
               <Settings size={18} />
               Admin
