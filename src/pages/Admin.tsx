@@ -119,7 +119,7 @@ function UsersSection() {
     setLoading(true); setError(null)
     const { data, error: err } = await supabase
       .from('profiles')
-      .select(`*, department:departments(name)`)
+      .select(`*, department:departments!profiles_department_id_fkey(name)`)
       .order('full_name')
     if (err) setError(err.message)
     else setUsers((data as Profile[]) ?? [])

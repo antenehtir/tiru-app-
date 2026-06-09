@@ -28,7 +28,6 @@ export default function Dashboard() {
         const { count: depts, error: e2 } = await supabase
           .from('departments')
           .select('*', { count: 'exact', head: true })
-          .eq('facility_id', fid)
         if (e2) { setError('Depts: ' + e2.message); setLoading(false); return }
 
         const today = new Date().toISOString().split('T')[0]
