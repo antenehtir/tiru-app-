@@ -23,6 +23,7 @@ const PILOT_USERS = [
   { email: 'meddir@amc.et',      password: 'Test1234!', full_name: 'Dr. Yonas Tadesse', role: 'medical_director', employee_id: 'AMC-005', department: 'Administration' },
   { email: 'ceo@amc.et',         password: 'Test1234!', full_name: 'Akeza Teame',        role: 'ceo',              employee_id: 'AMC-006', department: 'Administration' },
   { email: 'coordinator@amc.et', password: 'Test1234!', full_name: 'Sara Alemu',         role: 'coordinator',      employee_id: 'AMC-007', department: 'Administration' },
+  { email: 'gm@amc.et',         password: 'Test1234!', full_name: 'Melat Abate',         role: 'general_manager',  employee_id: 'AMC-008', department: 'Administration' },
 ]
 
 async function seed() {
