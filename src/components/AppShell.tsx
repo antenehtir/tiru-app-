@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, CalendarDays, UserCheck, Umbrella,
-  Users, AlertTriangle, Bell, Settings, LogOut,
+  LayoutDashboard, CalendarDays, QrCode, CalendarOff,
+  Users, ShieldAlert, Bell, Settings, LogOut,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -9,14 +9,17 @@ import { useAuthStore } from '../store/authStore'
 const NAV_ITEMS = [
   { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { to: '/shifts',     label: 'Shifts',     icon: CalendarDays },
-  { to: '/attendance', label: 'Attendance', icon: UserCheck },
-  { to: '/leave',      label: 'Leave',      icon: Umbrella },
+  { to: '/attendance', label: 'Attendance', icon: QrCode },
+  { to: '/leave',      label: 'Leave',      icon: CalendarOff },
   { to: '/staff',      label: 'Staff',      icon: Users },
-  { to: '/incidents',  label: 'Incidents',  icon: AlertTriangle },
+  { to: '/incidents',  label: 'Incidents',  icon: ShieldAlert },
   { to: '/notices',    label: 'Notices',    icon: Bell },
 ]
 
-const MOBILE_ITEMS = NAV_ITEMS.slice(0, 5)
+const MOBILE_ITEMS = [
+  ...NAV_ITEMS,
+  { to: '/admin', label: 'Admin', icon: Settings },
+]
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -80,13 +83,13 @@ export default function AppShell() {
       </div>
 
       {/* ── Bottom tab bar (mobile) ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 flex z-10">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 flex overflow-x-auto z-10">
         {MOBILE_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-medium transition-colors ${
+              `min-w-fit flex flex-col items-center justify-center px-3 py-2 gap-0.5 text-[10px] font-medium transition-colors ${
                 isActive ? 'text-teal-700' : 'text-gray-500'
               }`
             }
