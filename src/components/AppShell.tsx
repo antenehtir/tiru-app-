@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
-  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal,
+  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal, User,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -126,14 +126,29 @@ export default function AppShell() {
         </nav>
 
         <div className="px-4 py-4 border-t border-gray-200 space-y-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {profile?.full_name ?? '—'}
-            </p>
-            <p className="text-xs text-gray-500 capitalize">
-              {profile?.role?.replace(/_/g, ' ') ?? ''}
-            </p>
-          </div>
+          {/* Clickable profile link */}
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex items-center gap-2.5 w-full min-w-0 group text-left"
+          >
+            {/* Avatar circle */}
+            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center
+                            text-white text-xs font-bold flex-shrink-0 select-none
+                            group-hover:bg-teal-700 transition-colors">
+              {(profile?.full_name ?? '')
+                .split(' ').filter(Boolean).slice(0, 2)
+                .map((w: string) => w[0].toUpperCase()).join('')
+                || <User size={14} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-900 truncate group-hover:text-teal-700 transition-colors">
+                {profile?.full_name ?? '—'}
+              </p>
+              <p className="text-xs text-gray-500 capitalize truncate">
+                {profile?.role?.replace(/_/g, ' ') ?? ''}
+              </p>
+            </div>
+          </button>
           <button
             onClick={() => supabase.auth.signOut()}
             className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors"
@@ -199,6 +214,29 @@ export default function AppShell() {
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-4" />
 
             <div className="px-4 pb-6 space-y-1">
+              {/* My Profile */}
+              <button
+                onClick={() => go('/profile')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                {/* Mini avatar */}
+                <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center
+                                text-white text-xs font-bold flex-shrink-0 select-none">
+                  {(profile?.full_name ?? '')
+                    .split(' ').filter(Boolean).slice(0, 2)
+                    .map((w: string) => w[0].toUpperCase()).join('')
+                    || <User size={14} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {profile?.full_name ?? 'My Profile'}
+                  </p>
+                  <p className="text-xs text-gray-400 capitalize truncate">
+                    {profile?.role?.replace(/_/g, ' ') ?? ''}
+                  </p>
+                </div>
+              </button>
+
               {/* Incidents */}
               <button
                 onClick={() => go('/incidents')}

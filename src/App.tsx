@@ -14,6 +14,7 @@ import Incidents from './pages/Incidents'
 import Notices from './pages/Notices'
 import Flags from './pages/Flags'
 import Admin from './pages/Admin'
+import Profile from './pages/Profile'
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/notices"    element={<Notices />} />
           <Route path="/flags"      element={<Flags />} />
           <Route path="/admin"      element={<Admin />} />
+          <Route path="/profile"    element={<Profile />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
