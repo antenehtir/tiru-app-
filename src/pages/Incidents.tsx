@@ -83,6 +83,7 @@ export default function Incidents() {
   const [reviewStatus,   setReviewStatus]   = useState<IncidentStatus>('under_review')
   const [resolutionNote, setResolutionNote] = useState('')
   const [reviewing,      setReviewing]      = useState(false)
+  const [reviewErr,      setReviewErr]      = useState<string | null>(null)
 
   const fetchReports = useCallback(async () => {
     setLoading(true); setError(null)
@@ -124,12 +125,28 @@ export default function Incidents() {
 
   const applyReview = async () => {
     if (!reviewMode) return
+    setReviewErr(null)
+
+    if (reviewStatus === 'dismissed' && !resolutionNote.trim()) {
+      setReviewErr('Please provide a reason for dismissal')
+      return
+    }
+
     setReviewing(true)
-    const { error: err } = await supabase.from('incident_reports')
-      .update({ status: reviewStatus, resolution_note: resolutionNote.trim() || null })
+    const { error: updateErr } = await supabase
+      .from('incident_reports')
+      .update({
+        status: reviewStatus,
+        resolution_note: resolutionNote.trim() || null,
+      })
       .eq('id', reviewMode.id)
-    setReviewing(false)
-    if (err) return
+
+    if (updateErr) {
+      console.error('Update error:', updateErr)
+      setReviewErr(updateErr.message)
+      setReviewing(false)
+      return
+    }
 
     const { data: inc } = await supabase
       .from('incident_reports')
@@ -156,7 +173,7 @@ export default function Incidents() {
     }
     const msg = statusMessages[reviewStatus]
     if (msg && inc?.reporter_id) {
-      await supabase.from('notices').insert({
+      const { error: noticeErr } = await supabase.from('notices').insert({
         author_id: user?.id,
         title: msg.title,
         body: msg.body,
@@ -166,9 +183,14 @@ export default function Incidents() {
         target_user_id: inc.reporter_id,
         pinned: false,
       })
+      if (noticeErr) console.error('Notice error:', noticeErr)
     }
 
-    setReviewMode(null); setResolutionNote(''); fetchReports()
+    setReviewing(false)
+    setReviewMode(null)
+    setResolutionNote('')
+    setReviewErr(null)
+    fetchReports()
   }
 
   const deleteNotice = async (id: string, reporterId: string) => {
@@ -390,12 +412,17 @@ export default function Incidents() {
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="text-lg font-semibold">Update Status</h2>
-              <button onClick={() => { setReviewMode(null); setResolutionNote('') }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setReviewMode(null); setResolutionNote(''); setReviewErr(null) }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {reviewErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{reviewErr}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Status</label>
-                <select value={reviewStatus} onChange={e => setReviewStatus(e.target.value as IncidentStatus)}
+                <select value={reviewStatus} onChange={e => { setReviewStatus(e.target.value as IncidentStatus); setReviewErr(null) }}
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="under_review">Under Review</option>
                   <option value="resolved">Resolved</option>
@@ -403,14 +430,24 @@ export default function Incidents() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Resolution / Note</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {reviewStatus === 'dismissed'
+                    ? 'Reason for dismissal *'
+                    : reviewStatus === 'resolved'
+                    ? 'Resolution details (optional)'
+                    : 'Note (optional)'}
+                </label>
                 <textarea rows={3} value={resolutionNote} onChange={e => setResolutionNote(e.target.value)}
-                  placeholder="Add a note or resolution detail…"
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                  placeholder={reviewStatus === 'dismissed' ? 'Required — explain why this report is being dismissed…' : 'Add a note or resolution detail…'}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 outline-none resize-none ${
+                    reviewStatus === 'dismissed'
+                      ? 'border-amber-300 dark:border-amber-600 focus:ring-amber-400'
+                      : 'border-gray-200 dark:border-gray-600 focus:ring-teal-500'
+                  }`} />
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button onClick={() => { setReviewMode(null); setResolutionNote('') }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={() => { setReviewMode(null); setResolutionNote(''); setReviewErr(null) }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={applyReview} disabled={reviewing}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {reviewing && <Loader2 className="w-4 h-4 animate-spin" />}Update
