@@ -4,10 +4,20 @@ import { useAuth } from '../hooks/useAuth'
 import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
-  ChevronDown, ChevronUp, Shield,
+  ChevronDown, ChevronUp, Shield, MapPin, Pencil,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type Site = {
+  id: string
+  name: string
+  address: string | null
+  latitude: number | null
+  longitude: number | null
+  geofence_radius: number | null
+  is_active: boolean
+}
 
 type Profile = {
   id: string
@@ -84,10 +94,192 @@ export default function Admin() {
         <p className="text-sm text-gray-500 mt-0.5">Manage users, departments, and QR codes</p>
       </div>
 
+      {role === 'super_admin' && <SitesSection />}
       <UsersSection />
       <DepartmentsSection />
       <QRCodesSection />
     </div>
+  )
+}
+
+// ─── Sites Section ────────────────────────────────────────────────────────────
+
+const EMPTY_SITE_FORM = { name: '', address: '', latitude: '', longitude: '', geofence_radius: '150' }
+
+function SitesSection() {
+  const [sites,     setSites]     = useState<Site[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editSite,  setEditSite]  = useState<Site | null>(null)
+  const [saving,    setSaving]    = useState(false)
+  const [formErr,   setFormErr]   = useState<string | null>(null)
+  const [form,      setForm]      = useState(EMPTY_SITE_FORM)
+
+  const fetchSites = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase.from('sites').select('*').order('name')
+    setSites((data as Site[]) ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchSites() }, [fetchSites])
+
+  const openAdd = () => {
+    setEditSite(null)
+    setForm(EMPTY_SITE_FORM)
+    setFormErr(null)
+    setModalOpen(true)
+  }
+
+  const openEdit = (s: Site) => {
+    setEditSite(s)
+    setForm({
+      name:            s.name,
+      address:         s.address ?? '',
+      latitude:        s.latitude != null ? String(s.latitude) : '',
+      longitude:       s.longitude != null ? String(s.longitude) : '',
+      geofence_radius: s.geofence_radius != null ? String(s.geofence_radius) : '150',
+    })
+    setFormErr(null)
+    setModalOpen(true)
+  }
+
+  const saveSite = async () => {
+    setFormErr(null)
+    if (!form.name.trim())     return setFormErr('Site name is required.')
+    if (!form.latitude.trim()) return setFormErr('Latitude is required.')
+    if (!form.longitude.trim()) return setFormErr('Longitude is required.')
+    const lat = parseFloat(form.latitude)
+    const lng = parseFloat(form.longitude)
+    if (isNaN(lat) || isNaN(lng)) return setFormErr('Latitude and longitude must be valid numbers.')
+
+    setSaving(true)
+    const payload = {
+      name:            form.name.trim(),
+      address:         form.address.trim() || null,
+      latitude:        lat,
+      longitude:       lng,
+      geofence_radius: form.geofence_radius ? parseInt(form.geofence_radius, 10) : 150,
+    }
+    const { error: err } = editSite
+      ? await supabase.from('sites').update(payload).eq('id', editSite.id)
+      : await supabase.from('sites').insert({ ...payload, is_active: true })
+    setSaving(false)
+    if (err) { setFormErr(err.message); return }
+    setModalOpen(false)
+    fetchSites()
+  }
+
+  const toggleActive = async (id: string, current: boolean) => {
+    await supabase.from('sites').update({ is_active: !current }).eq('id', id)
+    fetchSites()
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-teal-500" />Sites &amp; Locations
+          <span className="text-sm font-normal text-gray-400">({sites.length})</span>
+        </h2>
+        <button onClick={openAdd}
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <MapPin className="w-4 h-4" />Add Site
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-gray-400 py-8 justify-center">
+          <Loader2 className="w-5 h-5 animate-spin" />Loading…
+        </div>
+      ) : sites.length === 0 ? (
+        <p className="text-sm text-gray-400 py-4">No sites yet. Add one above.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {sites.map(s => (
+            <div key={s.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-4 flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-semibold text-sm text-gray-900 dark:text-white">{s.name}</span>
+                {s.is_active
+                  ? <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5 flex-shrink-0">Active</span>
+                  : <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 flex-shrink-0">Inactive</span>
+                }
+              </div>
+              {s.address && <div className="text-xs text-gray-500 dark:text-gray-400">{s.address}</div>}
+              <div className="text-xs text-gray-400 font-mono">
+                {s.latitude != null && s.longitude != null
+                  ? `${s.latitude}, ${s.longitude}`
+                  : <span className="italic">No coordinates</span>
+                }
+              </div>
+              <div className="text-xs text-gray-400">
+                Geofence: {s.geofence_radius ?? 150} m
+              </div>
+              <div className="flex gap-2 mt-1">
+                <button onClick={() => openEdit(s)}
+                  className="flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg transition-colors">
+                  <Pencil className="w-3 h-3" />Edit
+                </button>
+                <button onClick={() => toggleActive(s.id, s.is_active)}
+                  className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${s.is_active ? 'bg-red-50 hover:bg-red-100 text-red-600' : 'bg-green-50 hover:bg-green-100 text-green-700'}`}>
+                  {s.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+              <h2 className="text-lg font-semibold">{editSite ? 'Edit Site' : 'Add Site'}</h2>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {formErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4" />{formErr}
+                </div>
+              )}
+              {([
+                { label: 'Site Name *',  key: 'name',      type: 'text',   placeholder: 'e.g. Main Campus' },
+                { label: 'Address',      key: 'address',   type: 'text',   placeholder: 'e.g. 123 Hospital Rd' },
+                { label: 'Latitude *',   key: 'latitude',  type: 'number', placeholder: 'e.g. 9.0054' },
+                { label: 'Longitude *',  key: 'longitude', type: 'number', placeholder: 'e.g. 38.7636' },
+              ] as { label: string; key: keyof typeof form; type: string; placeholder: string }[]).map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                  <input type={f.type} step="any" placeholder={f.placeholder}
+                    value={form[f.key]}
+                    onChange={e => setForm(x => ({ ...x, [f.key]: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Geofence Radius (metres)</label>
+                <input type="number" min="1" placeholder="150"
+                  value={form.geofence_radius}
+                  onChange={e => setForm(x => ({ ...x, geofence_radius: e.target.value }))}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+              </div>
+              <p className="text-xs text-gray-400">
+                Tip: Right-click your location on Google Maps to copy coordinates.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={saveSite} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : editSite ? 'Update Site' : 'Add Site'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 
