@@ -1,20 +1,28 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { MapPin } from 'lucide-react'
 
+const LEADERSHIP_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
+
 export default function Dashboard() {
   const { profile } = useAuthStore()
+  const navigate = useNavigate()
+  const role = profile?.role ?? ''
+  const isLeadership = LEADERSHIP_ROLES.includes(role)
+
   const [stats, setStats] = useState({
     staff: 0, departments: 0, shifts: 0, leave: 0
   })
   const [sitesCount, setSitesCount] = useState(0)
-  const [incidents, setIncidents] = useState<any[]>([])
+  const [activeIncidentCount, setActiveIncidentCount] = useState(0)
+  const [myIncidents, setMyIncidents] = useState<any[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!profile?.facility_id) return
+    if (!profile?.id) return
 
     async function fetchData() {
       try {
@@ -53,13 +61,23 @@ export default function Dashboard() {
           .eq('is_active', true)
         if (e5) { setError('Sites: ' + e5.message); setLoading(false); return }
 
-        const { data: inc, error: e7 } = await supabase
-          .from('incident_reports')
-          .select('id, title, severity, created_at')
-          .eq('facility_id', fid)
-          .order('created_at', { ascending: false })
-          .limit(5)
-        if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
+        if (isLeadership) {
+          const { count: activeInc, error: e7 } = await supabase
+            .from('incident_reports')
+            .select('*', { count: 'exact', head: true })
+            .in('status', ['submitted', 'under_review'])
+          if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
+          setActiveIncidentCount(activeInc ?? 0)
+        } else {
+          const { data: myInc, error: e7 } = await supabase
+            .from('incident_reports')
+            .select('id, title, severity, status, created_at')
+            .eq('reporter_id', profile!.id)
+            .order('created_at', { ascending: false })
+            .limit(3)
+          if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
+          setMyIncidents(myInc ?? [])
+        }
 
         setStats({
           staff: staff ?? 0,
@@ -68,7 +86,6 @@ export default function Dashboard() {
           leave: leave ?? 0
         })
         setSitesCount(sites ?? 0)
-        setIncidents(inc ?? [])
 
         setLoading(false)
       } catch (e: any) {
@@ -78,7 +95,7 @@ export default function Dashboard() {
     }
 
     fetchData()
-  }, [profile?.facility_id])
+  }, [profile?.id, isLeadership])
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning'
@@ -96,6 +113,13 @@ export default function Dashboard() {
     medium: 'bg-amber-100 text-amber-700',
     high: 'bg-orange-100 text-orange-700',
     critical: 'bg-red-100 text-red-700',
+  }
+
+  const statusColors: Record<string, string> = {
+    submitted:    'bg-blue-100 text-blue-700',
+    under_review: 'bg-amber-100 text-amber-700',
+    resolved:     'bg-green-100 text-green-700',
+    dismissed:    'bg-gray-100 text-gray-500',
   }
 
   if (loading) return (
@@ -139,28 +163,39 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">
-          Recent Incidents
-        </h2>
-        {incidents.length > 0 ? (
-          <ul className="space-y-3">
-            {incidents.map((inc) => (
-              <li key={inc.id}
-                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                <span className="text-sm text-gray-700">{inc.title}</span>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${severityColors[inc.severity]}`}>
-                  {inc.severity}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-gray-400 text-center py-4">
-            No incidents reported yet.
-          </p>
-        )}
-      </div>
+      {isLeadership ? (
+        <button
+          onClick={() => navigate('/incidents')}
+          className="w-full text-left bg-white border border-gray-200 rounded-lg p-4 hover:border-teal-300 hover:shadow-sm transition-all">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">Active Incidents</h2>
+          <p className="text-3xl font-bold text-orange-600">{activeIncidentCount}</p>
+          <p className="text-sm text-gray-400 mt-1">Submitted or under review — click to manage</p>
+        </button>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">My Reports</h2>
+          {myIncidents.length > 0 ? (
+            <ul className="space-y-3">
+              {myIncidents.map((inc) => (
+                <li key={inc.id}
+                  className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0 gap-3">
+                  <span className="text-sm text-gray-700 flex-1">{inc.title}</span>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {inc.severity}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[inc.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {inc.status?.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">No incidents reported.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

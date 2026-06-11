@@ -129,7 +129,46 @@ export default function Incidents() {
       .update({ status: reviewStatus, resolution_note: resolutionNote.trim() || null })
       .eq('id', reviewMode.id)
     setReviewing(false)
-    if (!err) { setReviewMode(null); setResolutionNote(''); fetchReports() }
+    if (err) return
+
+    const { data: inc } = await supabase
+      .from('incident_reports')
+      .select('reporter_id, title')
+      .eq('id', reviewMode.id)
+      .single()
+    const { data: { user } } = await supabase.auth.getUser()
+    const statusMessages: Record<string, { title: string; body: string; priority: string }> = {
+      under_review: {
+        title: 'Incident Report — Under Review',
+        body: `Your incident report "${inc?.title}" is currently under review by leadership. You will be notified when a resolution is reached.`,
+        priority: 'info',
+      },
+      resolved: {
+        title: '✓ Incident Report — Resolved',
+        body: `Your incident report "${inc?.title}" has been reviewed and marked as resolved. Thank you for helping maintain facility safety standards.`,
+        priority: 'info',
+      },
+      dismissed: {
+        title: 'Incident Report — Closed',
+        body: `Your incident report "${inc?.title}" has been reviewed and closed. Please contact your department head or HR if you have questions.`,
+        priority: 'important',
+      },
+    }
+    const msg = statusMessages[reviewStatus]
+    if (msg && inc?.reporter_id) {
+      await supabase.from('notices').insert({
+        author_id: user?.id,
+        title: msg.title,
+        body: msg.body,
+        priority: msg.priority,
+        audience: 'all',
+        audience_type: 'personal',
+        target_user_id: inc.reporter_id,
+        pinned: false,
+      })
+    }
+
+    setReviewMode(null); setResolutionNote(''); fetchReports()
   }
 
   const deleteNotice = async (id: string, reporterId: string) => {
