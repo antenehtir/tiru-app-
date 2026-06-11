@@ -186,11 +186,40 @@ export default function Shifts() {
     schedule_type: 'regular', specialty: '', notes: '',
   })
 
+  // ── Department head: fetch own department name ──
+  const [userDeptName, setUserDeptName] = useState('')
+  useEffect(() => {
+    if (role === 'department_head' && profile?.department_id) {
+      supabase.from('departments')
+        .select('name')
+        .eq('id', profile.department_id)
+        .single()
+        .then(({ data }) => { if (data) setUserDeptName(data.name) })
+    }
+  }, [profile?.department_id, role])
+
   // ── Derived ──
   const weekDays  = Array.from({ length: 7 }, (_, i) => addDays(weekBase, i))
   const monthDays = monthGridDays(monthBase)
   const canAdd    = CAN_ADD_SHIFT.includes(role)
   const todayStr  = isoDate(new Date())
+
+  // Mapping from department name → group name
+  const DEPT_TO_GROUP: Record<string, GroupName> = {
+    'Internal Medicine': 'Medical Doctors', 'Emergency': 'Medical Doctors',
+    'Surgery': 'Medical Doctors', 'Pediatrics': 'Medical Doctors',
+    'Gynecology & Obstetrics': 'Medical Doctors', 'Radiology': 'Medical Doctors',
+    'General Practice': 'Medical Doctors',
+    'Nursing': 'Nurses', 'Midwifery': 'Midwives',
+    'Pharmacy': 'Pharmacy', 'Laboratory': 'Laboratory', 'Reception': 'Reception',
+  }
+  const deptHeadGroup: GroupName | null =
+    role === 'department_head' && userDeptName
+      ? (DEPT_TO_GROUP[userDeptName] ?? null)
+      : null
+  const visibleGroups = deptHeadGroup
+    ? GROUPS.filter(g => g.name === deptHeadGroup)
+    : GROUPS
 
   // ── Data fetching ──
   const fetchShifts = useCallback(async () => {
@@ -294,7 +323,9 @@ export default function Shifts() {
   const openModal = async () => {
     setFormError(null)
     setForm({
-      user_id: '', department_id: '', shift_date: isoDate(new Date()),
+      user_id: '',
+      department_id: role === 'department_head' ? (profile?.department_id ?? '') : '',
+      shift_date: isoDate(new Date()),
       start_time: '08:00', end_time: '17:00',
       schedule_type: scheduleType,
       specialty: selectedSpecialty ?? '',
@@ -351,7 +382,7 @@ export default function Shifts() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {GROUPS.map(({ name, icon: Icon, color, description }) => {
+          {visibleGroups.map(({ name, icon: Icon, color, description }) => {
             const { card, icon } = GROUP_COLORS[color]
             return (
               <button
@@ -461,7 +492,7 @@ export default function Shifts() {
           </h1>
         </div>
 
-        {canAdd && (
+        {canAdd && (role !== 'department_head' || selectedGroup === deptHeadGroup) && (
           <button
             onClick={openModal}
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
@@ -686,16 +717,28 @@ export default function Shifts() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   <Building2 className="inline w-3.5 h-3.5 mr-1" />Department
+                  {role === 'department_head' && (
+                    <span className="ml-1 text-gray-400 font-normal normal-case">(your department)</span>
+                  )}
                 </label>
-                <select
-                  value={form.department_id}
-                  onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                >
-                  <option value="">— None —</option>
-                  <option value="gp">General Practice (GP)</option>
-                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
+                {role === 'department_head' ? (
+                  <input
+                    type="text"
+                    value={userDeptName || 'Loading…'}
+                    disabled
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 outline-none cursor-not-allowed"
+                  />
+                ) : (
+                  <select
+                    value={form.department_id}
+                    onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                  >
+                    <option value="">— None —</option>
+                    <option value="gp">General Practice (GP)</option>
+                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                )}
               </div>
 
               {/* Date */}
