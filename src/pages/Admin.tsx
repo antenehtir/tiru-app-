@@ -301,7 +301,6 @@ function SitesSection() {
 // ─── Users Section ────────────────────────────────────────────────────────────
 
 function UsersSection({ currentRole }: { currentRole: string }) {
-  const { profile: currentUser } = useAuth()
   const [users,    setUsers]    = useState<Profile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
@@ -798,8 +797,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 const initials = (req.profile?.full_name ?? '?')
                   .split(' ').filter(Boolean).slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
                 const FIELD_LABEL: Record<string, string> = {
-                  full_name: 'Full Name', phone: 'Phone Number', email: 'Email',
+                  full_name: 'Full Name', phone: 'Phone Number', email: 'Email Address',
                 }
+                const fieldLabel = FIELD_LABEL[req.field_name]
+                  ?? req.field_name.charAt(0).toUpperCase() + req.field_name.slice(1)
                 return (
                   <div key={req.id}
                     className={`px-5 py-4 flex flex-col sm:flex-row sm:items-start gap-4 transition-all duration-300 ${isDismissed ? 'opacity-0 max-h-0 py-0 overflow-hidden' : 'opacity-100'}`}>
@@ -820,7 +821,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                         )}
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400">
-                        <span className="font-semibold">{FIELD_LABEL[req.field_name] ?? req.field_name}:</span>{' '}
+                        <span className="font-semibold">{fieldLabel}:</span>{' '}
                         <span className="line-through text-gray-400">{req.current_value || '—'}</span>
                         <span className="mx-1 text-gray-400">→</span>
                         <span className="text-teal-700 dark:text-teal-400 font-medium">{req.requested_value}</span>
@@ -836,9 +837,23 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     <div className="flex gap-2 flex-shrink-0 sm:mt-0.5">
                       <button
                         onClick={async () => {
+                          const { data: { user } } = await supabase.auth.getUser()
+                          const currentUserId = user?.id ?? null
+                          await supabase.from('profiles')
+                            .update({ [req.field_name]: req.requested_value })
+                            .eq('id', req.user_id)
+                          await supabase.from('profile_change_requests')
+                            .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+                            .eq('id', req.id)
+                          await supabase.from('notices').insert({
+                            author_id: currentUserId,
+                            title: 'Profile Update — Approved',
+                            body: `Your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
+                            priority: 'info',
+                            audience: 'all',
+                            pinned: false,
+                          })
                           setDismissedIds(prev => new Set([...prev, req.id]))
-                          await supabase.from('profiles').update({ [req.field_name]: req.requested_value }).eq('id', req.user_id)
-                          await supabase.from('profile_change_requests').update({ status: 'approved', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() }).eq('id', req.id)
                           setTimeout(() => { fetchPendingRequests(); fetchUsers() }, 350)
                         }}
                         className="flex items-center gap-1.5 text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg transition-colors font-medium">
@@ -846,8 +861,20 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       </button>
                       <button
                         onClick={async () => {
+                          const { data: { user } } = await supabase.auth.getUser()
+                          const currentUserId = user?.id ?? null
+                          await supabase.from('profile_change_requests')
+                            .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+                            .eq('id', req.id)
+                          await supabase.from('notices').insert({
+                            author_id: currentUserId,
+                            title: 'Profile Update — Not Approved',
+                            body: `Your request to update your ${fieldLabel} has been reviewed and was not approved at this time. Please contact HR or your administrator for more information.`,
+                            priority: 'important',
+                            audience: 'all',
+                            pinned: false,
+                          })
                           setDismissedIds(prev => new Set([...prev, req.id]))
-                          await supabase.from('profile_change_requests').update({ status: 'rejected', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() }).eq('id', req.id)
                           setTimeout(() => { fetchPendingRequests() }, 350)
                         }}
                         className="flex items-center gap-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
