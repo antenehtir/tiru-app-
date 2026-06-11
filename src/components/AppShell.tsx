@@ -2,20 +2,21 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
-  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal, User, ClipboardList,
+  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal, User, ClipboardList, Activity,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 
 const NAV_ITEMS = [
-  { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-  { to: '/shifts',     label: 'Shifts',     icon: CalendarDays },
-  { to: '/attendance', label: 'Attendance', icon: QrCode },
-  { to: '/leave',      label: 'Leave',      icon: CalendarOff },
-  { to: '/staff',      label: 'Staff',      icon: Users },
+  { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard, pulse: false },
+  { to: '/shifts',     label: 'Shifts',     icon: CalendarDays,    pulse: false },
+  { to: '/onduty',     label: 'On Duty',    icon: Activity,        pulse: true  },
+  { to: '/attendance', label: 'Attendance', icon: QrCode,          pulse: false },
+  { to: '/leave',      label: 'Leave',      icon: CalendarOff,     pulse: false },
+  { to: '/staff',      label: 'Staff',      icon: Users,           pulse: false },
 ]
 
-const MOBILE_MAIN = NAV_ITEMS
+const MOBILE_MAIN = NAV_ITEMS.filter(n => n.to !== '/onduty')
 
 const LEADERSHIP  = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
 const CAN_ADMIN   = ['super_admin', 'ceo', 'general_manager']
@@ -105,9 +106,16 @@ export default function AppShell() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {NAV_ITEMS.map(({ to, label, icon: Icon, pulse }) => (
             <NavLink key={to} to={to} className={navClass}>
-              <Icon size={18} />
+              <span className="relative">
+                <Icon size={18} />
+                {pulse && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500">
+                    <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
+                  </span>
+                )}
+              </span>
               {label}
             </NavLink>
           ))}
@@ -249,6 +257,20 @@ export default function AppShell() {
                     {profile?.role?.replace(/_/g, ' ') ?? ''}
                   </p>
                 </div>
+              </button>
+
+              {/* On Duty */}
+              <button
+                onClick={() => go('/onduty')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <span className="relative">
+                  <Activity size={20} className="text-green-600" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500">
+                    <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
+                  </span>
+                </span>
+                <span className="flex-1 text-sm font-medium text-gray-800">On Duty</span>
               </button>
 
               {/* Incidents */}

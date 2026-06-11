@@ -16,6 +16,7 @@ import Flags from './pages/Flags'
 import Admin from './pages/Admin'
 import AuditLog from './pages/AuditLog'
 import Profile from './pages/Profile'
+import OnDuty from './pages/OnDuty'
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="/audit"      element={<AuditLog />} />
           <Route path="/admin"      element={<Admin />} />
           <Route path="/profile"    element={<Profile />} />
+          <Route path="/onduty"     element={<OnDuty />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

@@ -2,12 +2,14 @@ import { useEffect, useState, useCallback } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 import {
   CalendarDays, Clock, Plus, X,
   ChevronLeft, ChevronRight,
   User, Building2, AlertCircle, Loader2,
   Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
   Upload, Edit2, Trash2, UserCheck, CheckCircle2, RefreshCw,
+  Phone, Activity,
 } from 'lucide-react'
 import ShiftUpload from '../components/ShiftUpload'
 
@@ -24,7 +26,7 @@ type ShiftRow = {
   schedule_type: string | null
   notes: string | null
   created_at: string
-  user: { full_name: string } | null
+  user: { full_name: string; phone: string | null } | null
   department: { name: string } | null
 }
 
@@ -152,15 +154,26 @@ function ShiftChip({ shift, onClick }: { shift: ShiftRow; onClick?: () => void }
   const colorClass = colors[shift.user_id.charCodeAt(0) % colors.length]
   const startT = shift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00'
   const endT   = shift.ends_at.split('T')[1]?.substring(0, 5)   ?? '00:00'
+  const phone  = shift.user?.phone
   return (
     <div
-      className={`rounded-md px-1.5 py-1 text-[10px] leading-tight ${colorClass} ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+      className={`relative rounded-md px-1.5 py-1 text-[10px] leading-tight ${colorClass} ${phone ? 'pb-4' : ''} ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
       onClick={onClick}
       title={`${shift.user?.full_name ?? 'Unknown'}\n${fmt12(startT)} – ${fmt12(endT)}${shift.notes ? '\n' + shift.notes : ''}`}
     >
       <div className="font-semibold truncate">{shift.user?.full_name ?? '—'}</div>
       <div className="opacity-75">{fmt12(startT)} – {fmt12(endT)}</div>
       {shift.specialty && <div className="opacity-60 truncate">{shift.specialty}</div>}
+      {phone && (
+        <a
+          href={`tel:${phone}`}
+          title={`Call ${shift.user?.full_name ?? ''}`}
+          onClick={e => e.stopPropagation()}
+          className="absolute bottom-1 right-1 bg-teal-500 hover:bg-teal-600 text-white rounded-full p-0.5 transition-colors"
+        >
+          <Phone className="w-3 h-3" />
+        </a>
+      )}
     </div>
   )
 }
@@ -169,6 +182,7 @@ function ShiftChip({ shift, onClick }: { shift: ShiftRow; onClick?: () => void }
 
 export default function Shifts() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const role = profile?.role ?? ''
 
   // ── Navigation state ──
@@ -294,7 +308,7 @@ export default function Shifts() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query: any = supabase
       .from('shifts')
-      .select('*, user:profiles!shifts_user_id_fkey(full_name), department:departments(name)')
+      .select('*, user:profiles!shifts_user_id_fkey(full_name, phone), department:departments(name)')
       .gte('starts_at', fromDate + 'T00:00:00')
       .lte('starts_at', toDate + 'T23:59:59')
       .eq('schedule_type', scheduleType)
@@ -626,22 +640,30 @@ export default function Shifts() {
           </h1>
         </div>
 
-        {showAddBtn && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setUploadOpen(true)}
-              className="flex items-center gap-2 border border-teal-600 text-teal-600 hover:bg-teal-50 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              <Upload className="w-4 h-4" />Bulk Upload
-            </button>
-            <button
-              onClick={openModal}
-              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />Add Shift
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/onduty')}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <Activity className="w-4 h-4" />Live
+          </button>
+          {showAddBtn && (
+            <>
+              <button
+                onClick={() => setUploadOpen(true)}
+                className="flex items-center gap-2 border border-teal-600 text-teal-600 hover:bg-teal-50 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                <Upload className="w-4 h-4" />Bulk Upload
+              </button>
+              <button
+                onClick={openModal}
+                className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />Add Shift
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Save success banner ── */}
