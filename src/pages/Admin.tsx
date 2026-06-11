@@ -315,6 +315,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const pendingRef = useRef<HTMLDivElement>(null)
   const pendingCount = pendingRequests.length
 
+  // Reject reason modal
+  const [rejectModal,  setRejectModal]  = useState<{ requestId: string; userId: string; fieldName: string; staffName: string } | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
   // Invite modal
   const [inviteOpen,  setInviteOpen]  = useState(false)
   const [saving,      setSaving]      = useState(false)
@@ -839,6 +843,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                         onClick={async () => {
                           const { data: { user } } = await supabase.auth.getUser()
                           const currentUserId = user?.id ?? null
+                          const staffName = req.profile?.full_name ?? 'Staff member'
                           await supabase.from('profiles')
                             .update({ [req.field_name]: req.requested_value })
                             .eq('id', req.user_id)
@@ -847,8 +852,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                             .eq('id', req.id)
                           await supabase.from('notices').insert({
                             author_id: currentUserId,
-                            title: 'Profile Update — Approved',
-                            body: `Your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
+                            title: '✓ Your Profile Update was Approved',
+                            body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
                             priority: 'info',
                             audience: 'all',
                             pinned: false,
@@ -860,22 +865,9 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                         <CheckCircle2 className="w-3.5 h-3.5" />Approve
                       </button>
                       <button
-                        onClick={async () => {
-                          const { data: { user } } = await supabase.auth.getUser()
-                          const currentUserId = user?.id ?? null
-                          await supabase.from('profile_change_requests')
-                            .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
-                            .eq('id', req.id)
-                          await supabase.from('notices').insert({
-                            author_id: currentUserId,
-                            title: 'Profile Update — Not Approved',
-                            body: `Your request to update your ${fieldLabel} has been reviewed and was not approved at this time. Please contact HR or your administrator for more information.`,
-                            priority: 'important',
-                            audience: 'all',
-                            pinned: false,
-                          })
-                          setDismissedIds(prev => new Set([...prev, req.id]))
-                          setTimeout(() => { fetchPendingRequests() }, 350)
+                        onClick={() => {
+                          setRejectReason('')
+                          setRejectModal({ requestId: req.id, userId: req.user_id, fieldName: req.field_name, staffName: req.profile?.full_name ?? 'Staff member' })
                         }}
                         className="flex items-center gap-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
                         <XCircle className="w-3.5 h-3.5" />Reject
@@ -886,6 +878,63 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Reject reason modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">Reject Change Request</h2>
+              <button onClick={() => setRejectModal(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Reason for rejection (optional)
+              </label>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                placeholder="Enter reason to share with staff member..."
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-400 outline-none resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => setRejectModal(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+              <button
+                onClick={async () => {
+                  const { requestId, fieldName, staffName } = rejectModal
+                  const FIELD_LABEL: Record<string, string> = {
+                    full_name: 'Full Name', phone: 'Phone Number', email: 'Email Address',
+                  }
+                  const fLabel = FIELD_LABEL[fieldName] ?? fieldName.charAt(0).toUpperCase() + fieldName.slice(1)
+                  const { data: { user } } = await supabase.auth.getUser()
+                  const currentUserId = user?.id ?? null
+                  await supabase.from('profile_change_requests')
+                    .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+                    .eq('id', requestId)
+                  const body = rejectReason.trim()
+                    ? `Hi ${staffName}, your request to update your ${fLabel} was not approved. Reason: ${rejectReason.trim()}. Please contact HR for more information.`
+                    : `Hi ${staffName}, your request to update your ${fLabel} was not approved. Please contact HR or your administrator for more information.`
+                  await supabase.from('notices').insert({
+                    author_id: currentUserId,
+                    title: `Your Profile Update Request — ${fLabel}`,
+                    body,
+                    priority: 'important',
+                    audience: 'all',
+                    pinned: false,
+                  })
+                  setRejectModal(null)
+                  setDismissedIds(prev => new Set([...prev, requestId]))
+                  setTimeout(() => { fetchPendingRequests() }, 350)
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
+                <XCircle className="w-4 h-4" />Confirm Reject
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
