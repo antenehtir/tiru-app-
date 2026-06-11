@@ -856,6 +856,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                             body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
                             priority: 'info',
                             audience: 'all',
+                            audience_type: 'personal',
+                            target_user_id: req.user_id,
                             pinned: false,
                           })
                           setDismissedIds(prev => new Set([...prev, req.id]))
@@ -924,6 +926,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     body,
                     priority: 'important',
                     audience: 'all',
+                    audience_type: 'personal',
+                    target_user_id: rejectModal.userId,
                     pinned: false,
                   })
                   setRejectModal(null)

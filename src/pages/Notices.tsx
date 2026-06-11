@@ -16,6 +16,8 @@ type Notice = {
   body: string
   priority: NoticePriority
   audience: NoticeAudience
+  audience_type: 'broadcast' | 'personal' | null
+  target_user_id: string | null
   department_id: string | null
   pinned: boolean
   created_at: string
@@ -62,7 +64,8 @@ export default function Notices() {
     setLoading(true); setError(null)
     const { data: noticeData, error: nErr } = await supabase
       .from('notices')
-      .select(`*, author:profiles!notices_author_id_fkey(full_name, role)`)
+      .select('*, author:profiles!notices_author_id_fkey(full_name, role)')
+      .or(`audience_type.eq.broadcast,audience_type.is.null,and(audience_type.eq.personal,target_user_id.eq.${profile!.id})`)
       .order('pinned',     { ascending: false })
       .order('created_at', { ascending: false })
     if (nErr) { setError(nErr.message); setLoading(false); return }
@@ -209,16 +212,20 @@ export default function Notices() {
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-semibold text-sm text-gray-900 dark:text-white">{notice.title}</span>
                       <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
-                      <span className="text-xs text-gray-400 capitalize">
-                        → {notice.audience === 'all' ? 'All Staff' : notice.audience}
-                      </span>
+                      {notice.audience_type === 'personal' ? (
+                        <span className="text-xs font-medium text-teal-600 bg-teal-50 dark:bg-teal-900/30 px-1.5 py-0.5 rounded-full">Personal</span>
+                      ) : (
+                        <span className="text-xs text-gray-400 capitalize">
+                          → {notice.audience === 'all' ? 'All Staff' : notice.audience}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{notice.body}</p>
                     <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
                       <span>{notice.author?.full_name ?? 'System'}</span>
                       <span>·</span>
                       <span>{new Date(notice.created_at).toLocaleString()}</span>
-                      {(profile!.id === notice.author_id || role === 'super_admin') && (
+                      {notice.audience_type !== 'personal' && (profile!.id === notice.author_id || role === 'super_admin') && (
                         <>
                           <span>·</span>
                           <button
