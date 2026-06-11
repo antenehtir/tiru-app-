@@ -217,9 +217,7 @@ export default function Shifts() {
     role === 'department_head' && userDeptName
       ? (DEPT_TO_GROUP[userDeptName] ?? null)
       : null
-  const visibleGroups = deptHeadGroup
-    ? GROUPS.filter(g => g.name === deptHeadGroup)
-    : GROUPS
+  const visibleGroups = GROUPS
 
   // ── Data fetching ──
   const fetchShifts = useCallback(async () => {
