@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
@@ -392,6 +392,14 @@ export default function Shifts() {
     return () => { supabase.removeChannel(channel) }
   }, [fetchShifts, navStep])
 
+  // ── Re-fetch on mobile day/week change ──
+  useEffect(() => {
+    if (selectedGroup && (selectedSpecialty || !GROUP_CONFIG[selectedGroup]?.specialties?.length)) {
+      fetchShifts()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileDate, weekBase])
+
   // ── Navigation ──
   function handleSelectGroup(group: GroupName) {
     setSelectedGroup(group)
@@ -428,6 +436,19 @@ export default function Shifts() {
     setMobileDate(todayStr)
     const todayWeekBase = weekStart(new Date())
     if (isoDate(todayWeekBase) !== isoDate(weekBase)) setWeekBase(todayWeekBase)
+  }
+
+  // ── Swipe gesture for mobile day navigation ──
+  const touchStartX = useRef<number>(0)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current
+    if (deltaX < -50) navigateMobileDay(1)
+    else if (deltaX > 50) navigateMobileDay(-1)
   }
 
   // ── Add Shift modal ──
@@ -875,7 +896,11 @@ export default function Shifts() {
       )}
 
       {/* ── Mobile calendar ── */}
-      <div className="md:hidden">
+      <div
+        className="md:hidden"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {viewMode === 'week' ? (
           /* ── Week: single day card ── */
           loading ? (
