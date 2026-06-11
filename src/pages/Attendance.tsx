@@ -6,6 +6,7 @@ import {
   AlertTriangle, Loader2, Wifi, WifiOff, History,
 } from 'lucide-react'
 
+// Test Medical Center 1 coordinates
 const FACILITY_LAT  = 9.0054
 const FACILITY_LNG  = 38.7636
 const GEOFENCE_M    = 150

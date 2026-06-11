@@ -138,19 +138,19 @@ function UsersSection() {
     setFormErr(null)
     setSuccessMsg(null)
 
-    // Auto-generate next AMC-XXX employee ID (sorted desc, limit 1 = efficient)
+    // Auto-generate next TMC-XXX employee ID (sorted desc, limit 1 = efficient)
     const { data: empData } = await supabase
       .from('profiles')
       .select('employee_id')
-      .like('employee_id', 'AMC-%')
+      .like('employee_id', 'TMC-%')
       .order('employee_id', { ascending: false })
       .limit(1)
     const lastNum = parseInt(
-      ((empData?.[0] as { employee_id: string | null } | undefined)?.employee_id ?? 'AMC-008')
-        .replace('AMC-', ''),
+      ((empData?.[0] as { employee_id: string | null } | undefined)?.employee_id ?? 'TMC-008')
+        .replace('TMC-', ''),
       10,
     )
-    const nextId = 'AMC-' + String((isNaN(lastNum) ? 8 : lastNum) + 1).padStart(3, '0')
+    const nextId = 'TMC-' + String((isNaN(lastNum) ? 8 : lastNum) + 1).padStart(3, '0')
 
     // Fetch departments and prepend synthetic GP entry if not already present
     const { data: deptData } = await supabase
@@ -331,9 +331,9 @@ function UsersSection() {
               )}
               {[
                 { label:'Full Name *',    key:'full_name',   type:'text',  placeholder:'Dr. Abebe Girma' },
-                { label:'Email *',        key:'email',       type:'email', placeholder:'abebe@amc.et' },
+                { label:'Email *',        key:'email',       type:'email', placeholder:'abebe@tmc1.et' },
                 { label:'Phone',          key:'phone',       type:'tel',   placeholder:'+251...' },
-                { label:'Employee ID',    key:'employee_id', type:'text',  placeholder:'AMC-002' },
+                { label:'Employee ID',    key:'employee_id', type:'text',  placeholder:'TMC-002' },
               ].map(f => (
                 <div key={f.key}>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
