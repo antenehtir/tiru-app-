@@ -278,8 +278,9 @@ export default function Shifts() {
   // ── Bulk upload state ──
   const [uploadOpen, setUploadOpen] = useState(false)
 
-  // ── Mobile day view state ──
-  const [mobileDate, setMobileDate] = useState(() => isoDate(new Date()))
+  // ── Mobile day/month view state ──
+  const [mobileDate,     setMobileDate]     = useState(() => isoDate(new Date()))
+  const [mobileMonthDay, setMobileMonthDay] = useState<string | null>(null)
 
   // ── Department head: fetch own department name ──
   const [userDeptName, setUserDeptName] = useState('')
@@ -421,6 +422,12 @@ export default function Shifts() {
     setMobileDate(nextStr)
     const newWeekBase = weekStart(next)
     if (isoDate(newWeekBase) !== isoDate(weekBase)) setWeekBase(newWeekBase)
+  }
+
+  function goToToday() {
+    setMobileDate(todayStr)
+    const todayWeekBase = weekStart(new Date())
+    if (isoDate(todayWeekBase) !== isoDate(weekBase)) setWeekBase(todayWeekBase)
   }
 
   // ── Add Shift modal ──
@@ -743,65 +750,80 @@ export default function Shifts() {
           ))}
         </div>
 
-        {/* Day navigation: ← prev day | current day | next day → */}
-        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <button
-            onClick={() => navigateMobileDay(-1)}
-            className="flex items-center gap-1 px-3 py-3 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            <span className="text-sm">
-              {addDays(new Date(mobileDate + 'T00:00:00'), -1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          </button>
-          <button
-            onClick={() => setMobileDate(todayStr)}
-            className="flex-1 py-3 text-center hover:bg-gray-50 transition-colors"
-          >
-            {mobileDate === todayStr ? (
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-500 mb-0.5">Today</div>
-                <div className="text-sm font-bold text-teal-700">
-                  {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="text-sm font-bold text-gray-900">
-                  {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </div>
-                <div className="text-[10px] text-teal-500">Tap for today</div>
-              </div>
-            )}
-          </button>
-          <button
-            onClick={() => navigateMobileDay(1)}
-            className="flex items-center gap-1 px-3 py-3 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
-          >
-            <span className="text-sm">
-              {addDays(new Date(mobileDate + 'T00:00:00'), 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-            <ChevronRight className="w-5 h-5" />
-          </button>
+        {/* Week / Month toggle */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+          {(['week', 'month'] as ViewMode[]).map(v => (
+            <button key={v} onClick={() => setViewMode(v)}
+              className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                viewMode === v ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>{v}</button>
+          ))}
         </div>
 
-        {/* Week dots */}
-        <div className="flex items-center justify-center gap-4">
-          {weekDays.map(day => {
-            const dayStr     = isoDate(day)
-            const isSelected = dayStr === mobileDate
-            const isDayToday = dayStr === todayStr
-            return (
-              <button key={dayStr} onClick={() => setMobileDate(dayStr)}
-                className="flex flex-col items-center gap-1 py-1 px-0.5">
-                <span className="text-[9px] font-medium text-gray-400 uppercase">{DAY_LABELS[day.getDay()]}</span>
-                <span className={`w-2 h-2 rounded-full transition-colors ${
-                  isSelected ? 'bg-teal-600' : isDayToday ? 'bg-teal-300' : 'bg-gray-300'
-                }`} />
+        {/* Week-only: day navigation + dots */}
+        {viewMode === 'week' && (
+          <>
+            {/* Day navigation: ← prev day | current day | next day → */}
+            <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => navigateMobileDay(-1)}
+                className="flex items-center gap-1 px-3 py-3 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                <span className="text-sm">
+                  {addDays(new Date(mobileDate + 'T00:00:00'), -1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
               </button>
-            )
-          })}
-        </div>
+              <button
+                onClick={goToToday}
+                className="flex-1 py-3 text-center hover:bg-gray-50 transition-colors"
+              >
+                {mobileDate === todayStr ? (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-500 mb-0.5">Today</div>
+                    <div className="text-sm font-bold text-teal-700">
+                      {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-sm font-bold text-gray-900">
+                      {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </div>
+                    <div className="text-[10px] text-teal-500">Tap for today</div>
+                  </div>
+                )}
+              </button>
+              <button
+                onClick={() => navigateMobileDay(1)}
+                className="flex items-center gap-1 px-3 py-3 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+              >
+                <span className="text-sm">
+                  {addDays(new Date(mobileDate + 'T00:00:00'), 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Week dots */}
+            <div className="flex items-center justify-center gap-4">
+              {weekDays.map(day => {
+                const dayStr     = isoDate(day)
+                const isSelected = dayStr === mobileDate
+                const isDayToday = dayStr === todayStr
+                return (
+                  <button key={dayStr} onClick={() => setMobileDate(dayStr)}
+                    className="flex flex-col items-center gap-1 py-1 px-0.5">
+                    <span className="text-[9px] font-medium text-gray-400 uppercase">{DAY_LABELS[day.getDay()]}</span>
+                    <span className={`w-2 h-2 rounded-full transition-colors ${
+                      isSelected ? 'bg-teal-600' : isDayToday ? 'bg-teal-300' : 'bg-gray-300'
+                    }`} />
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Desktop controls ── */}
@@ -852,43 +874,162 @@ export default function Shifts() {
         </div>
       )}
 
-      {/* ── Mobile day card ── */}
+      {/* ── Mobile calendar ── */}
       <div className="md:hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-gray-400">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Day header */}
-            <div className={`flex items-center justify-between px-4 py-3 border-b border-gray-100 ${
-              mobileDate === todayStr ? 'bg-teal-50' : ''
-            }`}>
-              <span className={`font-semibold text-sm tracking-wide ${mobileDate === todayStr ? 'text-teal-700' : 'text-gray-700'}`}>
-                {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}
-              </span>
-              {mobileDate === todayStr && (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-teal-600">
-                  Today <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+        {viewMode === 'week' ? (
+          /* ── Week: single day card ── */
+          loading ? (
+            <div className="flex items-center justify-center py-16 text-gray-400">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className={`flex items-center justify-between px-4 py-3 border-b border-gray-100 ${
+                mobileDate === todayStr ? 'bg-teal-50' : ''
+              }`}>
+                <span className={`font-semibold text-sm tracking-wide ${mobileDate === todayStr ? 'text-teal-700' : 'text-gray-700'}`}>
+                  {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}
                 </span>
+                {mobileDate === todayStr && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-teal-600">
+                    Today <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+                  </span>
+                )}
+              </div>
+              {(shiftsByDate[mobileDate] ?? []).length === 0 ? (
+                <div className="py-10 text-center">
+                  <CalendarDays className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">No shifts scheduled</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {(shiftsByDate[mobileDate] ?? []).map(s => (
+                    <MobileShiftRow
+                      key={s.id}
+                      shift={s}
+                      onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }}
+                    />
+                  ))}
+                </div>
               )}
             </div>
-            {/* Shift list */}
-            {(shiftsByDate[mobileDate] ?? []).length === 0 ? (
-              <div className="py-10 text-center">
-                <CalendarDays className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">No shifts scheduled</p>
+          )
+        ) : (
+          /* ── Month: compact grid + bottom-sheet detail ── */
+          <div className="space-y-3">
+            {/* Month navigation */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setMonthBase(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              </button>
+              <span className="text-sm font-semibold text-gray-800">
+                {monthBase.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => setMonthBase(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <ChevronRight className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-16 text-gray-400">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {(shiftsByDate[mobileDate] ?? []).map(s => (
-                  <MobileShiftRow
-                    key={s.id}
-                    shift={s}
-                    onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }}
-                  />
-                ))}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* Day-of-week headers */}
+                <div className="grid grid-cols-7 border-b border-gray-100">
+                  {DAY_LABELS.map(d => (
+                    <div key={d} className="py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      {d[0]}
+                    </div>
+                  ))}
+                </div>
+                {/* Day cells */}
+                <div className="grid grid-cols-7">
+                  {monthDays.map((day, idx) => {
+                    const dayStr         = isoDate(day)
+                    const isToday        = dayStr === todayStr
+                    const isCurrentMonth = day.getMonth() === monthBase.getMonth()
+                    const dayShifts      = shiftsByDate[dayStr] ?? []
+                    return (
+                      <button
+                        key={dayStr}
+                        onClick={() => setMobileMonthDay(dayStr)}
+                        className={`flex flex-col items-center py-2 transition-colors hover:bg-gray-50 active:bg-gray-100 ${
+                          idx >= 7 ? 'border-t border-gray-100' : ''
+                        }`}
+                      >
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
+                          isToday
+                            ? 'bg-teal-600 text-white'
+                            : isCurrentMonth ? 'text-gray-900' : 'text-gray-300'
+                        }`}>
+                          {day.getDate()}
+                        </span>
+                        {dayShifts.length > 0 && isCurrentMonth && (
+                          <div className="flex items-center gap-0.5 mt-0.5">
+                            <span className="w-1 h-1 rounded-full bg-teal-500" />
+                            <span className="text-[9px] font-semibold text-teal-600">{dayShifts.length}</span>
+                          </div>
+                        )}
+                        {dayShifts.length === 0 && <span className="mt-0.5 h-3" />}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
+            )}
+
+            {/* Bottom sheet: day detail */}
+            {mobileMonthDay && (
+              <>
+                <div
+                  className="fixed inset-0 bg-black/40 z-40"
+                  onClick={() => setMobileMonthDay(null)}
+                />
+                <div className="fixed bottom-0 inset-x-0 z-50 bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[70vh]">
+                  <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                    <h3 className="font-semibold text-gray-900 text-sm">
+                      {new Date(mobileMonthDay + 'T00:00:00').toLocaleDateString('en-US', {
+                        weekday: 'long', day: 'numeric', month: 'long',
+                      })}
+                    </h3>
+                    <button onClick={() => setMobileMonthDay(null)} className="p-1 rounded-lg hover:bg-gray-100">
+                      <X className="w-5 h-5 text-gray-500" />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto pb-6">
+                    {(shiftsByDate[mobileMonthDay] ?? []).length === 0 ? (
+                      <div className="py-10 text-center">
+                        <CalendarDays className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400">No shifts this day</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {(shiftsByDate[mobileMonthDay] ?? []).map(s => (
+                          <MobileShiftRow
+                            key={s.id}
+                            shift={s}
+                            onClick={() => {
+                              setMobileMonthDay(null)
+                              setSelectedShift(s)
+                              setShiftAction(null)
+                              setActionError(null)
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
