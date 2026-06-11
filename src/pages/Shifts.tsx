@@ -457,7 +457,8 @@ export default function Shifts() {
       department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
       starts_at:     `${form.shift_date}T${form.start_time}:00`,
       ends_at:       `${form.shift_date}T${form.end_time}:00`,
-      schedule_type: form.schedule_type || null,
+      schedule_type: form.schedule_type || 'regular',
+      shift_type:    form.schedule_type || 'regular',
       specialty:     form.specialty || null,
       notes:         form.notes     || null,
     }).eq('id', selectedShift!.id)
