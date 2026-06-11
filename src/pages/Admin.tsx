@@ -844,13 +844,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                           const { data: { user } } = await supabase.auth.getUser()
                           const currentUserId = user?.id ?? null
                           const staffName = req.profile?.full_name ?? 'Staff member'
-                          await supabase.from('profiles')
-                            .update({ [req.field_name]: req.requested_value })
-                            .eq('id', req.user_id)
-                          await supabase.from('profile_change_requests')
-                            .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
-                            .eq('id', req.id)
-                          await supabase.from('notices').insert({
+                          const { error: noticeError } = await supabase.from('notices').insert({
                             author_id: currentUserId,
                             title: '✓ Your Profile Update was Approved',
                             body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
@@ -860,6 +854,13 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                             target_user_id: req.user_id,
                             pinned: false,
                           })
+                          if (noticeError) console.error('Notice error:', noticeError)
+                          await supabase.from('profiles')
+                            .update({ [req.field_name]: req.requested_value })
+                            .eq('id', req.user_id)
+                          await supabase.from('profile_change_requests')
+                            .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+                            .eq('id', req.id)
                           setDismissedIds(prev => new Set([...prev, req.id]))
                           setTimeout(() => { fetchPendingRequests(); fetchUsers() }, 350)
                         }}
