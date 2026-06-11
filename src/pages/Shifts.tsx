@@ -7,7 +7,9 @@ import {
   ChevronLeft, ChevronRight,
   User, Building2, AlertCircle, Loader2,
   Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
+  Upload, Edit2, Trash2, UserCheck, CheckCircle2, RefreshCw,
 } from 'lucide-react'
+import ShiftUpload from '../components/ShiftUpload'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,21 +28,20 @@ type ShiftRow = {
   department: { name: string } | null
 }
 
+type ShiftAction   = 'edit' | 'reassign' | 'delete'
 type ProfileOption = { id: string; full_name: string }
 type DeptOption    = { id: string; name: string }
 type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception'
 type ScheduleType  = 'regular' | 'duty'
 type ViewMode      = 'week' | 'month'
 type NavStep       = 'group' | 'specialty' | 'calendar'
+type RepeatPattern = 'daily' | 'weekdays' | 'weekly' | 'custom'
 
 // ─── Static config ────────────────────────────────────────────────────────────
 
-const GROUPS: {
-  name: GroupName
-  icon: LucideIcon
-  color: string
-  description: string
-}[] = [
+const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
+
+const GROUPS: { name: GroupName; icon: LucideIcon; color: string; description: string }[] = [
   { name: 'Medical Doctors', icon: Stethoscope, color: 'blue',   description: 'Physicians & specialists' },
   { name: 'Nurses',          icon: Heart,       color: 'rose',   description: 'Registered nurses' },
   { name: 'Midwives',        icon: Baby,        color: 'purple', description: 'Midwifery staff' },
@@ -50,54 +51,44 @@ const GROUPS: {
 ]
 
 const GROUP_CONFIG: Record<GroupName, {
-  departmentName: string | null   // null = filter by specialty only (Medical Doctors)
+  departmentName: string | null
   specialties: string[]
   skipLevel2: boolean
 }> = {
-  'Medical Doctors': {
-    departmentName: null,
-    specialties: ['General Practice (GP)', 'Internal Medicine', 'Emergency', 'Surgery', 'Pediatrics', 'Gynecology & Obstetrics', 'Radiology'],
-    skipLevel2: false,
-  },
-  'Nurses': {
-    departmentName: 'Nursing',
-    specialties: ['Ward', 'Emergency', 'ICU'],
-    skipLevel2: false,
-  },
-  'Midwives': {
-    departmentName: 'Midwifery',
-    specialties: ['Ward', 'OPD', 'ICU'],
-    skipLevel2: false,
-  },
-  'Pharmacy':   { departmentName: 'Pharmacy',   specialties: [], skipLevel2: true },
-  'Laboratory': { departmentName: 'Laboratory', specialties: [], skipLevel2: true },
-  'Reception':  { departmentName: 'Reception',  specialties: [], skipLevel2: true },
+  'Medical Doctors': { departmentName: null,        specialties: ['General Practice (GP)', 'Internal Medicine', 'Emergency', 'Surgery', 'Pediatrics', 'Gynecology & Obstetrics', 'Radiology'], skipLevel2: false },
+  'Nurses':          { departmentName: 'Nursing',   specialties: ['Ward', 'Emergency', 'ICU'],   skipLevel2: false },
+  'Midwives':        { departmentName: 'Midwifery', specialties: ['Ward', 'OPD', 'ICU'],         skipLevel2: false },
+  'Pharmacy':        { departmentName: 'Pharmacy',   specialties: [], skipLevel2: true },
+  'Laboratory':      { departmentName: 'Laboratory', specialties: [], skipLevel2: true },
+  'Reception':       { departmentName: 'Reception',  specialties: [], skipLevel2: true },
 }
 
 const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
-  blue:   { card: 'border-blue-200 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:border-blue-700',     icon: 'text-blue-500' },
-  rose:   { card: 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:border-rose-700',     icon: 'text-rose-500' },
-  purple: { card: 'border-purple-200 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:border-purple-700', icon: 'text-purple-500' },
-  amber:  { card: 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-700', icon: 'text-amber-500' },
-  teal:   { card: 'border-teal-200 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/20 dark:border-teal-700',     icon: 'text-teal-500' },
-  pink:   { card: 'border-pink-200 bg-pink-50 hover:bg-pink-100 dark:bg-pink-900/20 dark:border-pink-700',     icon: 'text-pink-500' },
+  blue:   { card: 'border-blue-200 bg-blue-50 hover:bg-blue-100',     icon: 'text-blue-500' },
+  rose:   { card: 'border-rose-200 bg-rose-50 hover:bg-rose-100',     icon: 'text-rose-500' },
+  purple: { card: 'border-purple-200 bg-purple-50 hover:bg-purple-100', icon: 'text-purple-500' },
+  amber:  { card: 'border-amber-200 bg-amber-50 hover:bg-amber-100',  icon: 'text-amber-500' },
+  teal:   { card: 'border-teal-200 bg-teal-50 hover:bg-teal-100',     icon: 'text-teal-500' },
+  pink:   { card: 'border-pink-200 bg-pink-50 hover:bg-pink-100',     icon: 'text-pink-500' },
 }
 
-const CAN_ADD_SHIFT = [
-  'super_admin', 'ceo', 'general_manager', 'medical_director',
-  'hr', 'department_head', 'coordinator',
-]
+const CAN_ADD_SHIFT = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr', 'department_head', 'coordinator']
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const REPEAT_PATTERNS: { value: RepeatPattern; label: string }[] = [
+  { value: 'daily',    label: 'Daily' },
+  { value: 'weekdays', label: 'Weekdays (Mon–Fri)' },
+  { value: 'weekly',   label: 'Weekly (same day)' },
+  { value: 'custom',   label: 'Custom days' },
+]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt12(time: string) {
   const [hStr, mStr] = time.split(':')
   const h = parseInt(hStr, 10)
-  const suffix = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return `${h12}:${mStr} ${suffix}`
+  return `${h % 12 || 12}:${mStr} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
 function isoDate(d: Date) { return d.toISOString().split('T')[0] }
@@ -111,36 +102,60 @@ function weekStart(d: Date) {
 }
 
 function monthGridDays(base: Date): Date[] {
-  const year = base.getFullYear()
-  const month = base.getMonth()
-  const firstDay = new Date(year, month, 1)
-  const lastDay  = new Date(year, month + 1, 0)
-  const start = new Date(firstDay)
-  start.setDate(start.getDate() - start.getDay())
-  const end = new Date(lastDay)
-  end.setDate(end.getDate() + (6 - end.getDay()))
-  const days: Date[] = []
-  const cur = new Date(start)
+  const year = base.getFullYear(); const month = base.getMonth()
+  const firstDay = new Date(year, month, 1); const lastDay = new Date(year, month + 1, 0)
+  const start = new Date(firstDay); start.setDate(start.getDate() - start.getDay())
+  const end = new Date(lastDay); end.setDate(end.getDate() + (6 - end.getDay()))
+  const days: Date[] = []; const cur = new Date(start)
   while (cur <= end) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 1) }
   return days
 }
 
+function generateRepeatDates(
+  startDate: string,
+  pattern: RepeatPattern,
+  selectedDays: number[],
+  untilDate: string,
+): string[] {
+  const dates: string[] = []
+  const start = new Date(startDate + 'T00:00:00')
+  const until = new Date(untilDate + 'T00:00:00')
+  const startDow = start.getDay()
+  let cur = new Date(start)
+  while (cur <= until) {
+    const dow = cur.getDay()
+    let include = false
+    if      (pattern === 'daily')    include = true
+    else if (pattern === 'weekdays') include = dow >= 1 && dow <= 5
+    else if (pattern === 'weekly')   include = dow === startDow
+    else if (pattern === 'custom')   include = selectedDays.includes(dow)
+    if (include) dates.push(isoDate(cur))
+    cur = addDays(cur, 1)
+  }
+  return dates
+}
+
+function formatShiftDate(isoStr: string) {
+  return new Date(isoStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 // ─── ShiftChip ────────────────────────────────────────────────────────────────
 
-function ShiftChip({ shift }: { shift: ShiftRow }) {
+function ShiftChip({ shift, onClick }: { shift: ShiftRow; onClick?: () => void }) {
   const colors = [
-    'bg-teal-100   text-teal-800   dark:bg-teal-900/40   dark:text-teal-300',
-    'bg-blue-100   text-blue-800   dark:bg-blue-900/40   dark:text-blue-300',
-    'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
-    'bg-amber-100  text-amber-800  dark:bg-amber-900/40  dark:text-amber-300',
-    'bg-rose-100   text-rose-800   dark:bg-rose-900/40   dark:text-rose-300',
+    'bg-teal-100   text-teal-800',
+    'bg-blue-100   text-blue-800',
+    'bg-purple-100 text-purple-800',
+    'bg-amber-100  text-amber-800',
+    'bg-rose-100   text-rose-800',
   ]
   const colorClass = colors[shift.user_id.charCodeAt(0) % colors.length]
   const startT = shift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00'
-  const endT   = shift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00'
+  const endT   = shift.ends_at.split('T')[1]?.substring(0, 5)   ?? '00:00'
   return (
     <div
-      className={`rounded-md px-1.5 py-1 text-[10px] leading-tight ${colorClass} cursor-default`}
+      className={`rounded-md px-1.5 py-1 text-[10px] leading-tight ${colorClass} ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+      onClick={onClick}
       title={`${shift.user?.full_name ?? 'Unknown'}\n${fmt12(startT)} – ${fmt12(endT)}${shift.notes ? '\n' + shift.notes : ''}`}
     >
       <div className="font-semibold truncate">{shift.user?.full_name ?? '—'}</div>
@@ -157,46 +172,78 @@ export default function Shifts() {
   const role = profile?.role ?? ''
 
   // ── Navigation state ──
-  const [navStep, setNavStep]               = useState<NavStep>('group')
-  const [selectedGroup, setSelectedGroup]   = useState<GroupName | null>(null)
+  const [navStep,          setNavStep]          = useState<NavStep>('group')
+  const [selectedGroup,    setSelectedGroup]    = useState<GroupName | null>(null)
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null)
-  const [scheduleType, setScheduleType]     = useState<ScheduleType>('regular')
+  const [scheduleType,     setScheduleType]     = useState<ScheduleType>('regular')
 
   // ── Calendar state ──
-  const [viewMode, setViewMode]   = useState<ViewMode>('week')
-  const [weekBase, setWeekBase]   = useState(() => weekStart(new Date()))
-  const [monthBase, setMonthBase] = useState(() => {
-    const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1)
-  })
+  const [viewMode,   setViewMode]   = useState<ViewMode>('week')
+  const [weekBase,   setWeekBase]   = useState(() => weekStart(new Date()))
+  const [monthBase,  setMonthBase]  = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
 
   // ── Data state ──
-  const [shifts, setShifts]   = useState<ShiftRow[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [shifts,   setShifts]   = useState<ShiftRow[]>([])
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
 
-  // ── Modal state ──
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [profiles, setProfiles]     = useState<ProfileOption[]>([])
-  const [departments, setDepartments] = useState<DeptOption[]>([])
-  const [saving, setSaving]         = useState(false)
-  const [formError, setFormError]   = useState<string | null>(null)
+  // ── Add/Edit modal state ──
+  const [modalOpen,    setModalOpen]    = useState(false)
+  const [profiles,     setProfiles]     = useState<ProfileOption[]>([])
+  const [departments,  setDepartments]  = useState<DeptOption[]>([])
+  const [saving,       setSaving]       = useState(false)
+  const [formError,    setFormError]    = useState<string | null>(null)
+  const [saveSuccess,  setSaveSuccess]  = useState<string | null>(null)
   const [form, setForm] = useState({
     user_id: '', department_id: '', shift_date: isoDate(new Date()),
     start_time: '08:00', end_time: '17:00',
     schedule_type: 'regular', specialty: '', notes: '',
   })
 
+  // ── Repeat state ──
+  const [repeatEnabled, setRepeatEnabled] = useState(false)
+  const [repeatPattern, setRepeatPattern] = useState<RepeatPattern>('weekly')
+  const [repeatDays,    setRepeatDays]    = useState<Set<number>>(new Set())
+  const [repeatUntil,   setRepeatUntil]   = useState('')
+
+  // ── Shift detail / action state ──
+  const [selectedShift,  setSelectedShift]  = useState<ShiftRow | null>(null)
+  const [shiftAction,    setShiftAction]    = useState<ShiftAction | null>(null)
+  const [reassignUserId, setReassignUserId] = useState('')
+  const [reassigning,    setReassigning]    = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
+  const [actionError,    setActionError]    = useState<string | null>(null)
+
+  // ── Bulk upload state ──
+  const [uploadOpen, setUploadOpen] = useState(false)
+
   // ── Department head: fetch own department name ──
   const [userDeptName, setUserDeptName] = useState('')
   useEffect(() => {
     if (profile?.role === 'department_head' && profile?.department_id) {
-      supabase.from('departments')
-        .select('name')
-        .eq('id', profile.department_id)
-        .single()
+      supabase.from('departments').select('name').eq('id', profile.department_id).single()
         .then(({ data }) => { if (data) setUserDeptName(data.name) })
     }
   }, [profile?.department_id, role])
+
+  // ── Pre-load profiles & departments when calendar is shown ──
+  useEffect(() => {
+    if (navStep !== 'calendar') return
+    Promise.all([
+      supabase.from('profiles').select('id, full_name').order('full_name'),
+      supabase.from('departments').select('id, name').order('name'),
+    ]).then(([{ data: pData }, { data: dData }]) => {
+      setProfiles((pData as ProfileOption[]) ?? [])
+      setDepartments((dData as DeptOption[]) ?? [])
+    })
+  }, [navStep])
+
+  // ── Auto-clear saveSuccess banner ──
+  useEffect(() => {
+    if (!saveSuccess) return
+    const t = setTimeout(() => setSaveSuccess(null), 4000)
+    return () => clearTimeout(t)
+  }, [saveSuccess])
 
   // ── Derived ──
   const weekDays  = Array.from({ length: 7 }, (_, i) => addDays(weekBase, i))
@@ -204,7 +251,6 @@ export default function Shifts() {
   const canAdd    = CAN_ADD_SHIFT.includes(role)
   const todayStr  = isoDate(new Date())
 
-  // Mapping from department name → group name
   const DEPT_TO_GROUP: Record<string, GroupName> = {
     'Internal Medicine': 'Medical Doctors', 'Emergency': 'Medical Doctors',
     'Surgery': 'Medical Doctors', 'Pediatrics': 'Medical Doctors',
@@ -214,26 +260,35 @@ export default function Shifts() {
     'Pharmacy': 'Pharmacy', 'Laboratory': 'Laboratory', 'Reception': 'Reception',
   }
   const deptHeadGroup: GroupName | null =
-    role === 'department_head' && userDeptName
-      ? (DEPT_TO_GROUP[userDeptName] ?? null)
-      : null
-  const visibleGroups = GROUPS
+    role === 'department_head' && userDeptName ? (DEPT_TO_GROUP[userDeptName] ?? null) : null
+
+  // Returns true if this user can edit/delete/reassign a given shift
+  const canManageShift = (shift: ShiftRow): boolean => {
+    if (!canAdd) return false
+    if (role === 'department_head') {
+      return !!profile?.department_id && shift.department_id === profile.department_id
+    }
+    return true
+  }
+
+  // ── Repeat preview count ──
+  const repeatPreviewCount =
+    repeatEnabled && repeatUntil && repeatUntil >= form.shift_date
+      ? generateRepeatDates(form.shift_date, repeatPattern, [...repeatDays], repeatUntil).length
+      : 1
 
   // ── Data fetching ──
   const fetchShifts = useCallback(async () => {
     if (!selectedGroup) return
     setLoading(true); setError(null)
 
-    // Compute date range inside callback (avoids stale closure issues)
     let fromDate: string, toDate: string
     if (viewMode === 'week') {
       const days = Array.from({ length: 7 }, (_, i) => addDays(weekBase, i))
-      fromDate = isoDate(days[0])
-      toDate   = isoDate(days[6])
+      fromDate = isoDate(days[0]); toDate = isoDate(days[6])
     } else {
       const days = monthGridDays(monthBase)
-      fromDate = isoDate(days[0])
-      toDate   = isoDate(days[days.length - 1])
+      fromDate = isoDate(days[0]); toDate = isoDate(days[days.length - 1])
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -245,20 +300,16 @@ export default function Shifts() {
       .eq('schedule_type', scheduleType)
       .order('starts_at', { ascending: true })
 
-    if (selectedSpecialty) {
-      query = query.eq('specialty', selectedSpecialty)
-    }
+    if (selectedSpecialty) query = query.eq('specialty', selectedSpecialty)
 
     const { data, error: err } = await query
     if (err) { setError(err.message); setLoading(false); return }
 
-    // Client-side filter by department name when applicable
     let result = (data as ShiftRow[]) ?? []
     const config = GROUP_CONFIG[selectedGroup]
     if (config.departmentName) {
       result = result.filter(s => s.department?.name === config.departmentName)
     }
-
     setShifts(result)
     setLoading(false)
   }, [selectedGroup, selectedSpecialty, scheduleType, viewMode, weekBase, monthBase])
@@ -267,7 +318,6 @@ export default function Shifts() {
     if (navStep === 'calendar') fetchShifts()
   }, [fetchShifts, navStep])
 
-  // Realtime subscription (only when viewing calendar)
   useEffect(() => {
     if (navStep !== 'calendar') return
     const channel = supabase
@@ -277,49 +327,34 @@ export default function Shifts() {
     return () => { supabase.removeChannel(channel) }
   }, [fetchShifts, navStep])
 
-  // ── Navigation handlers ──
+  // ── Navigation ──
   function handleSelectGroup(group: GroupName) {
     setSelectedGroup(group)
     const config = GROUP_CONFIG[group]
-    if (config.skipLevel2) {
-      setSelectedSpecialty(null)
-      setNavStep('calendar')
-    } else {
-      setNavStep('specialty')
-    }
+    if (config.skipLevel2) { setSelectedSpecialty(null); setNavStep('calendar') }
+    else setNavStep('specialty')
   }
 
   function handleSelectSpecialty(specialty: string) {
-    setSelectedSpecialty(specialty)
-    setNavStep('calendar')
+    setSelectedSpecialty(specialty); setNavStep('calendar')
   }
 
   function resetToLevel1() {
-    setNavStep('group')
-    setSelectedGroup(null)
-    setSelectedSpecialty(null)
-    setScheduleType('regular')
-    setShifts([])
-    setError(null)
+    setNavStep('group'); setSelectedGroup(null); setSelectedSpecialty(null)
+    setScheduleType('regular'); setShifts([]); setError(null)
   }
 
   function goBack() {
     if (!selectedGroup) return resetToLevel1()
     const config = GROUP_CONFIG[selectedGroup]
-    // If the group has specialties, calendar → specialty; otherwise calendar → group
-    if (!config.skipLevel2) {
-      setSelectedSpecialty(null)
-      setNavStep('specialty')
-      setShifts([])
-      setError(null)
-    } else {
-      resetToLevel1()
-    }
+    if (!config.skipLevel2) { setSelectedSpecialty(null); setNavStep('specialty'); setShifts([]); setError(null) }
+    else resetToLevel1()
   }
 
-  // ── Modal ──
-  const openModal = async () => {
+  // ── Add Shift modal ──
+  const openModal = () => {
     setFormError(null)
+    setRepeatEnabled(false); setRepeatPattern('weekly'); setRepeatDays(new Set()); setRepeatUntil('')
     setForm({
       user_id: '',
       department_id: role === 'department_head' ? (profile?.department_id ?? '') : '',
@@ -329,36 +364,156 @@ export default function Shifts() {
       specialty: selectedSpecialty ?? '',
       notes: '',
     })
-    const [{ data: pData }, { data: dData }] = await Promise.all([
-      supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('departments').select('id, name').order('name'),
-    ])
-    setProfiles((pData as ProfileOption[]) ?? [])
-    setDepartments((dData as DeptOption[]) ?? [])
     setModalOpen(true)
   }
 
+  const closeAddModal = () => {
+    setModalOpen(false); setFormError(null)
+    setRepeatEnabled(false)
+  }
+
+  // ── Save shift (add, with optional repeat) ──
   const saveShift = async () => {
     setFormError(null)
-    if (!form.user_id)   return setFormError('Please select a staff member.')
+    if (!form.user_id)     return setFormError('Please select a staff member.')
+    if (!form.shift_date)  return setFormError('Please pick a date.')
+    if (form.start_time >= form.end_time) return setFormError('End time must be after start time.')
+
+    if (repeatEnabled) {
+      if (!repeatUntil) return setFormError('Please set an end date for repeat.')
+      if (repeatUntil < form.shift_date) return setFormError('Repeat end date must be after the shift date.')
+      if (repeatPattern === 'custom' && repeatDays.size === 0) return setFormError('Please select at least one day.')
+    }
+
+    setSaving(true)
+
+    if (repeatEnabled && repeatUntil) {
+      const dates = generateRepeatDates(form.shift_date, repeatPattern, [...repeatDays], repeatUntil)
+      const shiftsToInsert = dates.map(date => ({
+        user_id:       form.user_id,
+        department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
+        facility_id:   FACILITY_ID,
+        starts_at:     `${date}T${form.start_time}:00`,
+        ends_at:       `${date}T${form.end_time}:00`,
+        schedule_type: form.schedule_type || 'regular',
+        specialty:     form.specialty || null,
+        notes:         form.notes     || null,
+      }))
+      const { error: err } = await supabase.from('shifts').insert(shiftsToInsert)
+      setSaving(false)
+      if (err) setFormError(err.message)
+      else { closeAddModal(); setSaveSuccess(`${dates.length} shifts created successfully`); fetchShifts() }
+    } else {
+      const { error: err } = await supabase.from('shifts').insert({
+        user_id:       form.user_id,
+        department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
+        starts_at:     `${form.shift_date}T${form.start_time}:00`,
+        ends_at:       `${form.shift_date}T${form.end_time}:00`,
+        schedule_type: form.schedule_type || null,
+        specialty:     form.specialty || null,
+        notes:         form.notes     || null,
+      })
+      setSaving(false)
+      if (err) setFormError(err.message)
+      else { closeAddModal(); fetchShifts() }
+    }
+  }
+
+  // ── Edit shift ──
+  const openEditModal = () => {
+    if (!selectedShift) return
+    const startT   = selectedShift.starts_at.split('T')[1]?.substring(0, 5) ?? '08:00'
+    const endT     = selectedShift.ends_at.split('T')[1]?.substring(0, 5)   ?? '17:00'
+    const dateStr  = selectedShift.starts_at.split('T')[0]
+    setFormError(null)
+    setRepeatEnabled(false)
+    setForm({
+      user_id:       selectedShift.user_id,
+      department_id: selectedShift.department_id ?? '',
+      shift_date:    dateStr,
+      start_time:    startT,
+      end_time:      endT,
+      schedule_type: selectedShift.schedule_type ?? 'regular',
+      specialty:     selectedShift.specialty  ?? '',
+      notes:         selectedShift.notes      ?? '',
+    })
+    setShiftAction('edit')
+  }
+
+  const updateShift = async () => {
+    setFormError(null)
+    if (!form.user_id)    return setFormError('Please select a staff member.')
     if (!form.shift_date) return setFormError('Please pick a date.')
     if (form.start_time >= form.end_time) return setFormError('End time must be after start time.')
     setSaving(true)
-    const { error: err } = await supabase.from('shifts').insert({
+    const { error: err } = await supabase.from('shifts').update({
       user_id:       form.user_id,
       department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
-      starts_at:     form.shift_date + 'T' + form.start_time + ':00',
-      ends_at:       form.shift_date + 'T' + form.end_time   + ':00',
+      starts_at:     `${form.shift_date}T${form.start_time}:00`,
+      ends_at:       `${form.shift_date}T${form.end_time}:00`,
       schedule_type: form.schedule_type || null,
-      specialty:     form.specialty     || null,
-      notes:         form.notes         || null,
-    })
+      specialty:     form.specialty || null,
+      notes:         form.notes     || null,
+    }).eq('id', selectedShift!.id)
     setSaving(false)
     if (err) setFormError(err.message)
-    else { setModalOpen(false); fetchShifts() }
+    else { setSelectedShift(null); setShiftAction(null); fetchShifts() }
   }
 
-  // Build date → shifts map for rendering
+  // ── Reassign shift ──
+  const openReassign = () => { setReassignUserId(''); setActionError(null); setShiftAction('reassign') }
+
+  const reassignShift = async () => {
+    if (!reassignUserId || !selectedShift) return
+    setReassigning(true); setActionError(null)
+
+    const { error } = await supabase.from('shifts').update({ user_id: reassignUserId }).eq('id', selectedShift.id)
+    if (error) { setReassigning(false); setActionError(error.message); return }
+
+    const shiftDate  = selectedShift.starts_at.split('T')[0]
+    const startT     = selectedShift.starts_at.split('T')[1]?.substring(0, 5) ?? ''
+    const endT       = selectedShift.ends_at.split('T')[1]?.substring(0, 5)   ?? ''
+    const formattedDate = formatShiftDate(shiftDate)
+
+    // Send notices (best effort – broadcast model)
+    await supabase.from('notices').insert([
+      {
+        title: 'Shift Reassigned',
+        body: `Your shift on ${formattedDate} (${fmt12(startT)} – ${fmt12(endT)}) has been reassigned to another staff member.`,
+      },
+      {
+        title: 'New Shift Assigned',
+        body: `You have been assigned a shift on ${formattedDate} from ${fmt12(startT)} to ${fmt12(endT)}.`,
+      },
+    ]).then(() => {/* ignore notice errors */})
+
+    setReassigning(false)
+    setSelectedShift(null); setShiftAction(null); setReassignUserId('')
+    fetchShifts()
+  }
+
+  // ── Delete shift ──
+  const deleteShift = async () => {
+    if (!selectedShift) return
+    setDeleting(true)
+    const { error } = await supabase.from('shifts').delete().eq('id', selectedShift.id)
+    setDeleting(false)
+    if (error) { setActionError(error.message); return }
+    setSelectedShift(null); setShiftAction(null); fetchShifts()
+  }
+
+  const closeDetail = () => { setSelectedShift(null); setShiftAction(null); setActionError(null); setReassignUserId('') }
+
+  // Toggle repeat-day for custom pattern
+  const toggleRepeatDay = (day: number) => {
+    setRepeatDays(prev => {
+      const next = new Set(prev)
+      if (next.has(day)) next.delete(day); else next.add(day)
+      return next
+    })
+  }
+
+  // ── Build date → shifts map ──
   const shiftsByDate: Record<string, ShiftRow[]> = {}
   for (const s of shifts) {
     const key = s.starts_at.split('T')[0]
@@ -373,23 +528,19 @@ export default function Shifts() {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <CalendarDays className="w-6 h-6 text-teal-500" />Shifts
           </h1>
           <p className="text-sm text-gray-500 mt-1">Select a staff group to view their schedule</p>
         </div>
-
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {visibleGroups.map(({ name, icon: Icon, color, description }) => {
+          {GROUPS.map(({ name, icon: Icon, color, description }) => {
             const { card, icon } = GROUP_COLORS[color]
             return (
-              <button
-                key={name}
-                onClick={() => handleSelectGroup(name)}
-                className={`rounded-2xl border-2 p-6 text-left transition-all duration-150 ${card}`}
-              >
+              <button key={name} onClick={() => handleSelectGroup(name)}
+                className={`rounded-2xl border-2 p-6 text-left transition-all duration-150 ${card}`}>
                 <Icon className={`w-9 h-9 mb-3 ${icon}`} />
-                <div className="font-semibold text-gray-900 dark:text-white text-[15px]">{name}</div>
+                <div className="font-semibold text-gray-900 text-[15px]">{name}</div>
                 <div className="text-xs text-gray-500 mt-0.5">{description}</div>
               </button>
             )
@@ -407,32 +558,23 @@ export default function Shifts() {
     const groupInfo = GROUPS.find(g => g.name === selectedGroup)!
     const Icon      = groupInfo.icon
     const { icon }  = GROUP_COLORS[groupInfo.color]
-
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <button
-          onClick={resetToLevel1}
-          className="flex items-center gap-1 text-sm text-teal-600 hover:text-teal-700 mb-5"
-        >
+        <button onClick={resetToLevel1} className="flex items-center gap-1 text-sm text-teal-600 hover:text-teal-700 mb-5">
           <ChevronLeft className="w-4 h-4" />Back to groups
         </button>
-
         <div className="mb-7">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Icon className={`w-6 h-6 ${icon}`} />{selectedGroup}
           </h1>
           <p className="text-sm text-gray-500 mt-1">Select a specialty to continue</p>
         </div>
-
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {config.specialties.map((specialty) => (
-            <button
-              key={specialty}
-              onClick={() => handleSelectSpecialty(specialty)}
-              className="rounded-2xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/20 dark:border-teal-700 p-5 text-left transition-all duration-150"
-            >
+          {config.specialties.map(specialty => (
+            <button key={specialty} onClick={() => handleSelectSpecialty(specialty)}
+              className="rounded-2xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 p-5 text-left transition-all duration-150">
               <CalendarDays className="w-6 h-6 text-teal-500 mb-2" />
-              <div className="font-semibold text-gray-900 dark:text-white text-sm">{specialty}</div>
+              <div className="font-semibold text-gray-900 text-sm">{specialty}</div>
             </button>
           ))}
         </div>
@@ -441,143 +583,109 @@ export default function Shifts() {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // LEVEL 3 + CALENDAR — Schedule type toggle + calendar view
+  // LEVEL 3 — Calendar
   // ════════════════════════════════════════════════════════════════════════════
 
-  // Breadcrumb parts (group + optional specialty)
   const breadcrumbParts = [selectedGroup, selectedSpecialty].filter(Boolean) as string[]
+  const showAddBtn = canAdd && (role !== 'department_head' || selectedGroup === deptHeadGroup)
 
   return (
     <div className="p-6 space-y-4">
 
-      {/* ── Header: breadcrumb + Add Shift ── */}
+      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          {/* Back + Breadcrumb */}
           <div className="flex items-center gap-1 flex-wrap text-sm mb-1">
-            <button
-              onClick={goBack}
-              className="flex items-center gap-0.5 text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors mr-1"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              <span className="text-xs">Back</span>
+            <button onClick={goBack} className="flex items-center gap-0.5 text-gray-400 hover:text-teal-600 transition-colors mr-1">
+              <ChevronLeft className="w-3.5 h-3.5" /><span className="text-xs">Back</span>
             </button>
             {breadcrumbParts.map((part, i) => (
               <span key={part} className="flex items-center gap-1">
                 {i > 0 && <span className="text-gray-400 select-none">›</span>}
-                <span className={i === breadcrumbParts.length - 1
-                  ? 'font-semibold text-gray-800 dark:text-gray-100'
-                  : 'text-gray-500'}>
-                  {part}
-                </span>
+                <span className={i === breadcrumbParts.length - 1 ? 'font-semibold text-gray-800' : 'text-gray-500'}>{part}</span>
               </span>
             ))}
             <span className="flex items-center gap-1">
               <span className="text-gray-400 select-none">›</span>
               <span className="font-semibold capitalize text-teal-600">{scheduleType}</span>
             </span>
-            <button
-              onClick={resetToLevel1}
-              title="Change selection"
-              className="ml-1 p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
-            >
+            <button onClick={resetToLevel1} title="Change selection"
+              className="ml-1 p-0.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <CalendarDays className="w-5 h-5 text-teal-500" />Shifts
           </h1>
         </div>
 
-        {canAdd && (role !== 'department_head' || selectedGroup === deptHeadGroup) && (
-          <button
-            onClick={openModal}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />Add Shift
-          </button>
+        {showAddBtn && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-2 border border-teal-600 text-teal-600 hover:bg-teal-50 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <Upload className="w-4 h-4" />Bulk Upload
+            </button>
+            <button
+              onClick={openModal}
+              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />Add Shift
+            </button>
+          </div>
         )}
       </div>
 
-      {/* ── Controls: schedule type + view mode + navigation ── */}
+      {/* ── Save success banner ── */}
+      {saveSuccess && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />{saveSuccess}
+        </div>
+      )}
+
+      {/* ── Controls ── */}
       <div className="flex items-center gap-3 flex-wrap">
-
-        {/* Schedule type toggle (Level 3) */}
-        <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-sm">
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
           {(['regular', 'duty'] as ScheduleType[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setScheduleType(t)}
+            <button key={t} onClick={() => setScheduleType(t)}
               className={`px-4 py-1.5 font-medium capitalize transition-colors ${
-                scheduleType === t
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              {t}
-            </button>
+                scheduleType === t ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>{t}</button>
           ))}
         </div>
-
-        {/* View mode toggle */}
-        <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-sm">
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
           {(['week', 'month'] as ViewMode[]).map(v => (
-            <button
-              key={v}
-              onClick={() => setViewMode(v)}
+            <button key={v} onClick={() => setViewMode(v)}
               className={`px-4 py-1.5 font-medium capitalize transition-colors ${
-                viewMode === v
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              {v}
-            </button>
+                viewMode === v ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>{v}</button>
           ))}
         </div>
-
-        {/* Navigation arrows + label + Today */}
         <div className="flex items-center gap-1.5 ml-auto">
           <button
-            onClick={() => viewMode === 'week'
-              ? setWeekBase(w => addDays(w, -7))
-              : setMonthBase(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
+            onClick={() => viewMode === 'week' ? setWeekBase(w => addDays(w, -7)) : setMonthBase(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+            className="p-1.5 rounded-md hover:bg-gray-100 transition-colors">
             <ChevronLeft className="w-5 h-5" />
           </button>
-
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[210px] text-center select-none">
+          <span className="text-sm font-medium text-gray-700 min-w-[210px] text-center select-none">
             {viewMode === 'week'
               ? `${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-              : monthBase.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-            }
+              : monthBase.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
           </span>
-
           <button
-            onClick={() => viewMode === 'week'
-              ? setWeekBase(w => addDays(w, 7))
-              : setMonthBase(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
+            onClick={() => viewMode === 'week' ? setWeekBase(w => addDays(w, 7)) : setMonthBase(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+            className="p-1.5 rounded-md hover:bg-gray-100 transition-colors">
             <ChevronRight className="w-5 h-5" />
           </button>
-
           <button
-            onClick={() => {
-              setWeekBase(weekStart(new Date()))
-              const n = new Date()
-              setMonthBase(new Date(n.getFullYear(), n.getMonth(), 1))
-            }}
-            className="ml-1 text-xs text-teal-600 hover:underline px-1"
-          >
+            onClick={() => { setWeekBase(weekStart(new Date())); const n = new Date(); setMonthBase(new Date(n.getFullYear(), n.getMonth(), 1)) }}
+            className="ml-1 text-xs text-teal-600 hover:underline px-1">
             Today
           </button>
         </div>
       </div>
 
-      {/* ── Error banner ── */}
       {error && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
@@ -590,81 +698,51 @@ export default function Shifts() {
           <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
         </div>
       ) : viewMode === 'week' ? (
-
-        /* ── Week view ── */
         <div className="grid grid-cols-7 gap-2">
-          {weekDays.map((day) => {
-            const key      = isoDate(day)
-            const isToday  = key === todayStr
+          {weekDays.map(day => {
+            const key       = isoDate(day)
+            const isToday   = key === todayStr
             const dayShifts = shiftsByDate[key] ?? []
             return (
-              <div
-                key={key}
-                className={`min-h-[160px] rounded-xl border p-2 flex flex-col gap-1.5 ${
-                  isToday
-                    ? 'border-teal-400 bg-teal-50 dark:bg-teal-900/20'
-                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
-                }`}
-              >
+              <div key={key} className={`min-h-[160px] rounded-xl border p-2 flex flex-col gap-1.5 ${
+                isToday ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-white'}`}>
                 <div className="text-center mb-1">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                    {DAY_LABELS[day.getDay()]}
-                  </div>
-                  <div className={`text-sm font-bold ${isToday ? 'text-teal-600' : 'text-gray-700 dark:text-gray-200'}`}>
-                    {day.getDate()}
-                  </div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{DAY_LABELS[day.getDay()]}</div>
+                  <div className={`text-sm font-bold ${isToday ? 'text-teal-600' : 'text-gray-700'}`}>{day.getDate()}</div>
                 </div>
                 {dayShifts.length === 0
-                  ? <div className="flex-1 flex items-center justify-center text-[10px] text-gray-300 dark:text-gray-600">No shifts</div>
-                  : dayShifts.map(s => <ShiftChip key={s.id} shift={s} />)
-                }
+                  ? <div className="flex-1 flex items-center justify-center text-[10px] text-gray-300">No shifts</div>
+                  : dayShifts.map(s => <ShiftChip key={s.id} shift={s} onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }} />)}
               </div>
             )
           })}
         </div>
-
       ) : (
-
-        /* ── Month view ── */
         <div>
-          {/* Day-of-week header */}
           <div className="grid grid-cols-7 mb-1">
             {DAY_LABELS.map(d => (
-              <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 py-1">
-                {d}
-              </div>
+              <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 py-1">{d}</div>
             ))}
           </div>
-          {/* Day cells */}
           <div className="grid grid-cols-7 gap-1">
-            {monthDays.map((day) => {
+            {monthDays.map(day => {
               const key            = isoDate(day)
               const isToday        = key === todayStr
               const isCurrentMonth = day.getMonth() === monthBase.getMonth()
               const dayShifts      = shiftsByDate[key] ?? []
               return (
-                <div
-                  key={key}
-                  className={`min-h-[90px] rounded-lg border p-1.5 flex flex-col gap-0.5 ${
-                    isToday
-                      ? 'border-teal-400 bg-teal-50 dark:bg-teal-900/20'
-                      : isCurrentMonth
-                        ? 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
-                        : 'border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50'
-                  }`}
-                >
-                  <div className={`text-xs font-bold text-center mb-0.5 ${
-                    isToday          ? 'text-teal-600'
-                    : isCurrentMonth ? 'text-gray-700 dark:text-gray-200'
-                    :                  'text-gray-300 dark:text-gray-600'
-                  }`}>
+                <div key={key} className={`min-h-[90px] rounded-lg border p-1.5 flex flex-col gap-0.5 ${
+                  isToday ? 'border-teal-400 bg-teal-50'
+                  : isCurrentMonth ? 'border-gray-200 bg-white'
+                  : 'border-gray-100 bg-gray-50/50'}`}>
+                  <div className={`text-xs font-bold text-center mb-0.5 ${isToday ? 'text-teal-600' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}`}>
                     {day.getDate()}
                   </div>
-                  {dayShifts.slice(0, 3).map(s => <ShiftChip key={s.id} shift={s} />)}
+                  {dayShifts.slice(0, 3).map(s => (
+                    <ShiftChip key={s.id} shift={s} onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }} />
+                  ))}
                   {dayShifts.length > 3 && (
-                    <div className="text-[9px] text-gray-400 text-center mt-0.5">
-                      +{dayShifts.length - 3} more
-                    </div>
+                    <div className="text-[9px] text-gray-400 text-center mt-0.5">+{dayShifts.length - 3} more</div>
                   )}
                 </div>
               )
@@ -674,21 +752,23 @@ export default function Shifts() {
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-          Add Shift Modal
+          Add / Edit Shift Modal
           ════════════════════════════════════════════════════════════════════ */}
-      {modalOpen && (
+      {(modalOpen || shiftAction === 'edit') && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col">
 
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 shrink-0">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Add Shift</h2>
-              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {shiftAction === 'edit' ? 'Edit Shift' : 'Add Shift'}
+              </h2>
+              <button
+                onClick={() => shiftAction === 'edit' ? setShiftAction(null) : closeAddModal()}
+                className="p-1 rounded-lg hover:bg-gray-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal body */}
             <div className="px-6 py-5 space-y-4 overflow-y-auto">
               {formError && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
@@ -696,16 +776,13 @@ export default function Shifts() {
                 </div>
               )}
 
-              {/* Staff member */}
+              {/* Staff */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   <User className="inline w-3.5 h-3.5 mr-1" />Staff Member *
                 </label>
-                <select
-                  value={form.user_id}
-                  onChange={e => setForm(f => ({ ...f, user_id: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                >
+                <select value={form.user_id} onChange={e => setForm(f => ({ ...f, user_id: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">— Select staff —</option>
                   {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
                 </select>
@@ -715,23 +792,14 @@ export default function Shifts() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   <Building2 className="inline w-3.5 h-3.5 mr-1" />Department
-                  {role === 'department_head' && (
-                    <span className="ml-1 text-gray-400 font-normal normal-case">(your department)</span>
-                  )}
+                  {role === 'department_head' && <span className="ml-1 text-gray-400 font-normal normal-case">(your department)</span>}
                 </label>
                 {role === 'department_head' ? (
-                  <input
-                    type="text"
-                    value={userDeptName || 'Loading…'}
-                    disabled
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 outline-none cursor-not-allowed"
-                  />
+                  <input type="text" value={userDeptName || 'Loading…'} disabled
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 outline-none cursor-not-allowed" />
                 ) : (
-                  <select
-                    value={form.department_id}
-                    onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                  >
+                  <select value={form.department_id} onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                     <option value="">— None —</option>
                     <option value="gp">General Practice (GP)</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -741,114 +809,352 @@ export default function Shifts() {
 
               {/* Date */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Date *
-                </label>
-                <input
-                  type="date"
-                  value={form.shift_date}
-                  onChange={e => setForm(f => ({ ...f, shift_date: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                />
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date *</label>
+                <input type="date" value={form.shift_date} onChange={e => setForm(f => ({ ...f, shift_date: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
 
-              {/* Start / End times */}
+              {/* Times */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                     <Clock className="inline w-3.5 h-3.5 mr-1" />Start *
                   </label>
-                  <input
-                    type="time"
-                    value={form.start_time}
-                    onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                  />
+                  <input type="time" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                    End *
-                  </label>
-                  <input
-                    type="time"
-                    value={form.end_time}
-                    onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                  />
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End *</label>
+                  <input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               </div>
 
-              {/* Schedule type (pre-filled from Level 3) */}
+              {/* Schedule type */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Schedule Type
-                </label>
-                <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-sm">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Schedule Type</label>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
                   {(['regular', 'duty'] as const).map(t => (
-                    <button
-                      type="button"
-                      key={t}
-                      onClick={() => setForm(f => ({ ...f, schedule_type: t }))}
+                    <button type="button" key={t} onClick={() => setForm(f => ({ ...f, schedule_type: t }))}
                       className={`flex-1 py-2 font-medium capitalize transition-colors ${
-                        form.schedule_type === t
-                          ? 'bg-teal-600 text-white'
-                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      {t}
-                    </button>
+                        form.schedule_type === t ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                      }`}>{t}</button>
                   ))}
                 </div>
               </div>
 
-              {/* Specialty (pre-filled from Level 2) */}
+              {/* Specialty */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Specialty
-                </label>
-                <input
-                  type="text"
-                  value={form.specialty}
-                  onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))}
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Specialty</label>
+                <input type="text" value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))}
                   placeholder="e.g. Internal Medicine, ICU, Ward…"
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Notes
-                </label>
-                <textarea
-                  rows={2}
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes</label>
+                <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="Optional notes…"
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none"
-                />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
+
+              {/* ── Repeat section (Add mode only) ── */}
+              {!shiftAction && (
+                <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={repeatEnabled}
+                      onChange={e => setRepeatEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-teal-600 rounded"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Repeat this shift</span>
+                  </label>
+
+                  {repeatEnabled && (
+                    <div className="space-y-3 pt-1">
+                      {/* Pattern */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Repeat Pattern</label>
+                        <select
+                          value={repeatPattern}
+                          onChange={e => {
+                            const p = e.target.value as RepeatPattern
+                            setRepeatPattern(p)
+                            if (p === 'custom') setRepeatDays(new Set())
+                          }}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none"
+                        >
+                          {REPEAT_PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Custom day checkboxes */}
+                      {repeatPattern === 'custom' && (
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Select Days</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[1, 2, 3, 4, 5, 6, 0].map(d => (
+                              <label key={d} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                repeatDays.has(d) ? 'bg-teal-600 text-white border-teal-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                              }`}>
+                                <input type="checkbox" className="hidden" checked={repeatDays.has(d)} onChange={() => toggleRepeatDay(d)} />
+                                {DAY_LABELS[d]}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Weekly auto-label */}
+                      {repeatPattern === 'weekly' && form.shift_date && (
+                        <p className="text-xs text-gray-500">
+                          Repeats every <span className="font-medium">{DAY_LABELS[new Date(form.shift_date + 'T00:00:00').getDay()]}</span>
+                        </p>
+                      )}
+
+                      {/* Until date */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Repeat Until *</label>
+                        <input type="date" value={repeatUntil} min={form.shift_date}
+                          onChange={e => setRepeatUntil(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                      </div>
+
+                      {/* Preview */}
+                      {repeatUntil && (
+                        <div className="flex items-center gap-1.5 text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                          This will create <span className="font-semibold">{repeatPreviewCount}</span> shift{repeatPreviewCount !== 1 ? 's' : ''}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Modal footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 shrink-0">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
               <button
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
+                onClick={() => shiftAction === 'edit' ? setShiftAction(null) : closeAddModal()}
+                className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 transition-colors">
                 Cancel
               </button>
               <button
-                onClick={saveShift}
+                onClick={shiftAction === 'edit' ? updateShift : saveShift}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors"
-              >
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                {saving ? 'Saving…' : 'Save Shift'}
+                {saving ? 'Saving…' : shiftAction === 'edit' ? 'Update Shift' : 'Save Shift'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          Shift Detail Modal
+          ════════════════════════════════════════════════════════════════════ */}
+      {selectedShift && !shiftAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <h2 className="text-base font-semibold text-gray-900">Shift Details</h2>
+              <button onClick={closeDetail} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-3">
+              {/* Staff */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Staff</p>
+                <p className="text-sm font-medium text-gray-900">{selectedShift.user?.full_name ?? '—'}</p>
+              </div>
+              {/* Department */}
+              {selectedShift.department?.name && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Department</p>
+                  <p className="text-sm text-gray-700">{selectedShift.department.name}</p>
+                </div>
+              )}
+              {/* Specialty */}
+              {selectedShift.specialty && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Specialty</p>
+                  <p className="text-sm text-gray-700">{selectedShift.specialty}</p>
+                </div>
+              )}
+              {/* Date */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Date</p>
+                <p className="text-sm text-gray-700">{formatShiftDate(selectedShift.starts_at.split('T')[0])}</p>
+              </div>
+              {/* Time */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Time</p>
+                <p className="text-sm text-gray-700">
+                  {fmt12(selectedShift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
+                  {' – '}
+                  {fmt12(selectedShift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
+                </p>
+              </div>
+              {/* Schedule type */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Schedule Type</p>
+                <p className="text-sm text-gray-700 capitalize">{selectedShift.schedule_type ?? '—'}</p>
+              </div>
+              {/* Notes */}
+              {selectedShift.notes && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Notes</p>
+                  <p className="text-sm text-gray-600">{selectedShift.notes}</p>
+                </div>
+              )}
+
+              {actionError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{actionError}
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons — only for authorised users */}
+            {canManageShift(selectedShift) && (
+              <div className="px-6 pb-5 flex gap-2">
+                <button
+                  onClick={openEditModal}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors text-gray-700"
+                >
+                  <Edit2 className="w-4 h-4" />Edit
+                </button>
+                <button
+                  onClick={openReassign}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors text-gray-700"
+                >
+                  <RefreshCw className="w-4 h-4" />Reassign
+                </button>
+                <button
+                  onClick={() => { setActionError(null); setShiftAction('delete') }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-red-200 hover:bg-red-50 rounded-lg transition-colors text-red-600"
+                >
+                  <Trash2 className="w-4 h-4" />Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          Reassign Modal
+          ════════════════════════════════════════════════════════════════════ */}
+      {selectedShift && shiftAction === 'reassign' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-teal-500" />Reassign Shift
+              </h2>
+              <button onClick={closeDetail} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 border border-gray-100 rounded-lg px-4 py-3 text-sm text-gray-600">
+                Currently assigned to <span className="font-medium text-gray-900">{selectedShift.user?.full_name ?? '—'}</span>
+                <br />
+                <span className="text-xs text-gray-400">
+                  {formatShiftDate(selectedShift.starts_at.split('T')[0])},&nbsp;
+                  {fmt12(selectedShift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
+                  {' – '}
+                  {fmt12(selectedShift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Assign To *
+                </label>
+                <select value={reassignUserId} onChange={e => setReassignUserId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+                  <option value="">— Select replacement staff —</option>
+                  {profiles.filter(p => p.id !== selectedShift.user_id).map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {actionError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{actionError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
+              <button onClick={() => setShiftAction(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={reassignShift}
+                disabled={!reassignUserId || reassigning}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {reassigning && <Loader2 className="w-4 h-4 animate-spin" />}
+                {reassigning ? 'Reassigning…' : 'Confirm Reassign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          Delete Confirmation Modal
+          ════════════════════════════════════════════════════════════════════ */}
+      {selectedShift && shiftAction === 'delete' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Delete Shift?</h2>
+            <p className="text-sm text-gray-500 mb-1">
+              This will permanently remove the shift for{' '}
+              <span className="font-medium text-gray-700">{selectedShift.user?.full_name ?? 'this staff member'}</span>.
+            </p>
+            <p className="text-xs text-gray-400 mb-5">
+              {formatShiftDate(selectedShift.starts_at.split('T')[0])},&nbsp;
+              {fmt12(selectedShift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
+              {' – '}
+              {fmt12(selectedShift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
+            </p>
+
+            {actionError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm mb-4">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />{actionError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShiftAction(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button onClick={deleteShift} disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 rounded-lg transition-colors">
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {deleting ? 'Deleting…' : 'Delete Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Upload ── */}
+      {uploadOpen && (
+        <ShiftUpload
+          onClose={() => setUploadOpen(false)}
+          onSuccess={() => { setUploadOpen(false); fetchShifts() }}
+          departmentId={profile?.department_id}
+          userRole={role}
+        />
       )}
     </div>
   )
