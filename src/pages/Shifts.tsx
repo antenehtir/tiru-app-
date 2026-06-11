@@ -189,7 +189,7 @@ export default function Shifts() {
   // ── Department head: fetch own department name ──
   const [userDeptName, setUserDeptName] = useState('')
   useEffect(() => {
-    if (role === 'department_head' && profile?.department_id) {
+    if (profile?.role === 'department_head' && profile?.department_id) {
       supabase.from('departments')
         .select('name')
         .eq('id', profile.department_id)
