@@ -14,6 +14,7 @@ import Incidents from './pages/Incidents'
 import Notices from './pages/Notices'
 import Flags from './pages/Flags'
 import Admin from './pages/Admin'
+import AuditLog from './pages/AuditLog'
 import Profile from './pages/Profile'
 
 const Spinner = () => (
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/incidents"  element={<Incidents />} />
           <Route path="/notices"    element={<Notices />} />
           <Route path="/flags"      element={<Flags />} />
+          <Route path="/audit"      element={<AuditLog />} />
           <Route path="/admin"      element={<Admin />} />
           <Route path="/profile"    element={<Profile />} />
         </Route>

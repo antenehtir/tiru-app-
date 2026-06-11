@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
 import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
-  ChevronDown, ChevronUp, Shield, MapPin, Pencil,
+  ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,7 +58,8 @@ type ChangeRequest = {
   status: string
   reviewed_by: string | null
   reviewed_at: string | null
-  profile?: { full_name: string } | null
+  created_at?: string
+  profile?: { full_name: string; role: string } | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -300,6 +301,7 @@ function SitesSection() {
 // ─── Users Section ────────────────────────────────────────────────────────────
 
 function UsersSection({ currentRole }: { currentRole: string }) {
+  const { profile: currentUser } = useAuth()
   const [users,    setUsers]    = useState<Profile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
@@ -307,9 +309,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [depts,    setDepts]    = useState<DeptOption[]>([])
   const [sites,    setSites]    = useState<SiteOption[]>([])
 
-  // Pending change requests badge
-  const [pendingCount,        setPendingCount]        = useState(0)
-  const [showPendingRequests, setShowPendingRequests] = useState(false)
+  // Pending change requests
+  const [pendingRequests, setPendingRequests] = useState<ChangeRequest[]>([])
+  const [pendingLoading,  setPendingLoading]  = useState(false)
+  const [dismissedIds,    setDismissedIds]    = useState<Set<string>>(new Set())
+  const pendingRef = useRef<HTMLDivElement>(null)
+  const pendingCount = pendingRequests.length
 
   // Invite modal
   const [inviteOpen,  setInviteOpen]  = useState(false)
@@ -361,15 +366,19 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       .then(({ data }) => setSites((data as SiteOption[]) ?? []))
   }, [])
 
-  const fetchPendingCount = useCallback(async () => {
-    const { count } = await supabase
+  const fetchPendingRequests = useCallback(async () => {
+    setPendingLoading(true)
+    const { data } = await supabase
       .from('profile_change_requests')
-      .select('*', { count: 'exact', head: true })
+      .select('*, profile:profiles!profile_change_requests_user_id_fkey(full_name, role)')
       .eq('status', 'pending')
-    setPendingCount(count ?? 0)
+      .order('created_at', { ascending: true })
+    setPendingRequests((data as ChangeRequest[]) ?? [])
+    setDismissedIds(new Set())
+    setPendingLoading(false)
   }, [])
 
-  useEffect(() => { fetchPendingCount() }, [fetchPendingCount])
+  useEffect(() => { fetchPendingRequests() }, [fetchPendingRequests])
 
   const openInviteModal = async () => {
     setFormErr(null)
@@ -525,8 +534,9 @@ function UsersSection({ currentRole }: { currentRole: string }) {
           <UserPlus className="w-5 h-5 text-teal-500" />Staff Accounts
           <span className="text-sm font-normal text-gray-400">({users.length})</span>
           {pendingCount > 0 && (
-            <button onClick={() => setShowPendingRequests(v => !v)}
-              className="flex items-center gap-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 py-0.5 rounded-full font-semibold transition-colors">
+            <button onClick={() => pendingRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold transition-colors bg-amber-100 hover:bg-amber-200 text-amber-700">
+              <Bell className="w-3 h-3" />
               {pendingCount} Pending Request{pendingCount !== 1 ? 's' : ''}
             </button>
           )}
@@ -768,103 +778,90 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         </div>
       )}
 
-      {/* Pending Change Requests */}
-      {showPendingRequests && (
-        <PendingRequestsSection onUpdate={() => { fetchPendingCount(); fetchUsers() }} />
+      {/* Pending Change Requests Panel */}
+      {pendingCount > 0 && (
+        <div ref={pendingRef} className="mt-6 border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded-r-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-200 dark:border-amber-800">
+            <Bell className="w-4 h-4 text-amber-600" />
+            <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              Pending Profile Change Requests
+            </h3>
+          </div>
+          {pendingLoading ? (
+            <div className="flex items-center gap-2 text-gray-400 py-6 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin" />Loading…
+            </div>
+          ) : (
+            <div className="divide-y divide-amber-100 dark:divide-amber-800/50">
+              {pendingRequests.map(req => {
+                const isDismissed = dismissedIds.has(req.id)
+                const initials = (req.profile?.full_name ?? '?')
+                  .split(' ').filter(Boolean).slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
+                const FIELD_LABEL: Record<string, string> = {
+                  full_name: 'Full Name', phone: 'Phone Number', email: 'Email',
+                }
+                return (
+                  <div key={req.id}
+                    className={`px-5 py-4 flex flex-col sm:flex-row sm:items-start gap-4 transition-all duration-300 ${isDismissed ? 'opacity-0 max-h-0 py-0 overflow-hidden' : 'opacity-100'}`}>
+                    {/* Initials circle */}
+                    <div className="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 select-none">
+                      {initials}
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-800 dark:text-white">
+                          {req.profile?.full_name ?? '—'}
+                        </span>
+                        {req.profile?.role && (
+                          <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${ROLE_COLOR[req.profile.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {req.profile.role.replace('_', ' ')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        <span className="font-semibold">{FIELD_LABEL[req.field_name] ?? req.field_name}:</span>{' '}
+                        <span className="line-through text-gray-400">{req.current_value || '—'}</span>
+                        <span className="mx-1 text-gray-400">→</span>
+                        <span className="text-teal-700 dark:text-teal-400 font-medium">{req.requested_value}</span>
+                      </p>
+                      {req.reason && (
+                        <p className="text-xs text-gray-400 italic">"{req.reason}"</p>
+                      )}
+                      <p className="text-xs text-gray-400">
+                        Submitted {new Date(req.created_at ?? '').toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      </p>
+                    </div>
+                    {/* Action buttons */}
+                    <div className="flex gap-2 flex-shrink-0 sm:mt-0.5">
+                      <button
+                        onClick={async () => {
+                          setDismissedIds(prev => new Set([...prev, req.id]))
+                          await supabase.from('profiles').update({ [req.field_name]: req.requested_value }).eq('id', req.user_id)
+                          await supabase.from('profile_change_requests').update({ status: 'approved', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() }).eq('id', req.id)
+                          setTimeout(() => { fetchPendingRequests(); fetchUsers() }, 350)
+                        }}
+                        className="flex items-center gap-1.5 text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5" />Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setDismissedIds(prev => new Set([...prev, req.id]))
+                          await supabase.from('profile_change_requests').update({ status: 'rejected', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() }).eq('id', req.id)
+                          setTimeout(() => { fetchPendingRequests() }, 350)
+                        }}
+                        className="flex items-center gap-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                        <XCircle className="w-3.5 h-3.5" />Reject
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
     </section>
-  )
-}
-
-// ─── Pending Requests Section ────────────────────────────────────────────────
-
-function PendingRequestsSection({ onUpdate }: { onUpdate: () => void }) {
-  const [requests, setRequests] = useState<ChangeRequest[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const { profile: currentUser } = useAuth()
-
-  const fetchRequests = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('profile_change_requests')
-      .select('*, profile:profiles!profile_change_requests_user_id_fkey(full_name)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-    setRequests((data as ChangeRequest[]) ?? [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchRequests() }, [fetchRequests])
-
-  const approve = async (req: ChangeRequest) => {
-    await supabase.from('profiles')
-      .update({ [req.field_name]: req.requested_value })
-      .eq('id', req.user_id)
-    await supabase.from('profile_change_requests')
-      .update({ status: 'approved', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() })
-      .eq('id', req.id)
-    fetchRequests()
-    onUpdate()
-  }
-
-  const reject = async (req: ChangeRequest) => {
-    await supabase.from('profile_change_requests')
-      .update({ status: 'rejected', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() })
-      .eq('id', req.id)
-    fetchRequests()
-    onUpdate()
-  }
-
-  const FIELD_LABEL: Record<string, string> = {
-    full_name: 'Full Name',
-    phone:     'Phone Number',
-    email:     'Email',
-  }
-
-  return (
-    <div className="mt-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-amber-200 dark:border-amber-800">
-        <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Pending Profile Change Requests</h3>
-      </div>
-      {loading ? (
-        <div className="flex items-center gap-2 text-gray-400 py-6 justify-center">
-          <Loader2 className="w-4 h-4 animate-spin" />Loading…
-        </div>
-      ) : requests.length === 0 ? (
-        <p className="text-sm text-gray-400 px-5 py-4">No pending requests.</p>
-      ) : (
-        <div className="divide-y divide-amber-100 dark:divide-amber-800">
-          {requests.map(req => (
-            <div key={req.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1 min-w-0 space-y-1">
-                <p className="text-sm font-medium text-gray-800 dark:text-white">
-                  {req.profile?.full_name ?? req.user_id}
-                </p>
-                <p className="text-xs text-gray-500">
-                  <span className="font-semibold">{FIELD_LABEL[req.field_name] ?? req.field_name}:</span>{' '}
-                  <span className="line-through text-gray-400">{req.current_value || '—'}</span>
-                  {' → '}
-                  <span className="text-teal-700 dark:text-teal-400 font-medium">{req.requested_value}</span>
-                </p>
-                {req.reason && (
-                  <p className="text-xs text-gray-400 italic">"{req.reason}"</p>
-                )}
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={() => approve(req)}
-                  className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                  Approve
-                </button>
-                <button onClick={() => reject(req)}
-                  className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 

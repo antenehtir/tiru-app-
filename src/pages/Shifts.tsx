@@ -317,7 +317,7 @@ export default function Shifts() {
     setSaving(true)
     const { error: err } = await supabase.from('shifts').insert({
       user_id:       form.user_id,
-      department_id: form.department_id || null,
+      department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
       starts_at:     form.shift_date + 'T' + form.start_time + ':00',
       ends_at:       form.shift_date + 'T' + form.end_time   + ':00',
       schedule_type: form.schedule_type || null,
@@ -693,6 +693,7 @@ export default function Shifts() {
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
                 >
                   <option value="">— None —</option>
+                  <option value="gp">General Practice (GP)</option>
                   {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>

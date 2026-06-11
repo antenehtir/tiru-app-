@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
-  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal, User,
+  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal, User, ClipboardList,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -17,9 +17,10 @@ const NAV_ITEMS = [
 
 const MOBILE_MAIN = NAV_ITEMS
 
-const LEADERSHIP = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
-const CAN_ADMIN  = ['super_admin', 'ceo', 'general_manager']
-const CAN_FLAGS  = ['super_admin', 'ceo', 'general_manager', 'medical_director']
+const LEADERSHIP  = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
+const CAN_ADMIN   = ['super_admin', 'ceo', 'general_manager']
+const CAN_FLAGS   = ['super_admin', 'ceo', 'general_manager', 'medical_director']
+const CAN_AUDIT   = ['super_admin', 'ceo']
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -35,6 +36,7 @@ export default function AppShell() {
   const isLeadership  = LEADERSHIP.includes(role)
   const canAdmin      = CAN_ADMIN.includes(role)
   const canFlags      = CAN_FLAGS.includes(role)
+  const canAudit      = CAN_AUDIT.includes(role)
 
   const [drawerOpen,        setDrawerOpen]      = useState(false)
   const [unreadNotices,     setUnreadNotices]   = useState(0)
@@ -121,6 +123,12 @@ export default function AppShell() {
             <NavLink to="/flags" className={navClass}>
               <AlertTriangle size={18} />
               Flags
+            </NavLink>
+          )}
+          {canAudit && (
+            <NavLink to="/audit" className={navClass}>
+              <ClipboardList size={18} />
+              Audit Log
             </NavLink>
           )}
           {canAdmin && (
@@ -277,6 +285,17 @@ export default function AppShell() {
                 >
                   <AlertTriangle size={20} className="text-red-500" />
                   <span className="text-sm font-medium text-gray-800">Flags &amp; Alerts</span>
+                </button>
+              )}
+
+              {/* Audit Log (super_admin + ceo) */}
+              {canAudit && (
+                <button
+                  onClick={() => go('/audit')}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                >
+                  <ClipboardList size={20} className="text-gray-600" />
+                  <span className="text-sm font-medium text-gray-800">Audit Log</span>
                 </button>
               )}
 
