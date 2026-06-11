@@ -9,6 +9,7 @@ interface Props {
   onClose: () => void
   onSuccess: () => void
   departmentId?: string | null
+  uploaderId: string
   userRole?: string
 }
 
@@ -29,7 +30,7 @@ const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ShiftUpload({ onClose, onSuccess, departmentId }: Props) {
+export default function ShiftUpload({ onClose, onSuccess, departmentId, uploaderId }: Props) {
   const [step, setStep]             = useState<1 | 2>(1)
   const [rows, setRows]             = useState<ParsedRow[]>([])
   const [importing, setImporting]   = useState(false)
@@ -139,7 +140,10 @@ export default function ShiftUpload({ onClose, onSuccess, departmentId }: Props)
       ends_at:       `${r.date}T${r.endTime}:00`,
       specialty:     r.specialty     || null,
       schedule_type: r.scheduleType,
+      shift_type:    r.scheduleType,
       notes:         r.notes         || null,
+      status:        'scheduled',
+      created_by:    uploaderId,
     }))
 
     const { error } = await supabase.from('shifts').insert(shiftsToInsert)
