@@ -26,7 +26,8 @@ type IncidentReport = {
   reporter: { full_name: string; role: string } | null
 }
 
-const LEADERSHIP = ['ceo','general_manager','medical_director','hr','super_admin']
+const CAN_VIEW_ALL = ['ceo','general_manager','medical_director','hr','super_admin']
+const CAN_ACTION   = ['ceo','general_manager','medical_director','super_admin']
 
 const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; dot: string }> = {
   low:      { label:'Low',      color:'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',            dot:'bg-gray-400' },
@@ -57,7 +58,8 @@ const SEVERITIES: Severity[] = ['low','medium','high','critical']
 export default function Incidents() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
-  const isLeadership = LEADERSHIP.includes(role)
+  const isLeadership = CAN_VIEW_ALL.includes(role)
+  const canAction    = CAN_ACTION.includes(role)
 
   type TabKey = 'mine' | 'all'
   const [tab, setTab] = useState<TabKey>(isLeadership ? 'all' : 'mine')
@@ -307,13 +309,13 @@ export default function Incidents() {
                       </p>
                     )}
                     <div className="flex gap-2 flex-wrap">
-                      {isLeadership && rep.status !== 'resolved' && rep.status !== 'dismissed' && (
+                      {canAction && rep.status !== 'resolved' && rep.status !== 'dismissed' && (
                         <button onClick={() => { setReviewMode({ id: rep.id, currentStatus: rep.status }); setReviewStatus('under_review') }}
                           className="flex items-center gap-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg transition-colors">
                           <Eye className="w-3.5 h-3.5" />Review / Update Status
                         </button>
                       )}
-                      {isLeadership && (rep.status === 'resolved' || rep.status === 'dismissed') && (
+                      {canAction && (rep.status === 'resolved' || rep.status === 'dismissed') && (
                         <span className="flex items-center gap-1.5 text-xs text-green-600">
                           <CheckCircle2 className="w-3.5 h-3.5" />Closed
                         </span>
