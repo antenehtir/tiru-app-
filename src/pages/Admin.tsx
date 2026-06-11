@@ -45,7 +45,21 @@ type QRCode = {
   created_at: string
 }
 
-type DeptOption = { id: string; name: string }
+type DeptOption  = { id: string; name: string }
+type SiteOption  = { id: string; name: string }
+
+type ChangeRequest = {
+  id: string
+  user_id: string
+  field_name: string
+  current_value: string | null
+  requested_value: string
+  reason: string | null
+  status: string
+  reviewed_by: string | null
+  reviewed_at: string | null
+  profile?: { full_name: string } | null
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -95,7 +109,7 @@ export default function Admin() {
       </div>
 
       {role === 'super_admin' && <SitesSection />}
-      <UsersSection />
+      <UsersSection currentRole={role} />
       <DepartmentsSection />
       <QRCodesSection />
     </div>
@@ -285,12 +299,17 @@ function SitesSection() {
 
 // ─── Users Section ────────────────────────────────────────────────────────────
 
-function UsersSection() {
+function UsersSection({ currentRole }: { currentRole: string }) {
   const [users,    setUsers]    = useState<Profile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [depts,    setDepts]    = useState<DeptOption[]>([])
+  const [sites,    setSites]    = useState<SiteOption[]>([])
+
+  // Pending change requests badge
+  const [pendingCount,        setPendingCount]        = useState(0)
+  const [showPendingRequests, setShowPendingRequests] = useState(false)
 
   // Invite modal
   const [inviteOpen,  setInviteOpen]  = useState(false)
@@ -307,6 +326,17 @@ function UsersSection() {
   const [editMode,  setEditMode]  = useState<EditMode>(null)
   const [newRole,   setNewRole]   = useState('')
   const [updating,  setUpdating]  = useState(false)
+
+  // Edit profile modal (super_admin only)
+  type EditProfileTarget = Profile | null
+  const [editProfileTarget, setEditProfileTarget] = useState<EditProfileTarget>(null)
+  const [editProfileForm,   setEditProfileForm]   = useState({
+    full_name: '', email: '', phone: '', employee_id: '',
+    role: 'staff', department_id: '', site_id: '', is_active: true,
+  })
+  const [editProfileErr,    setEditProfileErr]    = useState<string | null>(null)
+  const [editProfileSaving, setEditProfileSaving] = useState(false)
+  const [editProfileSuccess, setEditProfileSuccess] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true); setError(null)
@@ -325,6 +355,21 @@ function UsersSection() {
     supabase.from('departments').select('id, name').order('name')
       .then(({ data }) => setDepts((data as DeptOption[]) ?? []))
   }, [])
+
+  useEffect(() => {
+    supabase.from('sites').select('id, name').eq('is_active', true).order('name')
+      .then(({ data }) => setSites((data as SiteOption[]) ?? []))
+  }, [])
+
+  const fetchPendingCount = useCallback(async () => {
+    const { count } = await supabase
+      .from('profile_change_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+    setPendingCount(count ?? 0)
+  }, [])
+
+  useEffect(() => { fetchPendingCount() }, [fetchPendingCount])
 
   const openInviteModal = async () => {
     setFormErr(null)
@@ -430,15 +475,61 @@ function UsersSection() {
     fetchUsers()
   }
 
+  const openEditProfile = (u: Profile) => {
+    setEditProfileErr(null)
+    setEditProfileSuccess(null)
+    setEditProfileTarget(u)
+    setEditProfileForm({
+      full_name:     u.full_name ?? '',
+      email:         u.email ?? '',
+      phone:         u.phone ?? '',
+      employee_id:   u.employee_id ?? '',
+      role:          u.role,
+      department_id: u.department_id ?? '',
+      site_id:       (u as any).site_id ?? '',
+      is_active:     u.is_active,
+    })
+  }
+
+  const saveEditProfile = async () => {
+    if (!editProfileTarget) return
+    setEditProfileErr(null)
+    if (!editProfileForm.full_name.trim()) return setEditProfileErr('Full name is required.')
+    setEditProfileSaving(true)
+    const { error: err } = await supabase
+      .from('profiles')
+      .update({
+        full_name:     editProfileForm.full_name.trim(),
+        email:         editProfileForm.email.trim() || null,
+        phone:         editProfileForm.phone.trim() || null,
+        employee_id:   editProfileForm.employee_id.trim() || null,
+        role:          editProfileForm.role,
+        department_id: editProfileForm.department_id || null,
+        site_id:       editProfileForm.site_id || null,
+        is_active:     editProfileForm.is_active,
+      })
+      .eq('id', editProfileTarget.id)
+    setEditProfileSaving(false)
+    if (err) { setEditProfileErr(err.message); return }
+    setEditProfileSuccess('Profile updated successfully.')
+    fetchUsers()
+  }
+
   const toggleExpand = (id: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2 flex-wrap">
           <UserPlus className="w-5 h-5 text-teal-500" />Staff Accounts
           <span className="text-sm font-normal text-gray-400">({users.length})</span>
+          {pendingCount > 0 && (
+            <button onClick={() => setShowPendingRequests(v => !v)}
+              className="flex items-center gap-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 py-0.5 rounded-full font-semibold transition-colors">
+              {pendingCount} Pending Request{pendingCount !== 1 ? 's' : ''}
+            </button>
+          )}
         </h2>
         <button onClick={openInviteModal}
           className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
@@ -499,6 +590,12 @@ function UsersSection() {
                       className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${u.is_active ? 'bg-red-50 hover:bg-red-100 text-red-600' : 'bg-green-50 hover:bg-green-100 text-green-700'}`}>
                       {u.is_active ? 'Deactivate' : 'Reactivate'}
                     </button>
+                    {currentRole === 'super_admin' && (
+                      <button onClick={() => openEditProfile(u)}
+                        className="text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-3 py-1.5 rounded-lg transition-colors">
+                        Edit Profile
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -587,7 +684,184 @@ function UsersSection() {
           </div>
         </div>
       )}
+
+      {/* Edit Profile Modal */}
+      {editProfileTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+              <h2 className="text-lg font-semibold">Edit Profile — {editProfileTarget.full_name}</h2>
+              <button onClick={() => setEditProfileTarget(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {editProfileErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4" />{editProfileErr}
+                </div>
+              )}
+              {editProfileSuccess && (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4" />{editProfileSuccess}
+                </div>
+              )}
+              {([
+                { label: 'Full Name',   key: 'full_name',   type: 'text'  },
+                { label: 'Email',       key: 'email',       type: 'email' },
+                { label: 'Phone',       key: 'phone',       type: 'tel'   },
+                { label: 'Employee ID', key: 'employee_id', type: 'text'  },
+              ] as { label: string; key: keyof typeof editProfileForm; type: string }[]).map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                  <input type={f.type}
+                    value={editProfileForm[f.key] as string}
+                    onChange={e => setEditProfileForm(x => ({ ...x, [f.key]: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
+                <select value={editProfileForm.role}
+                  onChange={e => setEditProfileForm(x => ({ ...x, role: e.target.value }))}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                  {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department</label>
+                <select value={editProfileForm.department_id}
+                  onChange={e => setEditProfileForm(x => ({ ...x, department_id: e.target.value }))}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  <option value="">— None —</option>
+                  {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Site</label>
+                <select value={editProfileForm.site_id}
+                  onChange={e => setEditProfileForm(x => ({ ...x, site_id: e.target.value }))}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  <option value="">— None —</option>
+                  {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Active</label>
+                <button type="button"
+                  onClick={() => setEditProfileForm(x => ({ ...x, is_active: !x.is_active }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editProfileForm.is_active ? 'bg-teal-600' : 'bg-gray-300'}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editProfileForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-sm text-gray-500">{editProfileForm.is_active ? 'Active' : 'Inactive'}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
+              <button onClick={() => setEditProfileTarget(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Close</button>
+              <button onClick={saveEditProfile} disabled={editProfileSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                {editProfileSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editProfileSaving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Change Requests */}
+      {showPendingRequests && (
+        <PendingRequestsSection onUpdate={() => { fetchPendingCount(); fetchUsers() }} />
+      )}
     </section>
+  )
+}
+
+// ─── Pending Requests Section ────────────────────────────────────────────────
+
+function PendingRequestsSection({ onUpdate }: { onUpdate: () => void }) {
+  const [requests, setRequests] = useState<ChangeRequest[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const { profile: currentUser } = useAuth()
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('profile_change_requests')
+      .select('*, profile:profiles!profile_change_requests_user_id_fkey(full_name)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+    setRequests((data as ChangeRequest[]) ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchRequests() }, [fetchRequests])
+
+  const approve = async (req: ChangeRequest) => {
+    await supabase.from('profiles')
+      .update({ [req.field_name]: req.requested_value })
+      .eq('id', req.user_id)
+    await supabase.from('profile_change_requests')
+      .update({ status: 'approved', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() })
+      .eq('id', req.id)
+    fetchRequests()
+    onUpdate()
+  }
+
+  const reject = async (req: ChangeRequest) => {
+    await supabase.from('profile_change_requests')
+      .update({ status: 'rejected', reviewed_by: currentUser?.id ?? null, reviewed_at: new Date().toISOString() })
+      .eq('id', req.id)
+    fetchRequests()
+    onUpdate()
+  }
+
+  const FIELD_LABEL: Record<string, string> = {
+    full_name: 'Full Name',
+    phone:     'Phone Number',
+    email:     'Email',
+  }
+
+  return (
+    <div className="mt-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-amber-200 dark:border-amber-800">
+        <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Pending Profile Change Requests</h3>
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-gray-400 py-6 justify-center">
+          <Loader2 className="w-4 h-4 animate-spin" />Loading…
+        </div>
+      ) : requests.length === 0 ? (
+        <p className="text-sm text-gray-400 px-5 py-4">No pending requests.</p>
+      ) : (
+        <div className="divide-y divide-amber-100 dark:divide-amber-800">
+          {requests.map(req => (
+            <div key={req.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0 space-y-1">
+                <p className="text-sm font-medium text-gray-800 dark:text-white">
+                  {req.profile?.full_name ?? req.user_id}
+                </p>
+                <p className="text-xs text-gray-500">
+                  <span className="font-semibold">{FIELD_LABEL[req.field_name] ?? req.field_name}:</span>{' '}
+                  <span className="line-through text-gray-400">{req.current_value || '—'}</span>
+                  {' → '}
+                  <span className="text-teal-700 dark:text-teal-400 font-medium">{req.requested_value}</span>
+                </p>
+                {req.reason && (
+                  <p className="text-xs text-gray-400 italic">"{req.reason}"</p>
+                )}
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={() => approve(req)}
+                  className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                  Approve
+                </button>
+                <button onClick={() => reject(req)}
+                  className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

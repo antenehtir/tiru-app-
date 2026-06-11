@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { User, Lock, CheckCircle2, AlertCircle, Loader2, Info } from 'lucide-react'
+import { User, Lock, CheckCircle2, AlertCircle, Loader2, Info, FileEdit } from 'lucide-react'
 
 // ─── Role badge colour ────────────────────────────────────────────────────────
 
@@ -138,6 +138,9 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* ── Request a Change ── */}
+      <RequestChangeSection />
+
       {/* ── Change Password ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
@@ -192,6 +195,148 @@ export default function Profile() {
         </div>
       </div>
 
+    </div>
+  )
+}
+
+// ─── Request a Change ─────────────────────────────────────────────────────────
+
+const CHANGEABLE_FIELDS = [
+  { key: 'full_name',   label: 'Full Name'    },
+  { key: 'phone',       label: 'Phone Number' },
+  { key: 'email',       label: 'Email'        },
+] as const
+type ChangeableField = typeof CHANGEABLE_FIELDS[number]['key']
+
+function RequestChangeSection() {
+  const profile = useAuthStore(s => s.profile)
+
+  const [field,          setField]          = useState<ChangeableField>('full_name')
+  const [requestedValue, setRequestedValue] = useState('')
+  const [reason,         setReason]         = useState('')
+  const [saving,         setSaving]         = useState(false)
+  const [msg,            setMsg]            = useState<{ ok: boolean; text: string } | null>(null)
+
+  const currentValue = (profile as any)?.[field] ?? ''
+
+  const submit = async () => {
+    setMsg(null)
+    if (!requestedValue.trim()) return setMsg({ ok: false, text: 'Please enter the requested value.' })
+
+    setSaving(true)
+
+    const { data: existing } = await supabase
+      .from('profile_change_requests')
+      .select('id')
+      .eq('user_id', profile!.id)
+      .eq('field_name', field)
+      .eq('status', 'pending')
+      .limit(1)
+
+    if (existing && existing.length > 0) {
+      setSaving(false)
+      return setMsg({ ok: false, text: 'You already have a pending request for this field.' })
+    }
+
+    const { error: err } = await supabase.from('profile_change_requests').insert({
+      user_id:         profile!.id,
+      field_name:      field,
+      current_value:   currentValue,
+      requested_value: requestedValue.trim(),
+      reason:          reason.trim() || null,
+      status:          'pending',
+    })
+
+    setSaving(false)
+    if (err) {
+      setMsg({ ok: false, text: err.message })
+    } else {
+      setMsg({ ok: true, text: 'Change request submitted. HR or Admin will review it shortly.' })
+      setRequestedValue('')
+      setReason('')
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+        <FileEdit className="w-4 h-4 text-teal-500" />
+        <h2 className="text-base font-semibold text-gray-800">Request a Change</h2>
+      </div>
+
+      <div className="px-5 py-5 space-y-4">
+        {msg && (
+          <div className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm border ${
+            msg.ok
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50  border-red-200  text-red-700'
+          }`}>
+            {msg.ok
+              ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              : <AlertCircle  className="w-4 h-4 flex-shrink-0" />}
+            {msg.text}
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+            Field to Change
+          </label>
+          <select
+            value={field}
+            onChange={e => { setField(e.target.value as ChangeableField); setMsg(null); setRequestedValue('') }}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none"
+          >
+            {CHANGEABLE_FIELDS.map(f => (
+              <option key={f.key} value={f.key}>{f.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+            Current Value
+          </label>
+          <p className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 italic">
+            {currentValue || '—'}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+            Requested Value
+          </label>
+          <input
+            type="text"
+            value={requestedValue}
+            onChange={e => { setRequestedValue(e.target.value); setMsg(null) }}
+            placeholder="Enter new value…"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+            Reason
+          </label>
+          <textarea
+            rows={3}
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Optional — explain why the change is needed…"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+          />
+        </div>
+
+        <button
+          onClick={submit}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {saving ? 'Submitting…' : 'Submit Request'}
+        </button>
+      </div>
     </div>
   )
 }
