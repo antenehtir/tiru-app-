@@ -504,7 +504,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         phone:         editProfileForm.phone.trim() || null,
         employee_id:   editProfileForm.employee_id.trim() || null,
         role:          editProfileForm.role,
-        department_id: editProfileForm.department_id || null,
+        department_id: editProfileForm.department_id === 'gp' || !editProfileForm.department_id ? null : editProfileForm.department_id,
         site_id:       editProfileForm.site_id || null,
         is_active:     editProfileForm.is_active,
       })
@@ -732,6 +732,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   onChange={e => setEditProfileForm(x => ({ ...x, department_id: e.target.value }))}
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">— None —</option>
+                  <option value="gp">General Practice (GP)</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
@@ -745,13 +746,15 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 </select>
               </div>
               <div className="flex items-center gap-3">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Active</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</label>
                 <button type="button"
                   onClick={() => setEditProfileForm(x => ({ ...x, is_active: !x.is_active }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editProfileForm.is_active ? 'bg-teal-600' : 'bg-gray-300'}`}>
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editProfileForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
-                <span className="text-sm text-gray-500">{editProfileForm.is_active ? 'Active' : 'Inactive'}</span>
+                <span className={`text-sm font-medium ${editProfileForm.is_active ? 'text-green-600' : 'text-red-500'}`}>
+                  {editProfileForm.is_active ? 'Active' : 'Inactive'}
+                </span>
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
