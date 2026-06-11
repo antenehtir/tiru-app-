@@ -178,6 +178,53 @@ function ShiftChip({ shift, onClick }: { shift: ShiftRow; onClick?: () => void }
   )
 }
 
+// ─── MobileShiftRow (list item used only in mobile day view) ─────────────────
+
+function MobileShiftRow({ shift, onClick }: { shift: ShiftRow; onClick: () => void }) {
+  const AVATAR_COLORS = ['bg-teal-600', 'bg-blue-600', 'bg-purple-600', 'bg-amber-500', 'bg-rose-600']
+  const avatarColor = AVATAR_COLORS[shift.user_id.charCodeAt(0) % AVATAR_COLORS.length]
+  const initials    = (shift.user?.full_name ?? '').split(' ').filter(Boolean)
+    .slice(0, 2).map(w => w[0].toUpperCase()).join('')
+  const startT = shift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00'
+  const endT   = shift.ends_at.split('T')[1]?.substring(0, 5)   ?? '00:00'
+  const phone  = shift.user?.phone
+
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-3 cursor-pointer active:bg-gray-50 transition-colors"
+      onClick={onClick}
+    >
+      <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center
+                       text-white text-sm font-bold flex-shrink-0 select-none`}>
+        {initials || <User className="w-4 h-4" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-gray-900 text-sm leading-tight">{shift.user?.full_name ?? '—'}</div>
+        <div className="text-sm text-gray-500 mt-0.5">{fmt12(startT)} – {fmt12(endT)}</div>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {shift.specialty && <span className="text-xs text-gray-400">{shift.specialty}</span>}
+          {shift.schedule_type && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
+              shift.schedule_type === 'duty' ? 'bg-rose-100 text-rose-600' : 'bg-teal-100 text-teal-700'
+            }`}>{shift.schedule_type}</span>
+          )}
+        </div>
+      </div>
+      {phone && (
+        <a
+          href={`tel:${phone}`}
+          onClick={e => e.stopPropagation()}
+          className="flex-shrink-0 w-9 h-9 rounded-full bg-teal-50 hover:bg-teal-100
+                     flex items-center justify-center text-teal-600 transition-colors"
+          title={`Call ${shift.user?.full_name ?? ''}`}
+        >
+          <Phone className="w-4 h-4" />
+        </a>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Shifts() {
@@ -230,6 +277,9 @@ export default function Shifts() {
 
   // ── Bulk upload state ──
   const [uploadOpen, setUploadOpen] = useState(false)
+
+  // ── Mobile day view state ──
+  const [mobileDate, setMobileDate] = useState(() => isoDate(new Date()))
 
   // ── Department head: fetch own department name ──
   const [userDeptName, setUserDeptName] = useState('')
@@ -363,6 +413,14 @@ export default function Shifts() {
     const config = GROUP_CONFIG[selectedGroup]
     if (!config.skipLevel2) { setSelectedSpecialty(null); setNavStep('specialty'); setShifts([]); setError(null) }
     else resetToLevel1()
+  }
+
+  function navigateMobileDay(delta: number) {
+    const next    = addDays(new Date(mobileDate + 'T00:00:00'), delta)
+    const nextStr = isoDate(next)
+    setMobileDate(nextStr)
+    const newWeekBase = weekStart(next)
+    if (isoDate(newWeekBase) !== isoDate(weekBase)) setWeekBase(newWeekBase)
   }
 
   // ── Add Shift modal ──
@@ -554,14 +612,14 @@ export default function Shifts() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Select a staff group to view their schedule</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           {GROUPS.map(({ name, icon: Icon, color, description }) => {
             const { card, icon } = GROUP_COLORS[color]
             return (
               <button key={name} onClick={() => handleSelectGroup(name)}
-                className={`rounded-2xl border-2 p-6 text-left transition-all duration-150 ${card}`}>
-                <Icon className={`w-9 h-9 mb-3 ${icon}`} />
-                <div className="font-semibold text-gray-900 text-[15px]">{name}</div>
+                className={`rounded-2xl border-2 p-4 md:p-6 min-h-[100px] text-left transition-all duration-150 ${card}`}>
+                <Icon className={`w-8 h-8 md:w-9 md:h-9 mb-2 md:mb-3 ${icon}`} />
+                <div className="font-semibold text-gray-900 text-sm md:text-[15px]">{name}</div>
                 <div className="text-xs text-gray-500 mt-0.5">{description}</div>
               </button>
             )
@@ -590,11 +648,11 @@ export default function Shifts() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Select a specialty to continue</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           {config.specialties.map(specialty => (
             <button key={specialty} onClick={() => handleSelectSpecialty(specialty)}
-              className="rounded-2xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 p-5 text-left transition-all duration-150">
-              <CalendarDays className="w-6 h-6 text-teal-500 mb-2" />
+              className="rounded-2xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 p-4 md:p-5 min-h-[100px] text-left transition-all duration-150">
+              <CalendarDays className="w-7 h-7 md:w-6 md:h-6 text-teal-500 mb-2" />
               <div className="font-semibold text-gray-900 text-sm">{specialty}</div>
             </button>
           ))}
@@ -611,7 +669,7 @@ export default function Shifts() {
   const showAddBtn = canAdd && (role !== 'department_head' || selectedGroup === deptHeadGroup)
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -673,8 +731,81 @@ export default function Shifts() {
         </div>
       )}
 
-      {/* ── Controls ── */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* ── Mobile controls ── */}
+      <div className="md:hidden space-y-3">
+        {/* Schedule type toggle */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+          {(['regular', 'duty'] as ScheduleType[]).map(t => (
+            <button key={t} onClick={() => setScheduleType(t)}
+              className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                scheduleType === t ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>{t}</button>
+          ))}
+        </div>
+
+        {/* Day navigation: ← prev day | current day | next day → */}
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => navigateMobileDay(-1)}
+            className="flex items-center gap-1 px-3 py-3 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span className="text-sm">
+              {addDays(new Date(mobileDate + 'T00:00:00'), -1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </button>
+          <button
+            onClick={() => setMobileDate(todayStr)}
+            className="flex-1 py-3 text-center hover:bg-gray-50 transition-colors"
+          >
+            {mobileDate === todayStr ? (
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-500 mb-0.5">Today</div>
+                <div className="text-sm font-bold text-teal-700">
+                  {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="text-sm font-bold text-gray-900">
+                  {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
+                <div className="text-[10px] text-teal-500">Tap for today</div>
+              </div>
+            )}
+          </button>
+          <button
+            onClick={() => navigateMobileDay(1)}
+            className="flex items-center gap-1 px-3 py-3 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+          >
+            <span className="text-sm">
+              {addDays(new Date(mobileDate + 'T00:00:00'), 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Week dots */}
+        <div className="flex items-center justify-center gap-4">
+          {weekDays.map(day => {
+            const dayStr     = isoDate(day)
+            const isSelected = dayStr === mobileDate
+            const isDayToday = dayStr === todayStr
+            return (
+              <button key={dayStr} onClick={() => setMobileDate(dayStr)}
+                className="flex flex-col items-center gap-1 py-1 px-0.5">
+                <span className="text-[9px] font-medium text-gray-400 uppercase">{DAY_LABELS[day.getDay()]}</span>
+                <span className={`w-2 h-2 rounded-full transition-colors ${
+                  isSelected ? 'bg-teal-600' : isDayToday ? 'bg-teal-300' : 'bg-gray-300'
+                }`} />
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Desktop controls ── */}
+      <div className="hidden md:flex items-center gap-3 flex-wrap">
         <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
           {(['regular', 'duty'] as ScheduleType[]).map(t => (
             <button key={t} onClick={() => setScheduleType(t)}
@@ -721,64 +852,108 @@ export default function Shifts() {
         </div>
       )}
 
-      {/* ── Calendar ── */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
-        </div>
-      ) : viewMode === 'week' ? (
-        <div className="grid grid-cols-7 gap-2">
-          {weekDays.map(day => {
-            const key       = isoDate(day)
-            const isToday   = key === todayStr
-            const dayShifts = shiftsByDate[key] ?? []
-            return (
-              <div key={key} className={`min-h-[160px] rounded-xl border p-2 flex flex-col gap-1.5 ${
-                isToday ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-white'}`}>
-                <div className="text-center mb-1">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{DAY_LABELS[day.getDay()]}</div>
-                  <div className={`text-sm font-bold ${isToday ? 'text-teal-600' : 'text-gray-700'}`}>{day.getDate()}</div>
-                </div>
-                {dayShifts.length === 0
-                  ? <div className="flex-1 flex items-center justify-center text-[10px] text-gray-300">No shifts</div>
-                  : dayShifts.map(s => <ShiftChip key={s.id} shift={s} onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }} />)}
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div>
-          <div className="grid grid-cols-7 mb-1">
-            {DAY_LABELS.map(d => (
-              <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 py-1">{d}</div>
-            ))}
+      {/* ── Mobile day card ── */}
+      <div className="md:hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-400">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
           </div>
-          <div className="grid grid-cols-7 gap-1">
-            {monthDays.map(day => {
-              const key            = isoDate(day)
-              const isToday        = key === todayStr
-              const isCurrentMonth = day.getMonth() === monthBase.getMonth()
-              const dayShifts      = shiftsByDate[key] ?? []
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {/* Day header */}
+            <div className={`flex items-center justify-between px-4 py-3 border-b border-gray-100 ${
+              mobileDate === todayStr ? 'bg-teal-50' : ''
+            }`}>
+              <span className={`font-semibold text-sm tracking-wide ${mobileDate === todayStr ? 'text-teal-700' : 'text-gray-700'}`}>
+                {new Date(mobileDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}
+              </span>
+              {mobileDate === todayStr && (
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-teal-600">
+                  Today <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+                </span>
+              )}
+            </div>
+            {/* Shift list */}
+            {(shiftsByDate[mobileDate] ?? []).length === 0 ? (
+              <div className="py-10 text-center">
+                <CalendarDays className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No shifts scheduled</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {(shiftsByDate[mobileDate] ?? []).map(s => (
+                  <MobileShiftRow
+                    key={s.id}
+                    shift={s}
+                    onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Desktop calendar ── */}
+      <div className="hidden md:block">
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-gray-400">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading shifts…
+          </div>
+        ) : viewMode === 'week' ? (
+          <div className="grid grid-cols-7 gap-2">
+            {weekDays.map(day => {
+              const key       = isoDate(day)
+              const isToday   = key === todayStr
+              const dayShifts = shiftsByDate[key] ?? []
               return (
-                <div key={key} className={`min-h-[90px] rounded-lg border p-1.5 flex flex-col gap-0.5 ${
-                  isToday ? 'border-teal-400 bg-teal-50'
-                  : isCurrentMonth ? 'border-gray-200 bg-white'
-                  : 'border-gray-100 bg-gray-50/50'}`}>
-                  <div className={`text-xs font-bold text-center mb-0.5 ${isToday ? 'text-teal-600' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}`}>
-                    {day.getDate()}
+                <div key={key} className={`min-h-[160px] rounded-xl border p-2 flex flex-col gap-1.5 ${
+                  isToday ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-center mb-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{DAY_LABELS[day.getDay()]}</div>
+                    <div className={`text-sm font-bold ${isToday ? 'text-teal-600' : 'text-gray-700'}`}>{day.getDate()}</div>
                   </div>
-                  {dayShifts.slice(0, 3).map(s => (
-                    <ShiftChip key={s.id} shift={s} onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }} />
-                  ))}
-                  {dayShifts.length > 3 && (
-                    <div className="text-[9px] text-gray-400 text-center mt-0.5">+{dayShifts.length - 3} more</div>
-                  )}
+                  {dayShifts.length === 0
+                    ? <div className="flex-1 flex items-center justify-center text-[10px] text-gray-300">No shifts</div>
+                    : dayShifts.map(s => <ShiftChip key={s.id} shift={s} onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }} />)}
                 </div>
               )
             })}
           </div>
-        </div>
-      )}
+        ) : (
+          <div>
+            <div className="grid grid-cols-7 mb-1">
+              {DAY_LABELS.map(d => (
+                <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {monthDays.map(day => {
+                const key            = isoDate(day)
+                const isToday        = key === todayStr
+                const isCurrentMonth = day.getMonth() === monthBase.getMonth()
+                const dayShifts      = shiftsByDate[key] ?? []
+                return (
+                  <div key={key} className={`min-h-[90px] rounded-lg border p-1.5 flex flex-col gap-0.5 ${
+                    isToday ? 'border-teal-400 bg-teal-50'
+                    : isCurrentMonth ? 'border-gray-200 bg-white'
+                    : 'border-gray-100 bg-gray-50/50'}`}>
+                    <div className={`text-xs font-bold text-center mb-0.5 ${isToday ? 'text-teal-600' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}`}>
+                      {day.getDate()}
+                    </div>
+                    {dayShifts.slice(0, 3).map(s => (
+                      <ShiftChip key={s.id} shift={s} onClick={() => { setSelectedShift(s); setShiftAction(null); setActionError(null) }} />
+                    ))}
+                    {dayShifts.length > 3 && (
+                      <div className="text-[9px] text-gray-400 text-center mt-0.5">+{dayShifts.length - 3} more</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ════════════════════════════════════════════════════════════════════════
           Add / Edit Shift Modal
