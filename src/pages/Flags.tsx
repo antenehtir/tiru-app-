@@ -148,19 +148,28 @@ export default function Flags() {
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {SUMMARY_CARDS.map(({ label, icon: Icon, card, icon_, count, zero }) => (
-          <div
-            key={label}
-            className={`rounded-xl border-2 p-5 flex flex-col gap-2 ${card}`}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{label}</p>
-              <Icon className={`w-5 h-5 ${icon_}`} />
+        {SUMMARY_CARDS.map(({ label, icon: Icon, card, icon_, count, zero }) => {
+          const isLowAttendance = label === 'Low Attendance'
+          const subtitle = isLowAttendance
+            ? 'No data yet — this month'
+            : currentPeriod.subtitle
+          return (
+            <div
+              key={label}
+              className={`rounded-xl border-2 p-5 flex flex-col gap-2 ${card}`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{label}</p>
+                <Icon className={`w-5 h-5 ${icon_}`} />
+              </div>
+              <p className={`text-3xl font-bold ${count}`}>0</p>
+              <p className={`text-xs font-medium ${zero}`}>{subtitle}</p>
+              {isLowAttendance && (
+                <p className="text-xs text-blue-400 dark:text-blue-600 -mt-1">30-day rolling</p>
+              )}
             </div>
-            <p className={`text-3xl font-bold ${count}`}>0</p>
-            <p className={`text-xs font-medium ${zero}`}>{currentPeriod.subtitle}</p>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* ── Flags table ── */}
