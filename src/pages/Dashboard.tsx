@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
+import { MapPin } from 'lucide-react'
 
 export default function Dashboard() {
   const { profile } = useAuthStore()
   const [stats, setStats] = useState({
     staff: 0, departments: 0, shifts: 0, leave: 0
   })
+  const [sitesCount, setSitesCount] = useState(0)
   const [incidents, setIncidents] = useState<any[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -21,7 +23,6 @@ export default function Dashboard() {
         const { count: staff, error: e1 } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })
-          .eq('facility_id', fid)
           .eq('is_active', true)
         if (e1) { setError('Staff: ' + e1.message); setLoading(false); return }
 
@@ -46,13 +47,19 @@ export default function Dashboard() {
           .eq('status', 'pending')
         if (e4) { setError('Leave: ' + e4.message); setLoading(false); return }
 
-        const { data: inc, error: e5 } = await supabase
+        const { count: sites, error: e5 } = await supabase
+          .from('sites')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true)
+        if (e5) { setError('Sites: ' + e5.message); setLoading(false); return }
+
+        const { data: inc, error: e7 } = await supabase
           .from('incident_reports')
           .select('id, title, severity, created_at')
           .eq('facility_id', fid)
           .order('created_at', { ascending: false })
           .limit(5)
-        if (e5) { setError('Incidents: ' + e5.message); setLoading(false); return }
+        if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
 
         setStats({
           staff: staff ?? 0,
@@ -60,7 +67,9 @@ export default function Dashboard() {
           shifts: shifts ?? 0,
           leave: leave ?? 0
         })
+        setSitesCount(sites ?? 0)
         setIncidents(inc ?? [])
+
         setLoading(false)
       } catch (e: any) {
         setError(e.message)
@@ -114,15 +123,17 @@ export default function Dashboard() {
           {profile?.role?.replace(/_/g, ' ')}
         </span>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {[
           { label: 'Total Staff', value: stats.staff },
           { label: 'Departments', value: stats.departments },
           { label: "Today's Shifts", value: stats.shifts },
           { label: 'Pending Leave', value: stats.leave },
+          { label: 'Active Sites', value: sitesCount, icon: <MapPin className="w-4 h-4 text-teal-500 mb-1" /> },
         ].map((card) => (
           <div key={card.label}
             className="bg-white border border-gray-200 rounded-lg p-4">
+            {'icon' in card && card.icon}
             <p className="text-3xl font-bold text-teal-700">{card.value}</p>
             <p className="text-sm text-gray-500 mt-1">{card.label}</p>
           </div>
