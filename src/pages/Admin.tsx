@@ -974,6 +974,7 @@ function DepartmentsSection() {
     setSaving(true)
     const { error: err } = await supabase.from('departments').insert({
       name: form.name.trim(), description: form.description.trim() || null,
+      facility_id: 'd917b86c-682c-4f11-b285-0a1cada2b54b',
     })
     setSaving(false)
     if (err) { setFormErr(err.message); return }
