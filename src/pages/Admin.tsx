@@ -172,7 +172,7 @@ export default function Admin() {
   return (
     <div className="p-6 space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Settings className="w-6 h-6 text-teal-500" />Admin Panel
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">Manage users, departments, and QR codes</p>
@@ -263,7 +263,7 @@ function SitesSection() {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
           <MapPin className="w-5 h-5 text-teal-500" />Sites &amp; Locations
           <span className="text-sm font-normal text-gray-400">({sites.length})</span>
         </h2>
@@ -282,15 +282,15 @@ function SitesSection() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {sites.map(s => (
-            <div key={s.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-4 flex flex-col gap-2">
+            <div key={s.id} className="bg-white rounded-xl border border-gray-100 px-4 py-4 flex flex-col gap-2">
               <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-sm text-gray-900 dark:text-white">{s.name}</span>
+                <span className="font-semibold text-sm text-gray-900">{s.name}</span>
                 {s.is_active
                   ? <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5 flex-shrink-0">Active</span>
                   : <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 flex-shrink-0">Inactive</span>
                 }
               </div>
-              {s.address && <div className="text-xs text-gray-500 dark:text-gray-400">{s.address}</div>}
+              {s.address && <div className="text-xs text-gray-500">{s.address}</div>}
               <div className="text-xs text-gray-400 font-mono">
                 {s.latitude != null && s.longitude != null
                   ? `${s.latitude}, ${s.longitude}`
@@ -318,10 +318,10 @@ function SitesSection() {
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold">{editSite ? 'Edit Site' : 'Add Site'}</h2>
-              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {formErr && (
@@ -340,7 +340,7 @@ function SitesSection() {
                   <input type={f.type} step="any" placeholder={f.placeholder}
                     value={form[f.key]}
                     onChange={e => setForm(x => ({ ...x, [f.key]: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               ))}
               <div>
@@ -348,14 +348,14 @@ function SitesSection() {
                 <input type="number" min="1" placeholder="150"
                   value={form.geofence_radius}
                   onChange={e => setForm(x => ({ ...x, geofence_radius: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
               <p className="text-xs text-gray-400">
                 Tip: Right-click your location on Google Maps to copy coordinates.
               </p>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={saveSite} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : editSite ? 'Update Site' : 'Add Site'}
@@ -603,7 +603,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2 flex-wrap">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2 flex-wrap">
           <UserPlus className="w-5 h-5 text-teal-500" />Staff Accounts
           <span className="text-sm font-normal text-gray-400">({users.length})</span>
           {pendingCount > 0 && (
@@ -641,12 +641,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
           {users.map(u => {
             const isOpen = expanded.has(u.id)
             return (
-              <div key={u.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+              <div key={u.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50"
                   onClick={() => toggleExpand(u.id)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm text-gray-900 dark:text-white">{u.full_name}</span>
+                      <span className="font-medium text-sm text-gray-900">{u.full_name}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${ROLE_COLOR[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
                         {u.role.replace('_',' ')}
                       </span>
@@ -664,7 +664,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 </div>
 
                 {isOpen && (
-                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 flex gap-2 flex-wrap">
+                  <div className="px-4 pb-4 border-t border-gray-100 pt-3 flex gap-2 flex-wrap">
                     <button onClick={() => { setEditMode({ id: u.id, role: u.role }); setNewRole(u.role) }}
                       className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg transition-colors">
                       Change Role
@@ -690,10 +690,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       {/* Invite Modal */}
       {inviteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold">Invite Staff Member</h2>
-              <button onClick={() => setInviteOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setInviteOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {formErr && (
@@ -712,27 +712,27 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   <input type={f.type} placeholder={f.placeholder}
                     value={(inviteForm as any)[f.key]}
                     onChange={e => setInviteForm(x => ({ ...x, [f.key]: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               ))}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
                 <select value={inviteForm.role} onChange={e => setInviteForm(x => ({ ...x, role: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
                   {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department</label>
                 <select value={inviteForm.department_id} onChange={e => setInviteForm(x => ({ ...x, department_id: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">â€” None â€”</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
-              <button onClick={() => setInviteOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
+              <button onClick={() => setInviteOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={sendInvite} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : 'Add Staff'}
@@ -745,20 +745,20 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       {/* Edit Role Modal */}
       {editMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold">Change Role</h2>
-              <button onClick={() => setEditMode(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setEditMode(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Role</label>
               <select value={newRole} onChange={e => setNewRole(e.target.value)}
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
                 {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
               </select>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button onClick={() => setEditMode(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setEditMode(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={updateRole} disabled={updating}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {updating && <Loader2 className="w-4 h-4 animate-spin" />}Update
@@ -771,10 +771,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       {/* Edit Profile Modal */}
       {editProfileTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold">Edit Profile â€” {editProfileTarget.full_name}</h2>
-              <button onClick={() => setEditProfileTarget(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setEditProfileTarget(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {editProfileErr && (
@@ -798,14 +798,14 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   <input type={f.type}
                     value={editProfileForm[f.key] as string}
                     onChange={e => setEditProfileForm(x => ({ ...x, [f.key]: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               ))}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
                 <select value={editProfileForm.role}
                   onChange={e => setEditProfileForm(x => ({ ...x, role: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
                   {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_', ' ')}</option>)}
                 </select>
               </div>
@@ -813,7 +813,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department</label>
                 <select value={editProfileForm.department_id}
                   onChange={e => setEditProfileForm(x => ({ ...x, department_id: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">â€” None â€”</option>
                   <option value="gp">General Practice (GP)</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -823,7 +823,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Site</label>
                 <select value={editProfileForm.site_id}
                   onChange={e => setEditProfileForm(x => ({ ...x, site_id: e.target.value }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">â€” None â€”</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -840,8 +840,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 </span>
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
-              <button onClick={() => setEditProfileTarget(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Close</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
+              <button onClick={() => setEditProfileTarget(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Close</button>
               <button onClick={saveEditProfile} disabled={editProfileSaving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {editProfileSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editProfileSaving ? 'Savingâ€¦' : 'Save Changes'}
@@ -853,10 +853,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
       {/* Pending Change Requests Panel */}
       {pendingCount > 0 && (
-        <div ref={pendingRef} className="mt-6 border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded-r-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-200 dark:border-amber-800">
+        <div ref={pendingRef} className="mt-6 border-l-4 border-amber-400 bg-amber-50 rounded-r-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-200">
             <Bell className="w-4 h-4 text-amber-600" />
-            <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <h3 className="text-sm font-semibold text-amber-800">
               Pending Profile Change Requests
             </h3>
           </div>
@@ -865,7 +865,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               <Loader2 className="w-4 h-4 animate-spin" />Loading...
             </div>
           ) : (
-            <div className="divide-y divide-amber-100 dark:divide-amber-800/50">
+            <div className="divide-y divide-amber-100">
               {pendingRequests.map(req => {
                 const isDismissed = dismissedIds.has(req.id)
                 const initials = (req.profile?.full_name ?? '?')
@@ -885,7 +885,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     {/* Content */}
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-800 dark:text-white">
+                        <span className="text-sm font-semibold text-gray-800">
                           {req.profile?.full_name ?? 'â€”'}
                         </span>
                         {req.profile?.role && (
@@ -894,11 +894,11 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                      <p className="text-xs text-gray-600">
                         <span className="font-semibold">{fieldLabel}:</span>{' '}
                         <span className="line-through text-gray-400">{req.current_value || 'â€”'}</span>
                         <span className="mx-1 text-gray-400">â†’</span>
-                        <span className="text-teal-700 dark:text-teal-400 font-medium">{req.requested_value}</span>
+                        <span className="text-teal-700 font-medium">{req.requested_value}</span>
                       </p>
                       {req.reason && (
                         <p className="text-xs text-gray-400 italic">"{req.reason}"</p>
@@ -957,10 +957,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       {/* Reject reason modal */}
       {rejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">Reject Change Request</h2>
-              <button onClick={() => setRejectModal(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Reject Change Request</h2>
+              <button onClick={() => setRejectModal(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
@@ -971,11 +971,11 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
                 placeholder="Enter reason to share with staff member..."
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-400 outline-none resize-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-red-400 outline-none resize-none"
               />
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button onClick={() => setRejectModal(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setRejectModal(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button
                 onClick={async () => {
                   const { requestId, fieldName, staffName } = rejectModal
@@ -1060,7 +1060,7 @@ function DepartmentsSection() {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
           <Building2 className="w-5 h-5 text-teal-500" />Departments
           <span className="text-sm font-normal text-gray-400">({depts.length})</span>
         </h2>
@@ -1077,9 +1077,9 @@ function DepartmentsSection() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {depts.map(d => (
-            <div key={d.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-3 flex items-start justify-between gap-2">
+            <div key={d.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-start justify-between gap-2">
               <div>
-                <div className="font-medium text-sm text-gray-900 dark:text-white">{d.name}</div>
+                <div className="font-medium text-sm text-gray-900">{d.name}</div>
                 {d.description && <div className="text-xs text-gray-400 mt-0.5">{d.description}</div>}
               </div>
               <button onClick={() => deleteDept(d.id)} className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0">
@@ -1092,10 +1092,10 @@ function DepartmentsSection() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold">Add Department</h2>
-              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {formErr && (
@@ -1107,17 +1107,17 @@ function DepartmentsSection() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Name *</label>
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Cardiology"
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Optionalâ€¦"
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={saveDept} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : 'Save'}
@@ -1181,7 +1181,7 @@ function QRCodesSection() {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
           <QrCode className="w-5 h-5 text-teal-500" />Entrance QR Codes
           <span className="text-sm font-normal text-gray-400">({qrCodes.length})</span>
         </h2>
@@ -1190,7 +1190,7 @@ function QRCodesSection() {
       <div className="flex gap-2 mb-4">
         <input type="text" value={label} onChange={e => setLabel(e.target.value)}
           placeholder="Label e.g. Main Entrance, Gate Bâ€¦"
-          className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none"
           onKeyDown={e => e.key === 'Enter' && generateQR()}
         />
         <button onClick={generateQR} disabled={generating || !label.trim()}
@@ -1213,10 +1213,10 @@ function QRCodesSection() {
       ) : (
         <div className="space-y-2">
           {qrCodes.map(qr => (
-            <div key={qr.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3">
+            <div key={qr.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm text-gray-900 dark:text-white">{qr.label}</span>
+                  <span className="font-medium text-sm text-gray-900">{qr.label}</span>
                   {qr.is_active
                     ? <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Active</span>
                     : <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Inactive</span>
@@ -1226,18 +1226,18 @@ function QRCodesSection() {
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button onClick={() => copyId(qr.id)} title="Copy UUID"
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                   {copied === qr.id
                     ? <CheckCircle2 className="w-4 h-4 text-green-500" />
                     : <Copy className="w-4 h-4 text-gray-400" />
                   }
                 </button>
                 <button onClick={() => toggleQR(qr.id, qr.is_active)} title={qr.is_active ? 'Deactivate' : 'Activate'}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                   <RefreshCw className={`w-4 h-4 ${qr.is_active ? 'text-amber-500' : 'text-green-500'}`} />
                 </button>
                 <button onClick={() => deleteQR(qr.id)} title="Delete"
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                   <Trash2 className="w-4 h-4 text-red-400" />
                 </button>
               </div>
