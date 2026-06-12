@@ -358,7 +358,7 @@ function SitesSection() {
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={saveSite} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : editSite ? 'Update Site' : 'Add Site'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : editSite ? 'Update Site' : 'Add Site'}
               </button>
             </div>
           </div>
@@ -656,8 +656,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
                       {u.email && <span>{u.email}</span>}
-                      {u.department?.name && <span>Â· {u.department.name}</span>}
-                      {u.employee_id && <span>Â· {u.employee_id}</span>}
+                      {u.department?.name && <span>· {u.department.name}</span>}
+                      {u.employee_id && <span>· {u.employee_id}</span>}
                     </div>
                   </div>
                   {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -735,7 +735,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               <button onClick={() => setInviteOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={sendInvite} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : 'Add Staff'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : 'Add Staff'}
               </button>
             </div>
           </div>
@@ -844,7 +844,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               <button onClick={() => setEditProfileTarget(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Close</button>
               <button onClick={saveEditProfile} disabled={editProfileSaving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {editProfileSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editProfileSaving ? 'Savingâ€¦' : 'Save Changes'}
+                {editProfileSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editProfileSaving ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -1112,7 +1112,7 @@ function DepartmentsSection() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Optionalâ€¦"
+                  placeholder="Optional…"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
             </div>
@@ -1120,7 +1120,7 @@ function DepartmentsSection() {
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={saveDept} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : 'Save'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>
@@ -1189,7 +1189,7 @@ function QRCodesSection() {
 
       <div className="flex gap-2 mb-4">
         <input type="text" value={label} onChange={e => setLabel(e.target.value)}
-          placeholder="Label e.g. Main Entrance, Gate Bâ€¦"
+          placeholder="Label e.g. Main Entrance, Gate B…"
           className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none"
           onKeyDown={e => e.key === 'Enter' && generateQR()}
         />
