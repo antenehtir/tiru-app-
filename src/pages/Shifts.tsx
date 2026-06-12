@@ -775,13 +775,15 @@ export default function Shifts() {
             ))}
           </div>
           {/* Week / Month */}
-          <div className="flex flex-1 rounded-lg border border-gray-200 overflow-hidden text-sm">
-            {(['week', 'month'] as ViewMode[]).map(v => (
-              <button key={v} onClick={() => setViewMode(v)}
-                className={`flex-1 py-2 font-medium capitalize transition-colors ${
-                  viewMode === v ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}>{v}</button>
-            ))}
+          <div className="flex flex-1 min-w-0 rounded-lg border border-gray-200 overflow-hidden text-sm">
+            <button onClick={() => setViewMode('week')}
+              className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                viewMode === 'week' ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>Week</button>
+            <button onClick={() => setViewMode('month')}
+              className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                viewMode === 'month' ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>Month</button>
           </div>
         </div>
 
