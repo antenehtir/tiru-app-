@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
 import {
@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle, MessageSquare,
 } from 'lucide-react'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Site = {
   id: string
@@ -62,7 +62,7 @@ type ChangeRequest = {
   profile?: { full_name: string; role: string } | null
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ROLES = [
   'physician','nurse','pharmacist','staff',
@@ -119,7 +119,7 @@ function FeedbackSection() {
       </div>
       {loading ? (
         <div className="flex items-center justify-center py-10 text-gray-400">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" />Loading…
+          <Loader2 className="w-5 h-5 animate-spin mr-2" />Loading...
         </div>
       ) : feedbacks.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">No feedback submitted yet.</div>
@@ -153,7 +153,7 @@ function FeedbackSection() {
   )
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Admin() {
   const { profile: currentUser } = useAuth()
@@ -187,7 +187,7 @@ export default function Admin() {
   )
 }
 
-// ─── Sites Section ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Sites Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const EMPTY_SITE_FORM = { name: '', address: '', latitude: '', longitude: '', geofence_radius: '150' }
 
@@ -275,7 +275,7 @@ function SitesSection() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400 py-8 justify-center">
-          <Loader2 className="w-5 h-5 animate-spin" />Loading…
+          <Loader2 className="w-5 h-5 animate-spin" />Loading...
         </div>
       ) : sites.length === 0 ? (
         <p className="text-sm text-gray-400 py-4">No sites yet. Add one above.</p>
@@ -358,7 +358,7 @@ function SitesSection() {
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={saveSite} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : editSite ? 'Update Site' : 'Add Site'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : editSite ? 'Update Site' : 'Add Site'}
               </button>
             </div>
           </div>
@@ -368,7 +368,7 @@ function SitesSection() {
   )
 }
 
-// ─── Users Section ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Users Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function UsersSection({ currentRole }: { currentRole: string }) {
   const [users,    setUsers]    = useState<Profile[]>([])
@@ -491,7 +491,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
     setSaving(true)
 
-    // Step 1: Create auth user via signUp — the DB trigger auto-creates the profile
+    // Step 1: Create auth user via signUp â€” the DB trigger auto-creates the profile
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email:    inviteForm.email.trim(),
       password: 'TiruAMC2026!' + Math.random().toString(36).slice(2),
@@ -634,7 +634,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400 py-8 justify-center">
-          <Loader2 className="w-5 h-5 animate-spin" />Loading…
+          <Loader2 className="w-5 h-5 animate-spin" />Loading...
         </div>
       ) : (
         <div className="space-y-2">
@@ -656,8 +656,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
                       {u.email && <span>{u.email}</span>}
-                      {u.department?.name && <span>· {u.department.name}</span>}
-                      {u.employee_id && <span>· {u.employee_id}</span>}
+                      {u.department?.name && <span>Â· {u.department.name}</span>}
+                      {u.employee_id && <span>Â· {u.employee_id}</span>}
                     </div>
                   </div>
                   {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -726,7 +726,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department</label>
                 <select value={inviteForm.department_id} onChange={e => setInviteForm(x => ({ ...x, department_id: e.target.value }))}
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
-                  <option value="">— None —</option>
+                  <option value="">â€” None â€”</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
@@ -735,7 +735,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               <button onClick={() => setInviteOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={sendInvite} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : 'Add Staff'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : 'Add Staff'}
               </button>
             </div>
           </div>
@@ -773,7 +773,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900">
-              <h2 className="text-lg font-semibold">Edit Profile — {editProfileTarget.full_name}</h2>
+              <h2 className="text-lg font-semibold">Edit Profile â€” {editProfileTarget.full_name}</h2>
               <button onClick={() => setEditProfileTarget(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
@@ -814,7 +814,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <select value={editProfileForm.department_id}
                   onChange={e => setEditProfileForm(x => ({ ...x, department_id: e.target.value }))}
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
-                  <option value="">— None —</option>
+                  <option value="">â€” None â€”</option>
                   <option value="gp">General Practice (GP)</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
@@ -824,7 +824,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <select value={editProfileForm.site_id}
                   onChange={e => setEditProfileForm(x => ({ ...x, site_id: e.target.value }))}
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
-                  <option value="">— None —</option>
+                  <option value="">â€” None â€”</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
@@ -844,7 +844,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               <button onClick={() => setEditProfileTarget(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Close</button>
               <button onClick={saveEditProfile} disabled={editProfileSaving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {editProfileSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editProfileSaving ? 'Saving…' : 'Save Changes'}
+                {editProfileSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editProfileSaving ? 'Savingâ€¦' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -862,7 +862,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
           </div>
           {pendingLoading ? (
             <div className="flex items-center gap-2 text-gray-400 py-6 justify-center">
-              <Loader2 className="w-4 h-4 animate-spin" />Loading…
+              <Loader2 className="w-4 h-4 animate-spin" />Loading...
             </div>
           ) : (
             <div className="divide-y divide-amber-100 dark:divide-amber-800/50">
@@ -886,7 +886,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-gray-800 dark:text-white">
-                          {req.profile?.full_name ?? '—'}
+                          {req.profile?.full_name ?? 'â€”'}
                         </span>
                         {req.profile?.role && (
                           <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${ROLE_COLOR[req.profile.role] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -896,8 +896,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400">
                         <span className="font-semibold">{fieldLabel}:</span>{' '}
-                        <span className="line-through text-gray-400">{req.current_value || '—'}</span>
-                        <span className="mx-1 text-gray-400">→</span>
+                        <span className="line-through text-gray-400">{req.current_value || 'â€”'}</span>
+                        <span className="mx-1 text-gray-400">â†’</span>
                         <span className="text-teal-700 dark:text-teal-400 font-medium">{req.requested_value}</span>
                       </p>
                       {req.reason && (
@@ -916,7 +916,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                           const staffName = req.profile?.full_name ?? 'Staff member'
                           const { error: noticeError } = await supabase.from('notices').insert({
                             author_id: currentUserId,
-                            title: '✓ Your Profile Update was Approved',
+                            title: 'âœ“ Your Profile Update was Approved',
                             body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
                             priority: 'info',
                             audience: 'all',
@@ -993,7 +993,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     : `Hi ${staffName}, your request to update your ${fLabel} was not approved. Please contact HR or your administrator for more information.`
                   await supabase.from('notices').insert({
                     author_id: currentUserId,
-                    title: `Your Profile Update Request — ${fLabel}`,
+                    title: `Your Profile Update Request â€” ${fLabel}`,
                     body,
                     priority: 'important',
                     audience: 'all',
@@ -1016,7 +1016,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   )
 }
 
-// ─── Departments Section ──────────────────────────────────────────────────────
+// â”€â”€â”€ Departments Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DepartmentsSection() {
   const [depts,   setDepts]   = useState<Department[]>([])
@@ -1072,7 +1072,7 @@ function DepartmentsSection() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400 py-8 justify-center">
-          <Loader2 className="w-5 h-5 animate-spin" />Loading…
+          <Loader2 className="w-5 h-5 animate-spin" />Loading...
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1112,7 +1112,7 @@ function DepartmentsSection() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Optional…"
+                  placeholder="Optionalâ€¦"
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
             </div>
@@ -1120,7 +1120,7 @@ function DepartmentsSection() {
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={saveDept} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Saving…' : 'Save'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Savingâ€¦' : 'Save'}
               </button>
             </div>
           </div>
@@ -1130,7 +1130,7 @@ function DepartmentsSection() {
   )
 }
 
-// ─── QR Codes Section ─────────────────────────────────────────────────────────
+// â”€â”€â”€ QR Codes Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function QRCodesSection() {
   const [qrCodes,  setQrCodes]  = useState<QRCode[]>([])
@@ -1189,7 +1189,7 @@ function QRCodesSection() {
 
       <div className="flex gap-2 mb-4">
         <input type="text" value={label} onChange={e => setLabel(e.target.value)}
-          placeholder="Label e.g. Main Entrance, Gate B…"
+          placeholder="Label e.g. Main Entrance, Gate Bâ€¦"
           className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
           onKeyDown={e => e.key === 'Enter' && generateQR()}
         />
@@ -1206,7 +1206,7 @@ function QRCodesSection() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400 py-8 justify-center">
-          <Loader2 className="w-5 h-5 animate-spin" />Loading…
+          <Loader2 className="w-5 h-5 animate-spin" />Loading...
         </div>
       ) : qrCodes.length === 0 ? (
         <p className="text-sm text-gray-400 py-4">No QR codes yet. Generate one above.</p>
@@ -1248,3 +1248,4 @@ function QRCodesSection() {
     </section>
   )
 }
+
