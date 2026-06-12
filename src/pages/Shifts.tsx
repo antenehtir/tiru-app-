@@ -766,13 +766,15 @@ export default function Shifts() {
         {/* ── Mobile toggles row: schedule type + view mode ── */}
         <div className="flex gap-2">
           {/* Regular / Duty */}
-          <div className="flex flex-1 rounded-lg border border-gray-200 overflow-hidden text-sm">
-            {(['regular', 'duty'] as ScheduleType[]).map(t => (
-              <button key={t} onClick={() => setScheduleType(t)}
-                className={`flex-1 py-2 font-medium capitalize transition-colors ${
-                  scheduleType === t ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}>{t}</button>
-            ))}
+          <div className="flex flex-1 min-w-0 rounded-lg border border-gray-200 overflow-hidden text-sm">
+            <button onClick={() => setScheduleType('regular')}
+              className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                scheduleType === 'regular' ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>Regular</button>
+            <button onClick={() => setScheduleType('duty')}
+              className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                scheduleType === 'duty' ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}>Duty</button>
           </div>
           {/* Week / Month */}
           <div className="flex flex-1 min-w-0 rounded-lg border border-gray-200 overflow-hidden text-sm">
