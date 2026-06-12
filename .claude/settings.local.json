@@ -16,7 +16,8 @@
       "Bash(npm install *)",
       "Bash(git rm *)",
       "Bash(VITE_SUPABASE_URL=https://aqqihcyaafetzfqnxjuw.supabase.co SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxcWloY3lhYWZldHpmcW54anV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDcwMDI0MCwiZXhwIjoyMDk2Mjc2MjQwfQ.UOJBh2Acb4wr6QgmtJXvOxX1isvwHhHJ4L_T99rEJUk npx tsx scripts/seedPilotUsers.ts)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(p.dependencies['xlsx'] ?? p.devDependencies?.['xlsx'] ?? 'NOT FOUND'\\)\")"
     ]
   }
 }

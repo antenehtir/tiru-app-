@@ -425,11 +425,13 @@ export default function Shifts() {
   }
 
   function navigateMobileDay(delta: number) {
-    const next    = addDays(new Date(mobileDate + 'T00:00:00'), delta)
+    const current = new Date(mobileDate + 'T00:00:00')
+    const next = new Date(current)
+    next.setDate(current.getDate() + delta)
     const nextStr = isoDate(next)
-    setMobileDate(nextStr)
     const newWeekBase = weekStart(next)
-    if (isoDate(newWeekBase) !== isoDate(weekBase)) setWeekBase(newWeekBase)
+    setMobileDate(nextStr)
+    setWeekBase(newWeekBase)
   }
 
   function goToToday() {
@@ -761,24 +763,26 @@ export default function Shifts() {
 
       {/* ── Mobile controls ── */}
       <div className="md:hidden space-y-3">
-        {/* Schedule type toggle */}
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-          {(['regular', 'duty'] as ScheduleType[]).map(t => (
-            <button key={t} onClick={() => setScheduleType(t)}
-              className={`flex-1 py-2 font-medium capitalize transition-colors ${
-                scheduleType === t ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-              }`}>{t}</button>
-          ))}
-        </div>
-
-        {/* Week / Month toggle */}
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-          {(['week', 'month'] as ViewMode[]).map(v => (
-            <button key={v} onClick={() => setViewMode(v)}
-              className={`flex-1 py-2 font-medium capitalize transition-colors ${
-                viewMode === v ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-              }`}>{v}</button>
-          ))}
+        {/* ── Mobile toggles row: schedule type + view mode ── */}
+        <div className="flex gap-2">
+          {/* Regular / Duty */}
+          <div className="flex flex-1 rounded-lg border border-gray-200 overflow-hidden text-sm">
+            {(['regular', 'duty'] as ScheduleType[]).map(t => (
+              <button key={t} onClick={() => setScheduleType(t)}
+                className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                  scheduleType === t ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}>{t}</button>
+            ))}
+          </div>
+          {/* Week / Month */}
+          <div className="flex flex-1 rounded-lg border border-gray-200 overflow-hidden text-sm">
+            {(['week', 'month'] as ViewMode[]).map(v => (
+              <button key={v} onClick={() => setViewMode(v)}
+                className={`flex-1 py-2 font-medium capitalize transition-colors ${
+                  viewMode === v ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}>{v}</button>
+            ))}
+          </div>
         </div>
 
         {/* Week-only: day navigation + dots */}
