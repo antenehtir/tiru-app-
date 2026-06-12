@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
-  ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle,
+  ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle, MessageSquare,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,6 +84,75 @@ const ROLE_COLOR: Record<string, string> = {
   staff:            'bg-gray-100 text-gray-600',
 }
 
+function FeedbackSection() {
+  const [feedbacks, setFeedbacks] = useState<{id:string; name:string|null; message:string; submitted_at:string; is_read:boolean}[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase
+      .from('feedback')
+      .select('*')
+      .order('submitted_at', { ascending: false })
+      .then(({ data }) => {
+        setFeedbacks((data as any[]) ?? [])
+        setLoading(false)
+      })
+  }, [])
+
+  const markRead = async (id: string) => {
+    await supabase.from('feedback').update({ is_read: true }).eq('id', id)
+    setFeedbacks(prev => prev.map(f => f.id === id ? { ...f, is_read: true } : f))
+  }
+
+  const unread = feedbacks.filter(f => !f.is_read).length
+
+  return (
+    <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-teal-500" />
+          Feedback
+          {unread > 0 && (
+            <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 font-bold">{unread}</span>
+          )}
+        </h2>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" />Loading…
+        </div>
+      ) : feedbacks.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm">No feedback submitted yet.</div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {feedbacks.map(f => (
+            <div key={f.id}
+              className={`px-6 py-4 transition-colors cursor-pointer hover:bg-gray-50 ${f.is_read ? 'opacity-60' : 'bg-amber-50/40'}`}
+              onClick={() => !f.is_read && markRead(f.id)}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium text-gray-800">
+                      {f.name ?? 'Anonymous'}
+                    </span>
+                    {!f.is_read && (
+                      <span className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{f.message}</p>
+                </div>
+                <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">
+                  {new Date(f.submitted_at).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -113,6 +182,7 @@ export default function Admin() {
       <UsersSection currentRole={role} />
       <DepartmentsSection />
       <QRCodesSection />
+      {role === 'super_admin' && <FeedbackSection />}
     </div>
   )
 }
