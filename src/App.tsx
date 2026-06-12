@@ -17,6 +17,7 @@ import Admin from './pages/Admin'
 import AuditLog from './pages/AuditLog'
 import Profile from './pages/Profile'
 import OnDuty from './pages/OnDuty'
+import ResetPassword from './pages/ResetPassword'
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -72,6 +73,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<AppShell />}>
           <Route path="/dashboard"  element={<Dashboard />} />
           <Route path="/shifts"     element={<Shifts />} />
