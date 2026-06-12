@@ -1,3 +1,4 @@
+// v2 - mobile toggle fix
 import { useEffect, useState, useCallback, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
