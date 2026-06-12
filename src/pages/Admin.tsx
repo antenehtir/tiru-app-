@@ -182,7 +182,7 @@ export default function Admin() {
       <UsersSection currentRole={role} />
       <DepartmentsSection />
       <QRCodesSection />
-      {role === 'super_admin' && <FeedbackSection />}
+      <FeedbackSection />
     </div>
   )
 }
