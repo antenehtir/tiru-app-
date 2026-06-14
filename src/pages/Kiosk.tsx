@@ -181,7 +181,7 @@ export default function Kiosk() {
       lng = pos.coords.longitude
     } catch {}
 
-    const type = action === 'checkin' ? 'clock_in' : 'clock_out'
+    const type = action === 'checkin' ? 'check_in' : 'check_out'
     const { error } = await supabase.from('attendance_logs').insert({
       user_id:          staff!.id,
       facility_id:      FACILITY_ID,
@@ -192,7 +192,7 @@ export default function Kiosk() {
       latitude:         lat,
       longitude:        lng,
       within_geofence:  false,
-      status:           'synced',
+      status:           'pending_sync',
     })
     setLoading(false)
     if (error) {
