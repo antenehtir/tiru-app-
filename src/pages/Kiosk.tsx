@@ -58,6 +58,9 @@ export default function Kiosk() {
     supabase.auth.signInWithPassword({
       email: 'kiosk@tmc1.et',
       password: 'Kiosk1234!'
+    }).then(({ data, error }) => {
+      if (error) console.error('Kiosk auth failed:', error.message)
+      else console.log('Kiosk auth OK:', data.user?.email)
     })
   }, [])
 
