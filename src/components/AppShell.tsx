@@ -48,16 +48,42 @@ export default function AppShell() {
   const fetchCounts = useCallback(async () => {
     if (!profile?.id) return
 
-    // Unread notices
-    const { data: allNotices } = await supabase
+    // Fetch notices with full fields for proper filtering
+    const { data: noticeData } = await supabase
       .from('notices')
-      .select('id')
-    const { data: readRows } = await supabase
+      .select('id, audience_type, target_user_id, audience, department_ids, department_id')
+
+    const { data: readData } = await supabase
       .from('notice_reads')
       .select('notice_id')
       .eq('user_id', profile.id)
-    const readSet = new Set((readRows ?? []).map((r: { notice_id: string }) => r.notice_id))
-    setUnreadNotices(((allNotices ?? []) as { id: string }[]).filter(n => !readSet.has(n.id)).length)
+
+    const readSet = new Set((readData ?? []).map((r: any) => r.notice_id))
+    const userDeptId = profile.department_id ?? null
+    const userRole = profile.role ?? ''
+
+    const visibleNotices = ((noticeData as any[]) ?? []).filter(n => {
+      if (n.audience_type === 'personal') return n.target_user_id === profile.id
+      if (n.target_user_id) return false
+      if (n.audience === 'department') {
+        const ids = n.department_ids ?? (n.department_id ? [n.department_id] : [])
+        if (ids.length === 0) return false
+        if (['super_admin','ceo','general_manager','medical_director','hr'].includes(userRole)) return true
+        return userDeptId ? ids.includes(userDeptId) : false
+      }
+      if (n.audience === 'clinical') {
+        const clinicalRoles = ['physician','nurse','medical_director','department_head','coordinator']
+        return clinicalRoles.includes(userRole) || ['super_admin','ceo','general_manager','hr'].includes(userRole)
+      }
+      if (n.audience === 'administrative') {
+        return ['hr','coordinator','general_manager','ceo','super_admin'].includes(userRole)
+      }
+      if (n.audience_type === 'broadcast' || n.audience === 'all') return true
+      return false
+    })
+
+    const unreadCount = visibleNotices.filter(n => !readSet.has(n.id)).length
+    setUnreadNotices(unreadCount)
 
     // Submitted incidents (leadership only)
     if (isLeadership) {
