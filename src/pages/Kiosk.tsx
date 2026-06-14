@@ -183,13 +183,16 @@ export default function Kiosk() {
 
     const type = action === 'checkin' ? 'clock_in' : 'clock_out'
     const { error } = await supabase.from('attendance_logs').insert({
-      user_id:     staff!.id,
-      facility_id: FACILITY_ID,
-      type,
-      latitude:    lat,
-      longitude:   lng,
-      method:      'kiosk',
-      logged_at:   new Date().toISOString(),
+      user_id:          staff!.id,
+      facility_id:      FACILITY_ID,
+      log_type:         type,
+      scanned_at:       new Date().toISOString(),
+      gps_lat:          lat,
+      gps_lng:          lng,
+      latitude:         lat,
+      longitude:        lng,
+      within_geofence:  false,
+      status:           'synced',
     })
     setLoading(false)
     if (error) {
