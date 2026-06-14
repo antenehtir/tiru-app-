@@ -89,16 +89,17 @@ export default function Notices() {
     const userDeptId = profile?.department_id ?? null
 
     const visible = ((noticeData as Notice[]) ?? []).filter(n => {
-      // Personal notice — only for target user
+      // Personal notice — ALWAYS check this first, regardless of audience field
       if (n.audience_type === 'personal') return n.target_user_id === profile!.id
+
+      // Block any notice that has a target_user_id but wasn't caught above
+      if (n.target_user_id) return false
 
       // Department-targeted notice
       if (n.audience === 'department') {
         const ids = n.department_ids ?? (n.department_id ? [n.department_id] : [])
         if (ids.length === 0) return false
-        // Leadership always sees all department notices
         if (['super_admin','ceo','general_manager','medical_director','hr'].includes(role)) return true
-        // Others only see notices for their department
         return userDeptId ? ids.includes(userDeptId) : false
       }
 
@@ -114,8 +115,11 @@ export default function Notices() {
         return adminRoles.includes(role)
       }
 
-      // All staff — everyone sees it
-      return true
+      // All staff broadcast — everyone sees it
+      if (n.audience_type === 'broadcast' || n.audience === 'all') return true
+
+      // Fallback — hide unknown types
+      return false
     })
 
     setNotices(visible.map(n => ({ ...n, is_read: readSet.has(n.id) })))
