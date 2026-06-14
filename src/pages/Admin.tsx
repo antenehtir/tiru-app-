@@ -570,10 +570,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     setEditProfileTarget(u)
     setPhotoPreview(u.avatar_url ?? null)
     if (u.signature_url) {
-      const { data: sigUrl } = await supabase.storage
+      const { data: sigUrl } = supabase.storage
         .from('reference-signatures')
-        .createSignedUrl(u.signature_url, 3600)
-      setSigPreview(sigUrl?.signedUrl ?? null)
+        .getPublicUrl(u.signature_url)
+      setSigPreview(sigUrl.publicUrl)
     } else {
       setSigPreview(null)
     }
