@@ -52,6 +52,14 @@ export default function Kiosk() {
     }
   }, [screen])
 
+  // Sign in as kiosk account silently on mount
+  useEffect(() => {
+    supabase.auth.signInWithPassword({
+      email: 'kiosk@tmc1.et',
+      password: 'Kiosk1234!'
+    })
+  }, [])
+
   function resetKiosk() {
     setScreen('idle')
     setAction(null)
