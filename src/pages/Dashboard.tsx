@@ -123,8 +123,15 @@ export default function Dashboard() {
   }
 
   if (loading) return (
-    <div className="p-6">
-      <p className="text-gray-500 text-sm">Loading dashboard data...</p>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+      <div className="relative w-16 h-16">
+        <div className="absolute inset-0 rounded-2xl bg-teal-600 animate-pulse" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-white text-lg font-bold tracking-tight z-10">Tiru</span>
+        </div>
+        <div className="absolute -inset-1 rounded-2xl border-2 border-teal-400 animate-ping opacity-30" />
+      </div>
+      <p className="text-sm text-gray-400 animate-pulse">Loading...</p>
     </div>
   )
 
