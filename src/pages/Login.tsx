@@ -77,6 +77,8 @@ export default function Login() {
       audience_type:  'personal',
       target_user_id: SUPER_ADMIN_ID,
       pinned:         false,
+      department_ids: null,
+      department_id:  null,
     })
 
     setFbLoading(false)
