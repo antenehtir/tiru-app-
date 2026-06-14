@@ -13,7 +13,8 @@ type StaffProfile = {
   full_name: string
   role: string
   employee_id: string
-  department: { name: string } | null
+  kiosk_id: string | null
+  department: { id: string; name: string } | null
   pin: string | null
 }
 
@@ -76,22 +77,32 @@ export default function Kiosk() {
 
   function startAction(a: Action) {
     setAction(a)
-    if (a === 'notices') {
-      fetchNotices()
-      setScreen('notices')
-    } else {
-      setScreen('identify')
-    }
+    setScreen('identify')
   }
 
-  async function fetchNotices() {
+  async function fetchNotices(staffProfile: StaffProfile) {
+    const deptId = staffProfile.department
+      ? (staffProfile.department as any).id ?? null
+      : null
+
     const { data } = await supabase
       .from('notices')
-      .select('id, title, body, priority, created_at')
-      .in('audience', ['all', 'clinical'])
+      .select('id, title, body, priority, created_at, audience, department_ids')
       .order('created_at', { ascending: false })
-      .limit(10)
-    setNotices((data as any[]) ?? [])
+      .limit(20)
+
+    const filtered = ((data as any[]) ?? []).filter((n: any) => {
+      if (n.audience === 'all') return true
+      if (n.audience === 'department') {
+        const ids: string[] = n.department_ids ?? []
+        return deptId ? ids.includes(deptId) : false
+      }
+      const clinicalRoles = ['physician','nurse','medical_director','department_head','coordinator']
+      if (n.audience === 'clinical') return clinicalRoles.includes(staffProfile.role)
+      if (n.audience === 'administrative') return ['hr','coordinator','general_manager','ceo','super_admin'].includes(staffProfile.role)
+      return false
+    })
+    setNotices(filtered)
   }
 
   async function lookupStaff() {
@@ -99,7 +110,7 @@ export default function Kiosk() {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, role, employee_id, pin, department:departments(name)')
+      .select('id, full_name, role, employee_id, kiosk_id, pin, department:departments(id, name)')
       .eq('kiosk_id', employeeId.trim().toUpperCase())
       .eq('facility_id', FACILITY_ID)
       .eq('is_active', true)
@@ -111,6 +122,11 @@ export default function Kiosk() {
       return
     }
     setStaff(data as unknown as StaffProfile)
+    if (action === 'notices') {
+      await fetchNotices(data as unknown as StaffProfile)
+      setScreen('notices')
+      return
+    }
     if (!data.pin) {
       setErrorMsg('No PIN set for this account. Please contact HR to set your PIN.')
       setScreen('error')
