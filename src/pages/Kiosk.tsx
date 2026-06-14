@@ -126,7 +126,7 @@ export default function Kiosk() {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, role, employee_id, kiosk_id, pin, department:departments(id, name)')
+      .select('id, full_name, role, employee_id, kiosk_id, pin, department:departments!profiles_department_id_fkey(id, name)')
       .eq('kiosk_id', employeeId.trim().toUpperCase())
       .eq('is_active', true)
       .maybeSingle()
