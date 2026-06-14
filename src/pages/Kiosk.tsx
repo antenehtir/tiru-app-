@@ -113,23 +113,29 @@ export default function Kiosk() {
   }
 
   async function lookupStaff() {
+    if (!employeeId.trim()) return
     if (!kioskReady) {
       setErrorMsg('Terminal is initializing. Please wait a moment and try again.')
       setScreen('error')
       return
     }
-    if (!employeeId.trim()) return
     setLoading(true)
+
+    // Debug: log what we're searching for
+    console.log('Looking up kiosk_id:', employeeId.trim().toUpperCase())
+
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role, employee_id, kiosk_id, pin, department:departments(id, name)')
       .eq('kiosk_id', employeeId.trim().toUpperCase())
-      .eq('facility_id', FACILITY_ID)
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
+
+    console.log('Lookup result:', JSON.stringify(data), 'Error:', error?.message)
     setLoading(false)
+
     if (error || !data) {
-      setErrorMsg('Kiosk ID not found. Please try again or contact reception.')
+      setErrorMsg(`ID "${employeeId.trim().toUpperCase()}" not found. Please check and try again.`)
       setScreen('error')
       return
     }
