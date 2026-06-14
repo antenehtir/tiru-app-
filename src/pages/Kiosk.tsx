@@ -153,9 +153,10 @@ export default function Kiosk() {
     setScreen('pin')
   }
 
-  async function verifyPin() {
-    if (pin.length !== 4) return
-    if (pin !== staff?.pin) {
+  async function verifyPin(enteredPin?: string) {
+    const pinToCheck = enteredPin ?? pin
+    if (pinToCheck.length !== 4) return
+    if (pinToCheck !== staff?.pin) {
       setErrorMsg('Incorrect PIN. Please try again.')
       setScreen('error')
       return
@@ -347,7 +348,7 @@ export default function Kiosk() {
                 const next = pin + k
                 if (next.length <= 4) {
                   setPin(next)
-                  if (next.length === 4) setTimeout(() => verifyPin(), 100)
+                  if (next.length === 4) setTimeout(() => verifyPin(next), 100)
                 }
               }}
               className={`h-16 rounded-2xl text-2xl font-bold transition-all active:scale-95 ${
