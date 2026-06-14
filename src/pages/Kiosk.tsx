@@ -32,6 +32,7 @@ export default function Kiosk() {
   const [successMsg, setSuccessMsg] = useState('')
   const [time, setTime]             = useState(new Date())
   const [notices, setNotices]       = useState<{id:string; title:string; body:string; priority:string; created_at:string}[]>([])
+  const [kioskReady, setKioskReady] = useState(false)
 
   // Incident form
   const [incidentCategory, setIncidentCategory] = useState('patient_safety')
@@ -60,7 +61,10 @@ export default function Kiosk() {
       password: 'Kiosk1234!'
     }).then(({ data, error }) => {
       if (error) console.error('Kiosk auth failed:', error.message)
-      else console.log('Kiosk auth OK:', data.user?.email)
+      else {
+        console.log('Kiosk auth OK:', data.user?.email)
+        setKioskReady(true)
+      }
     })
   }, [])
 
@@ -109,6 +113,11 @@ export default function Kiosk() {
   }
 
   async function lookupStaff() {
+    if (!kioskReady) {
+      setErrorMsg('Terminal is initializing. Please wait a moment and try again.')
+      setScreen('error')
+      return
+    }
     if (!employeeId.trim()) return
     setLoading(true)
     const { data, error } = await supabase
@@ -264,7 +273,9 @@ export default function Kiosk() {
         </button>
       </div>
 
-      <p className="text-teal-300/60 text-xs mt-12">Kiosk Terminal · {FACILITY_ID.slice(0,8)}…</p>
+      <p className="text-teal-300/60 text-xs mt-12">
+        {kioskReady ? `Kiosk Terminal · ${FACILITY_ID.slice(0,8)}…` : 'Initializing terminal…'}
+      </p>
     </div>
   )
 
