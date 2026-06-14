@@ -92,13 +92,13 @@ export default function Kiosk() {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role, employee_id, pin, department:departments(name)')
-      .eq('employee_id', employeeId.trim().toUpperCase())
+      .eq('kiosk_id', employeeId.trim().toUpperCase())
       .eq('facility_id', FACILITY_ID)
       .eq('is_active', true)
       .single()
     setLoading(false)
     if (error || !data) {
-      setErrorMsg('Employee ID not found. Please try again or contact reception.')
+      setErrorMsg('Kiosk ID not found. Please try again or contact reception.')
       setScreen('error')
       return
     }
@@ -252,15 +252,15 @@ export default function Kiosk() {
           <div className="w-16 h-16 rounded-2xl bg-teal-600 flex items-center justify-center mx-auto mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Enter Employee ID</h2>
-          <p className="text-gray-500 text-sm mt-1">e.g. TMC-003</p>
+          <h2 className="text-2xl font-bold text-gray-900">Enter Kiosk ID</h2>
+          <p className="text-gray-500 text-sm mt-1">e.g. K001 — assigned by HR</p>
         </div>
         <input
           type="text"
           value={employeeId}
           onChange={e => setEmployeeId(e.target.value.toUpperCase())}
           onKeyDown={e => e.key === 'Enter' && lookupStaff()}
-          placeholder="TMC-000"
+          placeholder="K001"
           autoFocus
           className="w-full text-center text-3xl font-mono font-bold border-2 border-gray-200 rounded-2xl px-4 py-5 focus:ring-2 focus:ring-teal-500 outline-none tracking-widest mb-6"
         />
