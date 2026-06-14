@@ -564,12 +564,19 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     fetchUsers()
   }
 
-  const openEditProfile = (u: Profile) => {
+  const openEditProfile = async (u: Profile) => {
     setEditProfileErr(null)
     setEditProfileSuccess(null)
     setEditProfileTarget(u)
     setPhotoPreview(u.avatar_url ?? null)
-    setSigPreview(null)
+    if (u.signature_url) {
+      const { data: sigUrl } = await supabase.storage
+        .from('reference-signatures')
+        .createSignedUrl(u.signature_url, 3600)
+      setSigPreview(sigUrl?.signedUrl ?? null)
+    } else {
+      setSigPreview(null)
+    }
     setEditProfileForm({
       full_name:     u.full_name ?? '',
       email:         u.email ?? '',
