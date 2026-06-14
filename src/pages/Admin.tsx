@@ -819,6 +819,19 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       {/* Edit Profile Modal */}
       {editProfileTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          {lightbox && (
+            <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
+              onClick={() => setLightbox(null)}>
+              <div className="relative max-w-2xl w-full">
+                <img src={lightbox} alt="Full view" className="w-full rounded-2xl shadow-2xl" />
+                <button onClick={e => { e.stopPropagation(); setLightbox(null) }}
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
+                  <X className="w-4 h-4" />
+                </button>
+                <p className="text-center text-white/60 text-xs mt-2">Tap anywhere to close</p>
+              </div>
+            </div>
+          )}
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold">Edit Profile — {editProfileTarget.full_name}</h2>
@@ -1112,19 +1125,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <XCircle className="w-4 h-4" />Confirm Reject
               </button>
             </div>
-          </div>
-        </div>
-      )}
-      {lightbox && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightbox(null)}>
-          <div className="relative max-w-2xl w-full">
-            <img src={lightbox} alt="Full view" className="w-full rounded-2xl shadow-2xl" />
-            <button onClick={() => setLightbox(null)}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
-              ✕
-            </button>
-            <p className="text-center text-white/60 text-xs mt-2">Tap anywhere to close</p>
           </div>
         </div>
       )}
