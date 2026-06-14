@@ -5,9 +5,10 @@ import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
   ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle, MessageSquare,
+  Camera, PenLine,
 } from 'lucide-react'
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 type Site = {
   id: string
@@ -29,6 +30,8 @@ type Profile = {
   is_active: boolean
   department_id: string | null
   department: { name: string } | null
+  avatar_url: string | null
+  signature_url: string | null
 }
 
 type Department = {
@@ -62,7 +65,7 @@ type ChangeRequest = {
   profile?: { full_name: string; role: string } | null
 }
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const ROLES = [
   'physician','nurse','pharmacist','staff',
@@ -153,7 +156,7 @@ function FeedbackSection() {
   )
 }
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function Admin() {
   const { profile: currentUser } = useAuth()
@@ -187,7 +190,7 @@ export default function Admin() {
   )
 }
 
-// â”€â”€â”€ Sites Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Sites Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const EMPTY_SITE_FORM = { name: '', address: '', latitude: '', longitude: '', geofence_radius: '150' }
 
@@ -368,7 +371,7 @@ function SitesSection() {
   )
 }
 
-// â”€â”€â”€ Users Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Users Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function UsersSection({ currentRole }: { currentRole: string }) {
   const [users,    setUsers]    = useState<Profile[]>([])
@@ -415,6 +418,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [editProfileErr,    setEditProfileErr]    = useState<string | null>(null)
   const [editProfileSaving, setEditProfileSaving] = useState(false)
   const [editProfileSuccess, setEditProfileSuccess] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [uploadingSig,   setUploadingSig]   = useState(false)
+  const [photoPreview,   setPhotoPreview]   = useState<string | null>(null)
+  const [sigPreview,     setSigPreview]     = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true); setError(null)
@@ -491,7 +498,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
     setSaving(true)
 
-    // Step 1: Create auth user via signUp â€” the DB trigger auto-creates the profile
+    // Step 1: Create auth user via signUp â€" the DB trigger auto-creates the profile
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email:    inviteForm.email.trim(),
       password: 'TiruAMC2026!' + Math.random().toString(36).slice(2),
@@ -561,6 +568,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     setEditProfileErr(null)
     setEditProfileSuccess(null)
     setEditProfileTarget(u)
+    setPhotoPreview(u.avatar_url ?? null)
+    setSigPreview(null)
     setEditProfileForm({
       full_name:     u.full_name ?? '',
       email:         u.email ?? '',
@@ -599,6 +608,37 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
   const toggleExpand = (id: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>, userId: string) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    const ext = file.name.split('.').pop()
+    const fileName = `${userId}_avatar.${ext}`
+    const { data, error } = await supabase.storage
+      .from('staff-avatars')
+      .upload(fileName, file, { upsert: true, contentType: file.type })
+    if (error) { alert('Photo upload failed: ' + error.message); setUploadingPhoto(false); return }
+    const { data: urlData } = supabase.storage.from('staff-avatars').getPublicUrl(data.path)
+    await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', userId)
+    setPhotoPreview(urlData.publicUrl)
+    setUploadingPhoto(false)
+  }
+
+  async function handleSignatureUpload(e: React.ChangeEvent<HTMLInputElement>, userId: string) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingSig(true)
+    const ext = file.name.split('.').pop()
+    const fileName = `${userId}_ref_sig.${ext}`
+    const { data, error } = await supabase.storage
+      .from('reference-signatures')
+      .upload(fileName, file, { upsert: true, contentType: file.type })
+    if (error) { alert('Signature upload failed: ' + error.message); setUploadingSig(false); return }
+    await supabase.from('profiles').update({ signature_url: data.path }).eq('id', userId)
+    setSigPreview(URL.createObjectURL(file))
+    setUploadingSig(false)
+  }
 
   return (
     <section>
@@ -726,7 +766,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department</label>
                 <select value={inviteForm.department_id} onChange={e => setInviteForm(x => ({ ...x, department_id: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
-                  <option value="">â€” None â€”</option>
+                  <option value="">— None —</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
@@ -773,7 +813,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold">Edit Profile â€” {editProfileTarget.full_name}</h2>
+              <h2 className="text-lg font-semibold">Edit Profile — {editProfileTarget.full_name}</h2>
               <button onClick={() => setEditProfileTarget(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
@@ -814,7 +854,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <select value={editProfileForm.department_id}
                   onChange={e => setEditProfileForm(x => ({ ...x, department_id: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
-                  <option value="">â€” None â€”</option>
+                  <option value="">— None —</option>
                   <option value="gp">General Practice (GP)</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
@@ -824,7 +864,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <select value={editProfileForm.site_id}
                   onChange={e => setEditProfileForm(x => ({ ...x, site_id: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
-                  <option value="">â€” None â€”</option>
+                  <option value="">— None —</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
@@ -838,6 +878,61 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <span className={`text-sm font-medium ${editProfileForm.is_active ? 'text-green-600' : 'text-red-500'}`}>
                   {editProfileForm.is_active ? 'Active' : 'Inactive'}
                 </span>
+              </div>
+
+              {/* ── Photo & Signature Upload ── */}
+              <div className="border-t border-gray-100 pt-4 space-y-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Identity Verification Assets</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Profile Photo</label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      {photoPreview ? (
+                        <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-gray-400 text-xs text-center">No photo</span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed cursor-pointer transition-colors text-sm ${uploadingPhoto ? 'border-gray-200 text-gray-300' : 'border-teal-300 text-teal-600 hover:bg-teal-50'}`}>
+                        {uploadingPhoto ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Uploading...</>
+                        ) : (
+                          <><Camera className="w-4 h-4" />Upload Photo</>
+                        )}
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                          onChange={e => handlePhotoUpload(e, editProfileTarget!.id)}
+                          disabled={uploadingPhoto} />
+                      </label>
+                      <p className="text-xs text-gray-400 mt-1">JPG, PNG or WebP. Max 2MB.</p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Reference Signature</label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-lg bg-gray-100 border-2 border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      {sigPreview ? (
+                        <img src={sigPreview} alt="Signature" className="w-full h-full object-contain p-1" />
+                      ) : (
+                        <span className="text-gray-400 text-xs text-center">No sig</span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed cursor-pointer transition-colors text-sm ${uploadingSig ? 'border-gray-200 text-gray-300' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}>
+                        {uploadingSig ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Uploading...</>
+                        ) : (
+                          <><PenLine className="w-4 h-4" />Upload Signature</>
+                        )}
+                        <input type="file" accept="image/jpeg,image/png" className="hidden"
+                          onChange={e => handleSignatureUpload(e, editProfileTarget!.id)}
+                          disabled={uploadingSig} />
+                      </label>
+                      <p className="text-xs text-gray-400 mt-1">JPG or PNG. Max 1MB.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
@@ -886,7 +981,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-gray-800">
-                          {req.profile?.full_name ?? 'â€”'}
+                          {req.profile?.full_name ?? '—'}
                         </span>
                         {req.profile?.role && (
                           <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${ROLE_COLOR[req.profile.role] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -896,8 +991,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       </div>
                       <p className="text-xs text-gray-600">
                         <span className="font-semibold">{fieldLabel}:</span>{' '}
-                        <span className="line-through text-gray-400">{req.current_value || 'â€”'}</span>
-                        <span className="mx-1 text-gray-400">â†’</span>
+                        <span className="line-through text-gray-400">{req.current_value || '—'}</span>
+                        <span className="mx-1 text-gray-400">â†'</span>
                         <span className="text-teal-700 font-medium">{req.requested_value}</span>
                       </p>
                       {req.reason && (
@@ -916,7 +1011,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                           const staffName = req.profile?.full_name ?? 'Staff member'
                           const { error: noticeError } = await supabase.from('notices').insert({
                             author_id: currentUserId,
-                            title: 'âœ“ Your Profile Update was Approved',
+                            title: 'âœ" Your Profile Update was Approved',
                             body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
                             priority: 'info',
                             audience: 'all',
@@ -993,7 +1088,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     : `Hi ${staffName}, your request to update your ${fLabel} was not approved. Please contact HR or your administrator for more information.`
                   await supabase.from('notices').insert({
                     author_id: currentUserId,
-                    title: `Your Profile Update Request â€” ${fLabel}`,
+                    title: `Your Profile Update Request — ${fLabel}`,
                     body,
                     priority: 'important',
                     audience: 'all',
@@ -1016,7 +1111,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   )
 }
 
-// â”€â”€â”€ Departments Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Departments Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function DepartmentsSection() {
   const [depts,   setDepts]   = useState<Department[]>([])
@@ -1130,7 +1225,7 @@ function DepartmentsSection() {
   )
 }
 
-// â”€â”€â”€ QR Codes Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ QR Codes Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function QRCodesSection() {
   const [qrCodes,  setQrCodes]  = useState<QRCode[]>([])
