@@ -68,7 +68,8 @@ export default function App() {
   }, [])
 
   if (!appReady) return <Spinner />
-  if (!session) return <Login />
+  const publicPaths = ['/kiosk', '/reset-password']
+  if (!session && !publicPaths.includes(window.location.pathname)) return <Login />
 
   return (
     <BrowserRouter>
