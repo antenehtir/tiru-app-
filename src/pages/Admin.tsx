@@ -422,6 +422,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [uploadingSig,   setUploadingSig]   = useState(false)
   const [photoPreview,   setPhotoPreview]   = useState<string | null>(null)
   const [sigPreview,     setSigPreview]     = useState<string | null>(null)
+  const [lightbox,       setLightbox]       = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true); setError(null)
@@ -895,7 +896,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
                       {photoPreview ? (
-                        <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={photoPreview} alt="Preview" className="w-full h-full object-cover cursor-pointer" onClick={() => setLightbox(photoPreview)} />
                       ) : (
                         <span className="text-gray-400 text-xs text-center">No photo</span>
                       )}
@@ -920,7 +921,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-lg bg-gray-100 border-2 border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
                       {sigPreview ? (
-                        <img src={sigPreview} alt="Signature" className="w-full h-full object-contain p-1" />
+                        <img src={sigPreview} alt="Signature" className="w-full h-full object-contain p-1 cursor-pointer" onClick={() => setLightbox(sigPreview)} />
                       ) : (
                         <span className="text-gray-400 text-xs text-center">No sig</span>
                       )}
@@ -1111,6 +1112,19 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <XCircle className="w-4 h-4" />Confirm Reject
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {lightbox && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}>
+          <div className="relative max-w-2xl w-full">
+            <img src={lightbox} alt="Full view" className="w-full rounded-2xl shadow-2xl" />
+            <button onClick={() => setLightbox(null)}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
+              ✕
+            </button>
+            <p className="text-center text-white/60 text-xs mt-2">Tap anywhere to close</p>
           </div>
         </div>
       )}
