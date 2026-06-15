@@ -114,11 +114,13 @@ export default function Kiosk() {
 
     const { data } = await supabase
       .from('notices')
-      .select('id, title, body, priority, created_at, audience, department_ids')
+      .select('id, title, body, priority, created_at, audience, audience_type, target_user_id, department_ids')
       .order('created_at', { ascending: false })
       .limit(20)
 
     const filtered = ((data as any[]) ?? []).filter((n: any) => {
+      // Never show personal notices on kiosk
+      if (n.audience_type === 'personal') return false
       if (n.audience === 'all') return true
       if (n.audience === 'department') {
         const ids: string[] = n.department_ids ?? []
@@ -686,7 +688,9 @@ export default function Kiosk() {
             <Bell className="w-7 h-7 text-blue-500" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Facility Notices</h2>
-          <p className="text-gray-500 text-sm mt-1">Latest announcements for all staff</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Showing notices for {staff?.full_name ?? 'you'}
+          </p>
         </div>
         {notices.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No notices at this time.</div>
