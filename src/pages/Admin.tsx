@@ -32,6 +32,7 @@ type Profile = {
   department: { name: string } | null
   avatar_url: string | null
   signature_url: string | null
+  kiosk_id: string | null
 }
 
 type Department = {
@@ -732,9 +733,11 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       )}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
-                      {u.email && <span>{u.email}</span>}
+                      {u.email && !u.email.includes('@tiruplatform.com') && <span>{u.email}</span>}
+                      {u.email?.includes('@tiruplatform.com') && <span>Kiosk Staff</span>}
                       {u.department?.name && <span>· {u.department.name}</span>}
                       {u.employee_id && <span>· {u.employee_id}</span>}
+                      {u.kiosk_id && <span>· Kiosk: {u.kiosk_id}</span>}
                     </div>
                   </div>
                   {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -902,8 +905,11 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               ] as { label: string; key: keyof typeof editProfileForm; type: string }[]).map(f => (
                 <div key={f.key}>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
-                  <input type={f.type}
-                    value={editProfileForm[f.key] as string}
+                  <input type={f.key === 'email' ? 'text' : f.type}
+                    value={f.key === 'email'
+                      ? (editProfileForm.email?.includes('@tiruplatform.com') ? '' : (editProfileForm.email ?? ''))
+                      : (editProfileForm[f.key] as string)}
+                    placeholder={f.key === 'email' ? 'email@example.com (leave blank for kiosk-only staff)' : undefined}
                     onChange={e => setEditProfileForm(x => ({ ...x, [f.key]: e.target.value }))}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
