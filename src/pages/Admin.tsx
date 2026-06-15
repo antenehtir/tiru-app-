@@ -495,13 +495,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const sendInvite = async () => {
     setFormErr(null)
     if (!inviteForm.full_name.trim()) return setFormErr('Full name is required.')
-    if (!inviteForm.email.trim())     return setFormErr('Email is required.')
 
     setSaving(true)
 
     // Step 1: Create auth user via signUp — the DB trigger auto-creates the profile
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email:    inviteForm.email.trim(),
+      email:    inviteForm.email.trim() || `${inviteForm.employee_id.trim().toLowerCase().replace('-','_')}@tmc1-kiosk.local`,
       password: 'TiruAMC2026!' + Math.random().toString(36).slice(2),
       options:  {
         data: {
@@ -540,10 +539,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       }).eq('id', signUpData.user.id)
     }
 
-    // Step 3: Send password-setup email
-    await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
+    // Step 3: Send password-setup email (only for real email addresses)
+    if (inviteForm.email.trim() && !inviteForm.email.includes('@tmc1-kiosk.local')) {
+      await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+    }
 
     setSaving(false)
     const name = inviteForm.full_name.trim()
@@ -763,7 +764,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               )}
               {[
                 { label:'Full Name *',    key:'full_name',   type:'text',  placeholder:'Dr. Abebe Girma' },
-                { label:'Email *',        key:'email',       type:'email', placeholder:'abebe@tmc1.et' },
                 { label:'Phone',          key:'phone',       type:'tel',   placeholder:'+251...' },
                 { label:'Employee ID',    key:'employee_id', type:'text',  placeholder:'TMC-002' },
               ].map(f => (
@@ -775,6 +775,15 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               ))}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Email <span className="normal-case font-normal text-gray-400">(optional for kiosk-only staff)</span>
+                </label>
+                <input type="email" placeholder="abebe@tmc1.et"
+                  value={inviteForm.email}
+                  onChange={e => setInviteForm(x => ({ ...x, email: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   Kiosk ID <span className="normal-case font-normal text-gray-400">(optional — auto-assigned if blank)</span>
