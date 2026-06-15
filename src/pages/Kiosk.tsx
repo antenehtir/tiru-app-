@@ -5,7 +5,7 @@ import {
   CheckCircle2, XCircle, Loader2, Shield
 } from 'lucide-react'
 
-type KioskScreen = 'idle' | 'identify' | 'pin' | 'welcome' | 'dashboard' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
+type KioskScreen = 'idle' | 'identify' | 'pin' | 'dashboard' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
 type Action = 'checkin' | 'checkout' | 'incident' | 'notices'
 
 type StaffProfile = {
@@ -56,13 +56,33 @@ export default function Kiosk() {
     return () => clearInterval(t)
   }, [])
 
-  // Auto-return to idle after success/error
+  // Auto-return after success/error
   useEffect(() => {
-    if (screen === 'success' || screen === 'error') {
-      const t = setTimeout(() => resetKiosk(), 4000)
+    if (screen === 'success') {
+      const t = setTimeout(async () => {
+        if (staff) {
+          await fetchDashboardData(staff)
+          setScreen('dashboard')
+          setSignatureData(null)
+          setPin('')
+        } else {
+          resetKiosk()
+        }
+      }, 3000)
       return () => clearTimeout(t)
     }
-  }, [screen])
+    if (screen === 'error') {
+      const t = setTimeout(() => {
+        if (staff) {
+          setScreen('dashboard')
+          setPin('')
+        } else {
+          resetKiosk()
+        }
+      }, 3000)
+      return () => clearTimeout(t)
+    }
+  }, [screen, staff])
 
   // Sign in as kiosk account silently on mount
   useEffect(() => {
@@ -103,6 +123,42 @@ export default function Kiosk() {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
     }
+  }
+
+  async function lookupAndVerify(idInput: string, pinInput: string) {
+    if (!idInput || pinInput.length !== 4) return
+    if (!kioskReady) {
+      setErrorMsg('Terminal is initializing. Please wait and try again.')
+      setScreen('error')
+      return
+    }
+    setLoading(true)
+    const fullId = `${sitePrefix}-${idInput.padStart(3, '0')}`
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, employee_id, pin, department:departments!profiles_department_id_fkey(id, name)')
+      .eq('employee_id', fullId)
+      .eq('is_active', true)
+      .maybeSingle()
+    setLoading(false)
+    if (error || !data) {
+      setErrorMsg(`Staff ID "${fullId}" not found. Please try again.`)
+      setScreen('error')
+      return
+    }
+    if (!data.pin) {
+      setErrorMsg('No PIN set. Please contact HR.')
+      setScreen('error')
+      return
+    }
+    if (pinInput !== data.pin) {
+      setErrorMsg('Incorrect PIN. Please try again.')
+      setScreen('error')
+      return
+    }
+    setStaff(data as unknown as StaffProfile)
+    await fetchDashboardData(data as unknown as StaffProfile)
+    setScreen('dashboard')
   }
 
   function startAction(a: Action) {
@@ -195,42 +251,6 @@ export default function Kiosk() {
     setTodayShift(shiftData as any)
   }
 
-  async function lookupStaff() {
-    if (numInput.length < 1) return
-    if (!kioskReady) {
-      setErrorMsg('Terminal is initializing. Please wait a moment and try again.')
-      setScreen('error')
-      return
-    }
-    setLoading(true)
-    const fullId = `${sitePrefix}-${numInput.padStart(3, '0')}`
-    console.log('Looking up employee_id:', fullId)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, role, employee_id, pin, department:departments!profiles_department_id_fkey(id, name)')
-      .eq('employee_id', fullId)
-      .eq('is_active', true)
-      .maybeSingle()
-    console.log('Lookup result:', JSON.stringify(data), 'Error:', error?.message)
-    setLoading(false)
-    if (error || !data) {
-      setErrorMsg(`Staff ID "${fullId}" not found. Please try again or contact reception.`)
-      setScreen('error')
-      return
-    }
-    setStaff(data as unknown as StaffProfile)
-    if (action === 'notices') {
-      await fetchNotices(data as unknown as StaffProfile)
-      setScreen('notices')
-      return
-    }
-    if (!data.pin) {
-      setErrorMsg('No PIN set for this account. Please contact HR to set your PIN.')
-      setScreen('error')
-      return
-    }
-    setScreen('welcome')
-  }
 
   async function verifyPin(enteredPin?: string) {
     const pinToCheck = enteredPin ?? pin
@@ -450,80 +470,97 @@ export default function Kiosk() {
 
   // ── IDENTIFY SCREEN ──────────────────────────────────────────────────────
   if (screen === 'identify') return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8">
-      <button onClick={resetKiosk} className="absolute top-6 left-6 flex items-center gap-2 text-gray-400 hover:text-gray-600">
+    <div className="min-h-screen bg-gradient-to-br from-teal-700 to-teal-900 flex flex-col items-center justify-center p-6 select-none">
+      <button onClick={resetKiosk} className="absolute top-6 left-6 flex items-center gap-2 text-teal-200 hover:text-white transition-colors">
         <ArrowLeft className="w-5 h-5" />Back
       </button>
       <div className="w-full max-w-sm">
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-teal-600 flex items-center justify-center mx-auto mb-4">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Enter Your Staff Number</h2>
-          <p className="text-gray-500 text-sm mt-1">Type the number from your ID card</p>
+          <h2 className="text-2xl font-bold text-white">Staff Sign In</h2>
+          <p className="text-teal-200 text-sm mt-1">Enter your ID and PIN</p>
         </div>
 
         {/* ID Display */}
-        <div className="bg-white rounded-2xl border-2 border-gray-200 px-6 py-4 mb-6 text-center">
-          <p className="text-xs text-gray-400 mb-1 uppercase tracking-wider">Staff ID</p>
-          <p className="text-4xl font-mono font-bold text-gray-800 tracking-widest">
-            {sitePrefix}-<span className={numInput ? 'text-teal-600' : 'text-gray-300'}>
+        <div className="bg-white/10 rounded-2xl px-6 py-4 mb-3 text-center border-2 border-white/20">
+          <p className="text-xs text-teal-300 mb-1 uppercase tracking-wider">Staff ID</p>
+          <p className="text-4xl font-mono font-bold text-white tracking-widest">
+            {sitePrefix}-<span className={numInput ? 'text-teal-300' : 'text-white/30'}>
               {numInput || '___'}
             </span>
           </p>
         </div>
 
-        {/* Numeric Keypad */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k, i) => (
-            <button key={i} disabled={k === ''}
-              onClick={() => {
-                if (k === '⌫') { setNumInput(p => p.slice(0,-1)); return }
-                if (k === '') return
-                setNumInput(p => p.length < 5 ? p + k : p)
-              }}
-              className={`h-16 rounded-2xl text-2xl font-bold transition-all active:scale-95 ${
-                k === '' ? 'invisible' :
-                k === '⌫' ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' :
-                'bg-white border-2 border-gray-200 text-gray-800 hover:bg-teal-50 hover:border-teal-300 shadow-sm'
+        {/* PIN dots */}
+        <div className="bg-white/10 rounded-2xl px-6 py-4 mb-6 text-center border-2 border-white/20">
+          <p className="text-xs text-teal-300 mb-2 uppercase tracking-wider">PIN</p>
+          <div className="flex justify-center gap-4">
+            {[0,1,2,3].map(i => (
+              <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all ${
+                pin.length > i ? 'bg-white border-white' : 'border-white/40'
+              }`} />
+            ))}
+          </div>
+        </div>
+
+        {/* Combined numpad */}
+        <div className="mb-3">
+          <div className="flex rounded-xl overflow-hidden border border-white/20 mb-4">
+            <button
+              onClick={() => { setNumInput(''); setPin('') }}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                pin.length === 0 ? 'bg-white text-teal-700' : 'text-white/60 hover:text-white'
               }`}>
-              {k}
+              Staff ID
             </button>
-          ))}
+            <button
+              onClick={() => {}}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                pin.length > 0 || numInput.length > 0 ? 'bg-white/20 text-white' : 'text-white/60'
+              }`}>
+              PIN
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k, i) => (
+              <button key={i} disabled={k === ''}
+                onClick={() => {
+                  if (k === '⌫') {
+                    if (pin.length > 0) setPin(p => p.slice(0,-1))
+                    else setNumInput(p => p.slice(0,-1))
+                    return
+                  }
+                  if (k === '') return
+                  // Fill ID first (up to 5 digits), then PIN (up to 4)
+                  if (numInput.length < 5) {
+                    setNumInput(p => p + k)
+                  } else if (pin.length < 4) {
+                    setPin(p => p + k)
+                    if (pin.length === 3) {
+                      setTimeout(() => lookupAndVerify(numInput, pin + k), 100)
+                    }
+                  }
+                }}
+                className={`h-16 rounded-2xl text-2xl font-bold transition-all active:scale-95 ${
+                  k === '' ? 'invisible' :
+                  k === '⌫' ? 'bg-white/10 text-white hover:bg-white/20' :
+                  'bg-white/15 text-white hover:bg-white/25 border border-white/20'
+                }`}>
+                {k}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <button onClick={lookupStaff} disabled={loading || numInput.length === 0}
-          className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-lg transition-colors flex items-center justify-center gap-2">
-          {loading && <Loader2 className="w-5 h-5 animate-spin" />}
-          {loading ? 'Looking up…' : `Continue as ${sitePrefix}-${numInput || '___'}`}
-        </button>
-      </div>
-    </div>
-  )
-
-  // ── WELCOME SCREEN ───────────────────────────────────────────────────────
-  if (screen === 'welcome') return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex flex-col items-center justify-center p-8">
-      <div className="w-full max-w-sm text-center">
-        <div className="w-24 h-24 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-6 text-4xl font-bold text-white">
-          {(staff?.full_name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase()}
-        </div>
-        <h2 className="text-3xl font-bold text-white mb-1">
-          Welcome{action === 'checkin' ? ' back' : ''}!
-        </h2>
-        <p className="text-xl text-teal-100 mb-1">{staff?.full_name}</p>
-        <p className="text-teal-200 text-sm mb-2 capitalize">{staff?.role?.replace(/_/g,' ')} · {(staff?.department as any)?.name ?? 'No department'}</p>
-        <p className="text-teal-300 text-xs mb-10">
-          {action === 'checkin' ? '🟢 Clocking In' : action === 'checkout' ? '🔴 Clocking Out' : '📋 Reporting Incident'}
-        </p>
-        <button
-          onClick={() => setScreen('pin')}
-          className="w-full bg-white text-teal-700 font-bold py-4 rounded-2xl text-lg hover:bg-teal-50 transition-colors shadow-lg"
-        >
-          Continue — Enter PIN
-        </button>
-        <button onClick={resetKiosk} className="mt-4 text-teal-200 text-sm hover:text-white transition-colors">
-          Not me? Go back
+        <button onClick={() => lookupAndVerify(numInput, pin)}
+          disabled={loading || numInput.length === 0 || pin.length !== 4}
+          className="w-full bg-white text-teal-700 font-bold py-4 rounded-2xl text-lg transition-all disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95">
+          {loading && <Loader2 className="w-5 h-5 animate-spin text-teal-600" />}
+          {loading ? 'Signing in…' : 'Sign In'}
         </button>
       </div>
     </div>
