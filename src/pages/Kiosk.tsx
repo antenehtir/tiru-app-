@@ -447,7 +447,7 @@ export default function Kiosk() {
           <p className="text-xs text-gray-400 mb-1 uppercase tracking-wider">Staff ID</p>
           <p className="text-4xl font-mono font-bold text-gray-800 tracking-widest">
             {sitePrefix}-<span className={numInput ? 'text-teal-600' : 'text-gray-300'}>
-              {numInput ? numInput.padStart(3, '0') : '___'}
+              {numInput || '___'}
             </span>
           </p>
         </div>
@@ -459,7 +459,7 @@ export default function Kiosk() {
               onClick={() => {
                 if (k === '⌫') { setNumInput(p => p.slice(0,-1)); return }
                 if (k === '') return
-                if (numInput.length < 3) setNumInput(p => p + k)
+                setNumInput(p => p.length < 5 ? p + k : p)
               }}
               className={`h-16 rounded-2xl text-2xl font-bold transition-all active:scale-95 ${
                 k === '' ? 'invisible' :
@@ -474,7 +474,7 @@ export default function Kiosk() {
         <button onClick={lookupStaff} disabled={loading || numInput.length === 0}
           className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-lg transition-colors flex items-center justify-center gap-2">
           {loading && <Loader2 className="w-5 h-5 animate-spin" />}
-          {loading ? 'Looking up…' : `Continue as ${sitePrefix}-${numInput.padStart(3,'0') || '___'}`}
+          {loading ? 'Looking up…' : `Continue as ${sitePrefix}-${numInput || '___'}`}
         </button>
       </div>
     </div>
