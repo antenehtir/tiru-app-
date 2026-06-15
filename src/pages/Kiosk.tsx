@@ -5,7 +5,7 @@ import {
   CheckCircle2, XCircle, Loader2, Shield
 } from 'lucide-react'
 
-type KioskScreen = 'idle' | 'identify' | 'pin' | 'welcome' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
+type KioskScreen = 'idle' | 'identify' | 'pin' | 'welcome' | 'dashboard' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
 type Action = 'checkin' | 'checkout' | 'incident' | 'notices'
 
 type StaffProfile = {
@@ -43,6 +43,8 @@ export default function Kiosk() {
   const [signatureData, setSignatureData] = useState<string | null>(null)
   const [countdown, setCountdown]         = useState(3)
   const [cameraActive, setCameraActive]   = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [todayShift, setTodayShift]   = useState<{starts_at:string; ends_at:string; specialty:string|null} | null>(null)
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const videoRef     = useRef<HTMLVideoElement>(null)
   const streamRef    = useRef<MediaStream | null>(null)
@@ -95,6 +97,8 @@ export default function Kiosk() {
     setSignatureData(null)
     setCountdown(3)
     setCameraActive(false)
+    setUnreadCount(0)
+    setTodayShift(null)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -103,7 +107,19 @@ export default function Kiosk() {
 
   function startAction(a: Action) {
     setAction(a)
-    setScreen('identify')
+    if (screen === 'dashboard') {
+      // Already logged in — go directly to action
+      if (a === 'notices') {
+        fetchNotices(staff!)
+        setScreen('notices')
+      } else if (a === 'checkin' || a === 'checkout') {
+        setScreen('signature')
+      } else if (a === 'incident') {
+        setScreen('incident')
+      }
+    } else {
+      setScreen('identify')
+    }
   }
 
   async function fetchNotices(staffProfile: StaffProfile) {
@@ -131,6 +147,52 @@ export default function Kiosk() {
       return false
     })
     setNotices(filtered)
+  }
+
+  async function fetchDashboardData(staffProfile: StaffProfile) {
+    const now = new Date()
+    const todayStart = new Date(now); todayStart.setHours(0,0,0,0)
+    const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999)
+
+    const { data: noticeData } = await supabase
+      .from('notices')
+      .select('id, audience_type, target_user_id, audience, department_ids, department_id')
+
+    const { data: readData } = await supabase
+      .from('notice_reads')
+      .select('notice_id')
+      .eq('user_id', staffProfile.id)
+
+    const readSet = new Set((readData ?? []).map((r: any) => r.notice_id))
+    const deptId = staffProfile.department ? (staffProfile.department as any).id : null
+
+    const visible = ((noticeData as any[]) ?? []).filter((n: any) => {
+      if (n.audience_type === 'personal') return n.target_user_id === staffProfile.id
+      if (n.target_user_id) return false
+      if (n.audience === 'department') {
+        const ids = n.department_ids ?? (n.department_id ? [n.department_id] : [])
+        return deptId ? ids.includes(deptId) : false
+      }
+      if (n.audience === 'clinical') {
+        return ['physician','nurse','medical_director','department_head','coordinator'].includes(staffProfile.role)
+      }
+      if (n.audience === 'administrative') {
+        return ['hr','coordinator','general_manager','ceo','super_admin'].includes(staffProfile.role)
+      }
+      return true
+    })
+    setUnreadCount(visible.filter((n: any) => !readSet.has(n.id)).length)
+
+    const { data: shiftData } = await supabase
+      .from('shifts')
+      .select('starts_at, ends_at, specialty')
+      .eq('user_id', staffProfile.id)
+      .gte('starts_at', todayStart.toISOString())
+      .lte('starts_at', todayEnd.toISOString())
+      .order('starts_at')
+      .limit(1)
+      .maybeSingle()
+    setTodayShift(shiftData as any)
   }
 
   async function lookupStaff() {
@@ -178,11 +240,8 @@ export default function Kiosk() {
       setScreen('error')
       return
     }
-    if (action === 'checkin' || action === 'checkout') {
-      setScreen('signature')
-    } else if (action === 'incident') {
-      setScreen('incident')
-    }
+    await fetchDashboardData(staff!)
+    setScreen('dashboard')
   }
 
   // ── Signature pad helpers ────────────────────────────────────────────────
@@ -369,37 +428,17 @@ export default function Kiosk() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 w-full max-w-lg">
-        <button onClick={() => startAction('checkin')}
-          className="flex flex-col items-center gap-3 bg-white rounded-3xl p-8 shadow-2xl hover:bg-teal-50 active:scale-95 transition-all">
-          <div className="w-16 h-16 rounded-2xl bg-teal-100 flex items-center justify-center">
-            <LogIn className="w-8 h-8 text-teal-600" />
+      <div className="w-full max-w-sm">
+        <button
+          onClick={() => setScreen('identify')}
+          className="w-full flex flex-col items-center gap-4 bg-white/15 hover:bg-white/25 border-2 border-white/30 rounded-3xl p-8 transition-all active:scale-95">
+          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
+            <Shield className="w-8 h-8 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-800">Clock In</span>
-        </button>
-
-        <button onClick={() => startAction('checkout')}
-          className="flex flex-col items-center gap-3 bg-white rounded-3xl p-8 shadow-2xl hover:bg-teal-50 active:scale-95 transition-all">
-          <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center">
-            <LogOut className="w-8 h-8 text-orange-500" />
+          <div className="text-center">
+            <p className="text-xl font-bold text-white">Tap to Sign In</p>
+            <p className="text-teal-200 text-sm mt-1">Enter your staff ID and PIN</p>
           </div>
-          <span className="text-xl font-bold text-gray-800">Clock Out</span>
-        </button>
-
-        <button onClick={() => startAction('incident')}
-          className="flex flex-col items-center gap-3 bg-white rounded-3xl p-8 shadow-2xl hover:bg-red-50 active:scale-95 transition-all">
-          <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
-          </div>
-          <span className="text-xl font-bold text-gray-800">Report</span>
-        </button>
-
-        <button onClick={() => startAction('notices')}
-          className="flex flex-col items-center gap-3 bg-white rounded-3xl p-8 shadow-2xl hover:bg-blue-50 active:scale-95 transition-all">
-          <div className="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center">
-            <Bell className="w-8 h-8 text-blue-500" />
-          </div>
-          <span className="text-xl font-bold text-gray-800">Notices</span>
         </button>
       </div>
 
@@ -487,6 +526,94 @@ export default function Kiosk() {
           Not me? Go back
         </button>
       </div>
+    </div>
+  )
+
+  // ── DASHBOARD SCREEN ─────────────────────────────────────────────────────
+  if (screen === 'dashboard') return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-700 to-teal-900 flex flex-col p-6 select-none">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <p className="text-teal-200 text-sm">
+            {time.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+          <h1 className="text-2xl font-bold text-white mt-0.5">
+            Good {time.getHours() < 12 ? 'morning' : time.getHours() < 17 ? 'afternoon' : 'evening'},{' '}
+            {staff?.full_name.split(' ')[1] ?? staff?.full_name}!
+          </h1>
+          <p className="text-teal-200 text-sm capitalize mt-0.5">
+            {staff?.role?.replace(/_/g,' ')} · {(staff?.department as any)?.name ?? 'No department'}
+          </p>
+        </div>
+        <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white">
+          {(staff?.full_name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase()}
+        </div>
+      </div>
+
+      {/* Today's shift */}
+      {todayShift ? (
+        <div className="bg-white/10 rounded-2xl p-4 mb-6">
+          <p className="text-teal-200 text-xs uppercase tracking-wider mb-1">Today's Shift</p>
+          <p className="text-white font-semibold">
+            {new Date(todayShift.starts_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})}
+            {' – '}
+            {new Date(todayShift.ends_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})}
+            {todayShift.specialty ? ` · ${todayShift.specialty}` : ''}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-white/10 rounded-2xl p-4 mb-6">
+          <p className="text-teal-200 text-xs">No shift scheduled today</p>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="grid grid-cols-2 gap-4 flex-1">
+        <button onClick={() => startAction('checkin')}
+          className="flex flex-col items-center justify-center gap-3 bg-white rounded-3xl p-6 shadow-lg hover:bg-teal-50 active:scale-95 transition-all">
+          <div className="w-14 h-14 rounded-2xl bg-teal-100 flex items-center justify-center">
+            <LogIn className="w-7 h-7 text-teal-600" />
+          </div>
+          <span className="text-lg font-bold text-gray-800">Clock In</span>
+        </button>
+
+        <button onClick={() => startAction('checkout')}
+          className="flex flex-col items-center justify-center gap-3 bg-white rounded-3xl p-6 shadow-lg hover:bg-orange-50 active:scale-95 transition-all">
+          <div className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center">
+            <LogOut className="w-7 h-7 text-orange-500" />
+          </div>
+          <span className="text-lg font-bold text-gray-800">Clock Out</span>
+        </button>
+
+        <button onClick={() => startAction('incident')}
+          className="flex flex-col items-center justify-center gap-3 bg-white rounded-3xl p-6 shadow-lg hover:bg-red-50 active:scale-95 transition-all">
+          <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center">
+            <AlertTriangle className="w-7 h-7 text-red-500" />
+          </div>
+          <span className="text-lg font-bold text-gray-800">Report</span>
+        </button>
+
+        <button onClick={() => startAction('notices')}
+          className="relative flex flex-col items-center justify-center gap-3 bg-white rounded-3xl p-6 shadow-lg hover:bg-blue-50 active:scale-95 transition-all">
+          {unreadCount > 0 && (
+            <span className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+          <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center">
+            <Bell className="w-7 h-7 text-blue-500" />
+          </div>
+          <span className="text-lg font-bold text-gray-800">Notices</span>
+        </button>
+      </div>
+
+      {/* Sign out */}
+      <button onClick={resetKiosk}
+        className="mt-6 flex items-center justify-center gap-2 text-teal-200 hover:text-white transition-colors py-3">
+        <LogOut className="w-4 h-4" />
+        <span className="text-sm font-medium">Sign Out</span>
+      </button>
     </div>
   )
 
