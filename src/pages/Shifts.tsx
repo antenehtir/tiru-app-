@@ -267,7 +267,7 @@ export default function Shifts() {
   const [form, setForm] = useState({
     user_id: '', department_id: '', shift_date: isoDate(new Date()),
     start_time: '08:00', end_time: '17:00',
-    schedule_type: 'regular', specialty: '', notes: '',
+    schedule_type: 'regular', specialty: '', notes: '', overnight: false,
   })
 
   // ── Repeat state ──
@@ -481,7 +481,7 @@ export default function Shifts() {
       start_time: '08:00', end_time: '17:00',
       schedule_type: scheduleType,
       specialty: selectedSpecialty ?? '',
-      notes: '',
+      notes: '', overnight: false,
     })
     setModalOpen(true)
   }
@@ -496,7 +496,7 @@ export default function Shifts() {
     setFormError(null)
     if (!form.user_id)     return setFormError('Please select a staff member.')
     if (!form.shift_date)  return setFormError('Please pick a date.')
-    if (form.start_time >= form.end_time) return setFormError('End time must be after start time.')
+    if (!form.overnight && form.start_time >= form.end_time) return setFormError('End time must be after start time. For overnight shifts, enable the overnight toggle.')
 
     if (repeatEnabled) {
       if (!repeatUntil) return setFormError('Please set an end date for repeat.')
@@ -516,7 +516,9 @@ export default function Shifts() {
         facility_id:   FACILITY_ID,
         department_id: resolvedDeptId,
         starts_at:     `${date}T${form.start_time}:00`,
-        ends_at:       `${date}T${form.end_time}:00`,
+        ends_at:       form.overnight
+          ? `${addDays(new Date(date + 'T00:00:00'), 1).toISOString().split('T')[0]}T${form.end_time}:00`
+          : `${date}T${form.end_time}:00`,
         schedule_type: form.schedule_type || 'regular',
         shift_type:    form.schedule_type || 'regular',
         specialty:     form.specialty || null,
@@ -534,7 +536,9 @@ export default function Shifts() {
         facility_id:   FACILITY_ID,
         department_id: resolvedDeptId,
         starts_at:     `${form.shift_date}T${form.start_time}:00`,
-        ends_at:       `${form.shift_date}T${form.end_time}:00`,
+        ends_at:       form.overnight
+          ? `${addDays(new Date(form.shift_date + 'T00:00:00'), 1).toISOString().split('T')[0]}T${form.end_time}:00`
+          : `${form.shift_date}T${form.end_time}:00`,
         schedule_type: form.schedule_type || 'regular',
         shift_type:    form.schedule_type || 'regular',
         specialty:     form.specialty || null,
@@ -565,6 +569,7 @@ export default function Shifts() {
       schedule_type: selectedShift.schedule_type ?? 'regular',
       specialty:     selectedShift.specialty  ?? '',
       notes:         selectedShift.notes      ?? '',
+      overnight:     false,
     })
     setShiftAction('edit')
   }
@@ -579,7 +584,9 @@ export default function Shifts() {
       user_id:       form.user_id,
       department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
       starts_at:     `${form.shift_date}T${form.start_time}:00`,
-      ends_at:       `${form.shift_date}T${form.end_time}:00`,
+      ends_at:       form.overnight
+        ? `${addDays(new Date(form.shift_date + 'T00:00:00'), 1).toISOString().split('T')[0]}T${form.end_time}:00`
+        : `${form.shift_date}T${form.end_time}:00`,
       schedule_type: form.schedule_type || 'regular',
       shift_type:    form.schedule_type || 'regular',
       specialty:     form.specialty || null,
@@ -1226,6 +1233,13 @@ export default function Shifts() {
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End *</label>
                   <input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+                    <div onClick={() => setForm(f => ({ ...f, overnight: !f.overnight }))}
+                      className={`relative w-8 h-4 rounded-full transition-colors ${form.overnight ? 'bg-teal-500' : 'bg-gray-300'}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${form.overnight ? 'translate-x-4' : ''}`} />
+                    </div>
+                    <span className="text-xs text-gray-500">Overnight shift <span className="text-teal-600">(ends next day)</span></span>
+                  </label>
                 </div>
               </div>
 
