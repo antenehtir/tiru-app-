@@ -541,14 +541,15 @@ export default function Kiosk() {
                     return
                   }
                   if (k === '') return
-                  // Fill ID first (up to 3 digits), then PIN (up to 4)
-                  if (numInput.length < 3 && pin.length === 0) {
+                  if (numInput.length < 3) {
                     setNumInput(p => p + k)
-                  } else if (pin.length < 4) {
+                  } else {
                     const newPin = pin + k
-                    setPin(newPin)
-                    if (newPin.length === 4) {
-                      setTimeout(() => lookupAndVerify(numInput, newPin), 100)
+                    if (newPin.length <= 4) {
+                      setPin(newPin)
+                      if (newPin.length === 4) {
+                        setTimeout(() => lookupAndVerify(numInput, newPin), 100)
+                      }
                     }
                   }
                 }}
