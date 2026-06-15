@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { Activity, RefreshCw, Phone, Clock, Building2, X } from 'lucide-react'
+import { Activity, RefreshCw, Phone, Clock, Building2, ChevronDown } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,13 +27,6 @@ type ShiftStatus = 'PRESENT' | 'LATE' | 'EXPECTED' | 'UPCOMING' | 'CLOCKED_OUT'
 type EnrichedShift = ShiftEntry & { status: ShiftStatus; latestLog: AttendanceLog | null }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmt12(time: string) {
-  const [h, m] = time.split(':').map(Number)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12  = h % 12 || 12
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
-}
 
 function getStatus(shift: ShiftEntry, latestLog: AttendanceLog | null, now: Date): ShiftStatus {
   if (latestLog) {
@@ -64,8 +57,16 @@ export default function OnDuty() {
   const [now,       setNow]       = useState(new Date())
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
 
-  const [deptFilter,   setDeptFilter]   = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<ShiftStatus | null>(null)
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set())
+
+  const toggleDept = (dept: string) => {
+    setExpandedDepts(prev => {
+      const next = new Set(prev)
+      if (next.has(dept)) next.delete(dept)
+      else next.add(dept)
+      return next
+    })
+  }
 
   // Clock tick every minute
   useEffect(() => {
@@ -135,18 +136,6 @@ export default function OnDuty() {
     return acc
   }, {})
 
-  const filteredGrouped = Object.entries(grouped)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .reduce<Record<string, EnrichedShift[]>>((acc, [dept, deptShifts]) => {
-      if (deptFilter && dept !== deptFilter) return acc
-      const filtered = deptShifts.filter(s => {
-        if (statusFilter && s.status !== statusFilter) return false
-        return true
-      })
-      if (filtered.length > 0) acc[dept] = filtered
-      return acc
-    }, {})
-
   // Summary counts
   const counts = shifts.reduce<Record<ShiftStatus, number>>(
     (acc, s) => { acc[s.status]++; return acc },
@@ -196,47 +185,15 @@ export default function OnDuty() {
         <div className="flex flex-wrap gap-2">
           {(['PRESENT', 'EXPECTED', 'LATE', 'UPCOMING', 'CLOCKED_OUT'] as ShiftStatus[]).map(s => (
             counts[s] > 0 && (
-              <button key={s}
-                onClick={() => setStatusFilter(statusFilter === s ? null : s)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                  STATUS_META[s].badge
-                } ${statusFilter === s ? 'ring-2 ring-offset-1 ring-teal-500 scale-105' : 'hover:scale-105'}`}>
+              <span key={s} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${STATUS_META[s].badge}`}>
                 <span className={`w-2 h-2 rounded-full ${STATUS_META[s].dot}`} />
                 {counts[s]} {STATUS_META[s].label}
-              </button>
+              </span>
             )
           ))}
-          {(deptFilter || statusFilter) && (
-            <button onClick={() => { setDeptFilter(null); setStatusFilter(null) }}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all">
-              <X className="w-3 h-3" /> Clear filters
-            </button>
-          )}
           <span className="text-xs text-gray-400 self-center ml-auto">
             {lastFetch ? `Updated ${lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
-        </div>
-      )}
-
-      {/* ── Department filter chips ── */}
-      {!loading && shifts.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          <button
-            onClick={() => setDeptFilter(null)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              !deptFilter ? 'bg-teal-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300'
-            }`}>
-            All Depts
-          </button>
-          {Object.keys(grouped).sort().map(dept => (
-            <button key={dept}
-              onClick={() => setDeptFilter(deptFilter === dept ? null : dept)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                deptFilter === dept ? 'bg-teal-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300'
-              }`}>
-              {dept} ({grouped[dept].length})
-            </button>
-          ))}
         </div>
       )}
 
@@ -262,70 +219,104 @@ export default function OnDuty() {
         </div>
       )}
 
-      {/* ── Grouped cards ── */}
-      {!loading && !error && Object.entries(filteredGrouped).map(([dept, deptShifts]) => (
-        <div key={dept} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-gray-400" />
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wider">{dept}</h2>
-            <span className="text-xs text-gray-400">({deptShifts.length})</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {deptShifts.map(shift => {
-              const meta      = STATUS_META[shift.status]
-              const status    = shift.status
-              const latestLog = shift.latestLog
-              const startT    = shift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00'
-              const endT      = shift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00'
-
+      {/* ── Accordion departments ── */}
+      {!loading && shifts.length > 0 && (
+        <div className="space-y-2">
+          {Object.entries(grouped)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([dept, deptShifts]) => {
+              const isOpen = expandedDepts.has(dept)
+              const deptPresent  = deptShifts.filter(s => s.status === 'PRESENT').length
+              const deptLate     = deptShifts.filter(s => s.status === 'LATE').length
+              const deptExpected = deptShifts.filter(s => s.status === 'EXPECTED').length
               return (
-                <div key={shift.id} className={`bg-white rounded-xl border-l-4 ${meta.border} p-4 shadow-sm hover:shadow-md transition-shadow`}>
-                  <div className="flex items-start gap-3">
-                    {/* Avatar */}
-                    <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold text-white ${
-                      status === 'PRESENT'    ? 'bg-teal-500' :
-                      status === 'LATE'       ? 'bg-red-500'  :
-                      status === 'EXPECTED'   ? 'bg-amber-500':
-                      status === 'CLOCKED_OUT'? 'bg-gray-400' : 'bg-blue-400'
-                    }`}>
-                      {(shift.user?.full_name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-0.5">
-                        <p className="font-semibold text-gray-900 text-sm truncate">{shift.user?.full_name ?? '—'}</p>
-                        <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${meta.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />{meta.label}
-                        </span>
+                <div key={dept} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* Department header — tap to expand */}
+                  <button
+                    onClick={() => toggleDept(dept)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center">
+                        <Building2 className="w-4 h-4 text-teal-600" />
                       </div>
-                      <p className="text-xs text-gray-400 capitalize mb-1">
-                        {shift.user?.role?.replace(/_/g, ' ')}{shift.specialty ? ` · ${shift.specialty}` : ''}
-                      </p>
-                      <p className="text-xs text-gray-500">{fmt12(startT)} – {fmt12(endT)}</p>
-                      {latestLog?.attendance_type === 'clock_in' && (
-                        <p className="text-xs text-teal-600 mt-0.5">
-                          ✓ In at {new Date(latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                          {latestLog.within_geofence === false && <span className="text-amber-500 ml-1">(off-site)</span>}
-                        </p>
-                      )}
-                      {latestLog?.attendance_type === 'clock_out' && (
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          ✓ Out at {new Date(latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      )}
-                      {shift.user?.phone && (
-                        <a href={`tel:${shift.user.phone}`} className="inline-flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 mt-1">
-                          <Phone className="w-3 h-3" />{shift.user.phone}
-                        </a>
-                      )}
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-gray-900">{dept}</p>
+                        <p className="text-xs text-gray-400">{deptShifts.length} shift{deptShifts.length !== 1 ? 's' : ''} today</p>
+                      </div>
                     </div>
-                  </div>
+                    <div className="flex items-center gap-2">
+                      {deptPresent > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />{deptPresent}
+                        </span>
+                      )}
+                      {deptLate > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" />{deptLate} Late
+                        </span>
+                      )}
+                      {deptExpected > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{deptExpected}
+                        </span>
+                      )}
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </button>
+
+                  {/* Expanded staff list */}
+                  {isOpen && (
+                    <div className="border-t border-gray-100 divide-y divide-gray-50">
+                      {deptShifts.map(shift => {
+                        const meta      = STATUS_META[shift.status]
+                        const latestLog = shift.latestLog
+                        const startT    = new Date(shift.starts_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                        const endT      = new Date(shift.ends_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                        return (
+                          <div key={shift.id} className="flex items-start gap-3 px-4 py-3">
+                            <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white ${
+                              shift.status === 'PRESENT'    ? 'bg-teal-500' :
+                              shift.status === 'LATE'       ? 'bg-red-500'  :
+                              shift.status === 'EXPECTED'   ? 'bg-amber-500':
+                              shift.status === 'CLOCKED_OUT'? 'bg-gray-400' : 'bg-blue-400'
+                            }`}>
+                              {(shift.user?.full_name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{shift.user?.full_name ?? '—'}</p>
+                                <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${meta.badge}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />{meta.label}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-400 capitalize">{shift.user?.role?.replace(/_/g, ' ')}{shift.specialty ? ` · ${shift.specialty}` : ''}</p>
+                              <p className="text-xs text-gray-500">{startT} – {endT}</p>
+                              {latestLog?.attendance_type === 'clock_in' && (
+                                <p className="text-xs text-teal-600">
+                                  ✓ In at {new Date(latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                  {latestLog.within_geofence === false && <span className="text-amber-500 ml-1">(off-site)</span>}
+                                </p>
+                              )}
+                              {latestLog?.attendance_type === 'clock_out' && (
+                                <p className="text-xs text-gray-400">✓ Out at {new Date(latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
+                              )}
+                              {shift.user?.phone && (
+                                <a href={`tel:${shift.user.phone}`} className="inline-flex items-center gap-1 text-xs text-teal-600 mt-0.5">
+                                  <Phone className="w-3 h-3" />{shift.user.phone}
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })}
-          </div>
         </div>
-      ))}
+      )}
     </div>
   )
 }
