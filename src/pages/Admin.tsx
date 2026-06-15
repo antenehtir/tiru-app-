@@ -500,7 +500,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
     // Step 1: Create auth user via signUp — the DB trigger auto-creates the profile
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email:    inviteForm.email.trim() || `${inviteForm.employee_id.trim().toLowerCase().replace('-','_')}@kiosk.tiru-platform.com`,
+      email:    inviteForm.email.trim() || `kiosk.${inviteForm.employee_id.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}@tiruplatform.com`,
       password: 'TiruAMC2026!' + Math.random().toString(36).slice(2),
       options:  {
         data: {
@@ -541,7 +541,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     }
 
     // Step 3: Send password-setup email (only for real email addresses)
-    if (inviteForm.email.trim() && !inviteForm.email.includes('@kiosk.tiru-platform.com')) {
+    if (inviteForm.email.trim() && !inviteForm.email.includes('@tiruplatform.com')) {
       await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
         redirectTo: `${window.location.origin}/reset-password`,
       })
