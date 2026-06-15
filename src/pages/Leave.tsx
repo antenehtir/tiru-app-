@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
 import {
@@ -28,10 +28,10 @@ const CAN_APPROVE = ['medical_director']
 const CAN_RECORD  = ['hr']
 
 const STATUS_COLOR: Record<LeaveStatus, string> = {
-  pending:  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  recorded: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  pending:  'bg-amber-100 text-amber-700',
+  approved: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+  recorded: 'bg-blue-100 text-blue-700',
 }
 
 const LEAVE_TYPES: LeaveType[] = ['annual','sick','emergency','maternity','paternity','unpaid','other']
@@ -124,7 +124,7 @@ export default function Leave() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <CalendarOff className="w-6 h-6 text-teal-500" />Leave Requests
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">Submit and track leave applications</p>
@@ -136,7 +136,7 @@ export default function Leave() {
         </button>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex gap-1 border-b border-gray-200">
         {tabs.filter(t => t.show).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? 'border-teal-500 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -153,7 +153,7 @@ export default function Leave() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading…
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loadingâ€¦
         </div>
       ) : requests.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
@@ -165,19 +165,19 @@ export default function Leave() {
             const isOpen = expanded.has(req.id)
             const isOwn  = req.user_id === profile?.id
             return (
-              <div key={req.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => toggleExpand(req.id)}>
+              <div key={req.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(req.id)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm text-gray-900 dark:text-white">
-                        {req.requester?.full_name ?? (isOwn ? profile?.full_name : '—')}
+                      <span className="font-medium text-sm text-gray-900">
+                        {req.requester?.full_name ?? (isOwn ? profile?.full_name : 'â€”')}
                       </span>
                       <span className="text-xs text-gray-400 capitalize">{req.leave_type}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${STATUS_COLOR[req.status]}`}>{req.status}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />{req.start_date} → {req.end_date}
-                      &nbsp;·&nbsp;
+                      <Clock className="w-3 h-3" />{req.start_date} â†’ {req.end_date}
+                      &nbsp;Â·&nbsp;
                       {Math.max(1, Math.round((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1)} day(s)
                     </div>
                   </div>
@@ -185,10 +185,10 @@ export default function Leave() {
                 </div>
 
                 {isOpen && (
-                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
-                    {req.reason && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-semibold">Reason:</span> {req.reason}</p>}
-                    {req.medical_director_note && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-semibold">Medical Director note:</span> {req.medical_director_note}</p>}
-                    {req.hr_note && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-semibold">HR note:</span> {req.hr_note}</p>}
+                  <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
+                    {req.reason && <p className="text-sm text-gray-600"><span className="font-semibold">Reason:</span> {req.reason}</p>}
+                    {req.medical_director_note && <p className="text-sm text-gray-600"><span className="font-semibold">Medical Director note:</span> {req.medical_director_note}</p>}
+                    {req.hr_note && <p className="text-sm text-gray-600"><span className="font-semibold">HR note:</span> {req.hr_note}</p>}
                     <p className="text-xs text-gray-400">Submitted: {new Date(req.created_at).toLocaleString()}</p>
                     <div className="flex gap-2 flex-wrap">
                       {isMedDir && req.status === 'pending' && (
@@ -220,10 +220,10 @@ export default function Leave() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold">New Leave Request</h2>
-              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {formErr && (
@@ -234,7 +234,7 @@ export default function Leave() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Leave Type</label>
                 <select value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value as LeaveType }))}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
                   {LEAVE_TYPES.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
                 </select>
               </div>
@@ -242,26 +242,26 @@ export default function Leave() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Date *</label>
                   <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Date *</label>
                   <input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
                 <textarea rows={3} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
-                  placeholder="Optional…"
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                  placeholder="Optionalâ€¦"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={submitRequest} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submitting…' : 'Submit Request'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submittingâ€¦' : 'Submit Request'}
               </button>
             </div>
           </div>
@@ -270,19 +270,19 @@ export default function Leave() {
 
       {actionMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold capitalize">{actionMode.action === 'record' ? 'Mark as Recorded' : actionMode.action}</h2>
-              <button onClick={() => { setActionMode(null); setActionNote('') }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setActionMode(null); setActionNote('') }} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-3">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
               <textarea rows={3} value={actionNote} onChange={e => setActionNote(e.target.value)}
-                placeholder="Add a note…"
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                placeholder="Add a noteâ€¦"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-              <button onClick={() => { setActionMode(null); setActionNote('') }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => { setActionMode(null); setActionNote('') }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={applyAction} disabled={actioning}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-60
                   ${actionMode.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : ''}
@@ -298,3 +298,4 @@ export default function Leave() {
     </div>
   )
 }
+
