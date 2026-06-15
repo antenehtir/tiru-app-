@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { User, Lock, CheckCircle2, AlertCircle, Loader2, Info, FileEdit } from 'lucide-react'
+import { User, Lock, CheckCircle2, AlertCircle, Loader2, Info, FileEdit, Shield } from 'lucide-react'
 
 // ─── Role badge colour ────────────────────────────────────────────────────────
 
@@ -58,6 +58,13 @@ export default function Profile() {
   const [savingPw,  setSavingPw]  = useState(false)
   const [pwMsg,     setPwMsg]     = useState<{ ok: boolean; text: string } | null>(null)
 
+  // Kiosk PIN change
+  const [currentPin,  setCurrentPin]  = useState('')
+  const [newKioskPin, setNewKioskPin] = useState('')
+  const [confirmPin,  setConfirmPin]  = useState('')
+  const [savingPin,   setSavingPin]   = useState(false)
+  const [pinMsg,      setPinMsg]      = useState<{ ok: boolean; text: string } | null>(null)
+
   const changePassword = async () => {
     setPwMsg(null)
     if (!currentPw)          return setPwMsg({ ok: false, text: 'Please enter your current password.' })
@@ -84,6 +91,28 @@ export default function Profile() {
       setPwMsg({ ok: true, text: 'Password updated successfully.' })
       setCurrentPw(''); setNewPw(''); setConfirmPw('')
     }
+  }
+
+  const changePin = async () => {
+    setPinMsg(null)
+    if (currentPin !== (profile as any)?.pin) {
+      setPinMsg({ ok: false, text: 'Current PIN is incorrect.' }); return
+    }
+    if (newKioskPin.length !== 4) {
+      setPinMsg({ ok: false, text: 'New PIN must be exactly 4 digits.' }); return
+    }
+    if (newKioskPin !== confirmPin) {
+      setPinMsg({ ok: false, text: 'PINs do not match.' }); return
+    }
+    setSavingPin(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ pin: newKioskPin })
+      .eq('id', profile!.id)
+    setSavingPin(false)
+    if (error) { setPinMsg({ ok: false, text: error.message }); return }
+    setPinMsg({ ok: true, text: 'Kiosk PIN updated successfully.' })
+    setCurrentPin(''); setNewKioskPin(''); setConfirmPin('')
   }
 
   // Avatar initials
@@ -191,6 +220,52 @@ export default function Profile() {
           >
             {savingPw && <Loader2 className="w-4 h-4 animate-spin" />}
             {savingPw ? 'Updating…' : 'Update Password'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Kiosk PIN ── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+          <Shield className="w-4 h-4 text-teal-500" />
+          <h2 className="text-base font-semibold text-gray-800">Kiosk PIN</h2>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <p className="text-xs text-gray-500">Your 4-digit PIN is used to verify your identity at the facility kiosk terminal.</p>
+          {pinMsg && (
+            <div className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm border ${
+              pinMsg.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
+            }`}>
+              {pinMsg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+              {pinMsg.text}
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Current PIN</label>
+            <input type="password" maxLength={4} value={currentPin}
+              onChange={e => { setCurrentPin(e.target.value.replace(/\D/g,'').slice(0,4)); setPinMsg(null) }}
+              placeholder="● ● ● ●"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-center tracking-widest text-lg" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New PIN</label>
+            <input type="password" maxLength={4} value={newKioskPin}
+              onChange={e => { setNewKioskPin(e.target.value.replace(/\D/g,'').slice(0,4)); setPinMsg(null) }}
+              placeholder="● ● ● ●"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-center tracking-widest text-lg" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Confirm New PIN</label>
+            <input type="password" maxLength={4} value={confirmPin}
+              onChange={e => { setConfirmPin(e.target.value.replace(/\D/g,'').slice(0,4)); setPinMsg(null) }}
+              placeholder="● ● ● ●"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-center tracking-widest text-lg" />
+          </div>
+          <p className="text-xs text-gray-400">Must be exactly 4 digits. Do not share your PIN with anyone.</p>
+          <button onClick={changePin} disabled={savingPin}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+            {savingPin && <Loader2 className="w-4 h-4 animate-spin" />}
+            {savingPin ? 'Updating…' : 'Update Kiosk PIN'}
           </button>
         </div>
       </div>
