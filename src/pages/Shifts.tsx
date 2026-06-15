@@ -495,12 +495,15 @@ export default function Shifts() {
 
     setSaving(true)
 
+    const GP_DEPT_ID = departments.find(d => d.name === 'General Practice')?.id ?? null
+    const resolvedDeptId = form.department_id === 'gp' ? GP_DEPT_ID : (form.department_id || null)
+
     if (repeatEnabled && repeatUntil) {
       const dates = generateRepeatDates(form.shift_date, repeatPattern, [...repeatDays], repeatUntil)
       const shiftsToInsert = dates.map(date => ({
         user_id:       form.user_id,
-        department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
         facility_id:   FACILITY_ID,
+        department_id: resolvedDeptId,
         starts_at:     `${date}T${form.start_time}:00`,
         ends_at:       `${date}T${form.end_time}:00`,
         schedule_type: form.schedule_type || 'regular',
@@ -517,7 +520,8 @@ export default function Shifts() {
     } else {
       const { error: err } = await supabase.from('shifts').insert({
         user_id:       form.user_id,
-        department_id: form.department_id === 'gp' || !form.department_id ? null : form.department_id,
+        facility_id:   FACILITY_ID,
+        department_id: resolvedDeptId,
         starts_at:     `${form.shift_date}T${form.start_time}:00`,
         ends_at:       `${form.shift_date}T${form.end_time}:00`,
         schedule_type: form.schedule_type || 'regular',
