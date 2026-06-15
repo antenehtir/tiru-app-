@@ -5,7 +5,7 @@ import {
   CheckCircle2, XCircle, Loader2, Shield
 } from 'lucide-react'
 
-type KioskScreen = 'idle' | 'identify' | 'pin' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
+type KioskScreen = 'idle' | 'identify' | 'pin' | 'welcome' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
 type Action = 'checkin' | 'checkout' | 'incident' | 'notices'
 
 type StaffProfile = {
@@ -168,7 +168,7 @@ export default function Kiosk() {
       setScreen('error')
       return
     }
-    setScreen('pin')
+    setScreen('welcome')
   }
 
   async function verifyPin(enteredPin?: string) {
@@ -458,6 +458,34 @@ export default function Kiosk() {
           className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-lg transition-colors flex items-center justify-center gap-2">
           {loading && <Loader2 className="w-5 h-5 animate-spin" />}
           {loading ? 'Looking up…' : `Continue as ${sitePrefix}-${numInput || '___'}`}
+        </button>
+      </div>
+    </div>
+  )
+
+  // ── WELCOME SCREEN ───────────────────────────────────────────────────────
+  if (screen === 'welcome') return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex flex-col items-center justify-center p-8">
+      <div className="w-full max-w-sm text-center">
+        <div className="w-24 h-24 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-6 text-4xl font-bold text-white">
+          {(staff?.full_name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase()}
+        </div>
+        <h2 className="text-3xl font-bold text-white mb-1">
+          Welcome{action === 'checkin' ? ' back' : ''}!
+        </h2>
+        <p className="text-xl text-teal-100 mb-1">{staff?.full_name}</p>
+        <p className="text-teal-200 text-sm mb-2 capitalize">{staff?.role?.replace(/_/g,' ')} · {(staff?.department as any)?.name ?? 'No department'}</p>
+        <p className="text-teal-300 text-xs mb-10">
+          {action === 'checkin' ? '🟢 Clocking In' : action === 'checkout' ? '🔴 Clocking Out' : '📋 Reporting Incident'}
+        </p>
+        <button
+          onClick={() => setScreen('pin')}
+          className="w-full bg-white text-teal-700 font-bold py-4 rounded-2xl text-lg hover:bg-teal-50 transition-colors shadow-lg"
+        >
+          Continue — Enter PIN
+        </button>
+        <button onClick={resetKiosk} className="mt-4 text-teal-200 text-sm hover:text-white transition-colors">
+          Not me? Go back
         </button>
       </div>
     </div>
