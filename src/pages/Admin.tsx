@@ -779,7 +779,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   Email <span className="normal-case font-normal text-gray-400">(optional for kiosk-only staff)</span>
                 </label>
-                <input type="email" placeholder="abebe@tmc1.et"
+                <input type="text" placeholder="abebe@tmc1.et (optional)"
                   value={inviteForm.email}
                   onChange={e => setInviteForm(x => ({ ...x, email: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
