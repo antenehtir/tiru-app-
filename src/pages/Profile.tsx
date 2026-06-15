@@ -64,6 +64,10 @@ export default function Profile() {
   const [confirmPin,  setConfirmPin]  = useState('')
   const [savingPin,   setSavingPin]   = useState(false)
   const [pinMsg,      setPinMsg]      = useState<{ ok: boolean; text: string } | null>(null)
+  const [forgotPinMode,    setForgotPinMode]    = useState(false)
+  const [recoveryPassword, setRecoveryPassword] = useState('')
+  const [recoveryVerified, setRecoveryVerified] = useState(false)
+  const [verifyingPw,      setVerifyingPw]      = useState(false)
 
   const changePassword = async () => {
     setPwMsg(null)
@@ -113,6 +117,45 @@ export default function Profile() {
     if (error) { setPinMsg({ ok: false, text: error.message }); return }
     setPinMsg({ ok: true, text: 'Kiosk PIN updated successfully.' })
     setCurrentPin(''); setNewKioskPin(''); setConfirmPin('')
+  }
+
+  const verifyPasswordForPinReset = async () => {
+    setVerifyingPw(true)
+    setPinMsg(null)
+    const { error } = await supabase.auth.signInWithPassword({
+      email: profile!.email!,
+      password: recoveryPassword,
+    })
+    setVerifyingPw(false)
+    if (error) {
+      setPinMsg({ ok: false, text: 'Incorrect password. Please try again.' })
+      return
+    }
+    setRecoveryVerified(true)
+    setRecoveryPassword('')
+    setNewKioskPin('')
+    setConfirmPin('')
+  }
+
+  const resetPinWithPassword = async () => {
+    setPinMsg(null)
+    if (newKioskPin.length !== 4) {
+      setPinMsg({ ok: false, text: 'PIN must be exactly 4 digits.' }); return
+    }
+    if (newKioskPin !== confirmPin) {
+      setPinMsg({ ok: false, text: 'PINs do not match.' }); return
+    }
+    setSavingPin(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ pin: newKioskPin })
+      .eq('id', profile!.id)
+    setSavingPin(false)
+    if (error) { setPinMsg({ ok: false, text: error.message }); return }
+    setPinMsg({ ok: true, text: 'Kiosk PIN reset successfully.' })
+    setForgotPinMode(false)
+    setRecoveryVerified(false)
+    setNewKioskPin(''); setConfirmPin('')
   }
 
   // Avatar initials
@@ -240,13 +283,48 @@ export default function Profile() {
               {pinMsg.text}
             </div>
           )}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Current PIN</label>
-            <input type="password" maxLength={4} value={currentPin}
-              onChange={e => { setCurrentPin(e.target.value.replace(/\D/g,'').slice(0,4)); setPinMsg(null) }}
-              placeholder="● ● ● ●"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-center tracking-widest text-lg" />
-          </div>
+          {!forgotPinMode ? (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Current PIN</label>
+              <input type="password" maxLength={4} value={currentPin}
+                onChange={e => { setCurrentPin(e.target.value.replace(/\D/g,'').slice(0,4)); setPinMsg(null) }}
+                placeholder="● ● ● ●"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-center tracking-widest text-lg" />
+              <button
+                onClick={() => { setForgotPinMode(true); setPinMsg(null); setCurrentPin('') }}
+                className="text-xs text-teal-600 hover:text-teal-700 mt-1.5 hover:underline">
+                Forgot your PIN?
+              </button>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">PIN Recovery</p>
+              {!recoveryVerified ? (
+                <>
+                  <p className="text-sm text-amber-700">Enter your account password to verify your identity:</p>
+                  <input type="password" value={recoveryPassword}
+                    onChange={e => { setRecoveryPassword(e.target.value); setPinMsg(null) }}
+                    placeholder="Your login password"
+                    className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white" />
+                  <div className="flex gap-2">
+                    <button onClick={() => { setForgotPinMode(false); setPinMsg(null) }}
+                      className="flex-1 border border-gray-200 text-gray-600 font-medium py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={verifyPasswordForPinReset} disabled={verifyingPw || !recoveryPassword}
+                      className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                      {verifyingPw && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {verifyingPw ? 'Verifying…' : 'Verify'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-green-700 font-medium">✓ Identity verified — set your new PIN:</p>
+                </>
+              )}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New PIN</label>
             <input type="password" maxLength={4} value={newKioskPin}
@@ -262,10 +340,12 @@ export default function Profile() {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-center tracking-widest text-lg" />
           </div>
           <p className="text-xs text-gray-400">Must be exactly 4 digits. Do not share your PIN with anyone.</p>
-          <button onClick={changePin} disabled={savingPin}
+          <button
+            onClick={forgotPinMode && recoveryVerified ? resetPinWithPassword : changePin}
+            disabled={savingPin || (forgotPinMode && !recoveryVerified)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
             {savingPin && <Loader2 className="w-4 h-4 animate-spin" />}
-            {savingPin ? 'Updating…' : 'Update Kiosk PIN'}
+            {savingPin ? 'Updating…' : forgotPinMode && recoveryVerified ? 'Reset Kiosk PIN' : 'Update Kiosk PIN'}
           </button>
         </div>
       </div>
