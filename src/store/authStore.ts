@@ -11,6 +11,7 @@ export interface Profile {
   phone: string | null
   employee_id: string | null
   is_active: boolean | null
+  pin: string | null
 }
 
 interface AuthStore {
