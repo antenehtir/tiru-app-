@@ -723,11 +723,14 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                         <span className="text-xs rounded-full px-2 py-0.5 bg-red-100 text-red-600">Inactive</span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                    <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
                       {u.email && !u.email.includes('@tiruplatform.com') && <span>{u.email}</span>}
                       {u.email?.includes('@tiruplatform.com') && <span>Kiosk Staff</span>}
                       {u.department?.name && <span>· {u.department.name}</span>}
                       {u.employee_id && <span>· {u.employee_id}</span>}
+                      {(u as any).created_at && (
+                        <span>· Joined {new Date((u as any).created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                      )}
                     </div>
                   </div>
                   {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -876,6 +879,17 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               {editProfileSuccess && (
                 <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-sm">
                   <CheckCircle2 className="w-4 h-4" />{editProfileSuccess}
+                </div>
+              )}
+              {/* Member since — read only */}
+              {(editProfileTarget as any)?.created_at && (
+                <div className="bg-gray-50 rounded-lg px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Member Since</span>
+                  <span className="text-sm text-gray-700 font-medium">
+                    {new Date((editProfileTarget as any).created_at).toLocaleDateString('en-US', {
+                      day: 'numeric', month: 'long', year: 'numeric'
+                    })}
+                  </span>
                 </div>
               )}
               {([
