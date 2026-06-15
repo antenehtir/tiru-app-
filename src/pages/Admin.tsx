@@ -399,7 +399,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [successMsg,  setSuccessMsg]  = useState<string | null>(null)
   const [inviteForm,  setInviteForm]  = useState({
     full_name: '', email: '', phone: '', role: 'staff',
-    department_id: '', employee_id: '',
+    department_id: '', employee_id: '', kiosk_id: '',
   })
 
   // Edit role modal
@@ -488,7 +488,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     const hasGP = fetched.some(d => d.name.toLowerCase().includes('general practice'))
     setDepts(hasGP ? fetched : [{ id: 'gp', name: 'General Practice (GP)' }, ...fetched])
 
-    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId })
+    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId, kiosk_id: '' })
     setInviteOpen(true)
   }
 
@@ -536,20 +536,31 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         department_id: deptId,
         employee_id:   inviteForm.employee_id.trim() || null,
         facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
+        kiosk_id:      inviteForm.kiosk_id.trim() || null,
       }).eq('id', signUpData.user.id)
     }
 
     // Step 3: Send password-setup email
     await supabase.auth.resetPasswordForEmail(inviteForm.email.trim(), {
-      redirectTo: window.location.origin + '/set-password',
+      redirectTo: `${window.location.origin}/reset-password`,
     })
 
     setSaving(false)
     const name = inviteForm.full_name.trim()
+    const email = inviteForm.email.trim()
     setInviteOpen(false)
-    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '' })
+    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '', kiosk_id: '' })
     setSuccessMsg(`Account created for ${name}. They will receive an email to set their password.`)
-    fetchUsers()
+    await fetchUsers()
+    // Auto-open edit modal for photo/signature upload
+    const { data: newUser } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single()
+    if (newUser) {
+      setTimeout(() => openEditProfile(newUser as Profile), 500)
+    }
   }
 
   const updateRole = async () => {
@@ -764,6 +775,15 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               ))}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Kiosk ID <span className="normal-case font-normal text-gray-400">(optional — auto-assigned if blank)</span>
+                </label>
+                <input type="text" value={inviteForm.kiosk_id}
+                  onChange={e => setInviteForm(f => ({ ...f, kiosk_id: e.target.value.toUpperCase() }))}
+                  placeholder="e.g. K019"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
                 <select value={inviteForm.role} onChange={e => setInviteForm(x => ({ ...x, role: e.target.value }))}
