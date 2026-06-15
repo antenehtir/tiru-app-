@@ -96,7 +96,7 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-600 mb-3 shadow-lg">
             <span className="text-white text-lg font-bold tracking-tight">Tiru</span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">Real-Time Healthcare Operations Intelligence</p>
+          <p className="text-sm text-gray-500 mt-1">Real-Time Health Facility Operations Intelligence</p>
         </div>
 
         {/* ── LOGIN FORM ── */}
