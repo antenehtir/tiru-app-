@@ -37,11 +37,11 @@ type LogRow = {
 
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000
-  const Ï†1 = (lat1 * Math.PI) / 180
-  const Ï†2 = (lat2 * Math.PI) / 180
-  const Î”Ï† = ((lat2 - lat1) * Math.PI) / 180
-  const Î”Î» = ((lng2 - lng1) * Math.PI) / 180
-  const a = Math.sin(Î”Ï†/2)**2 + Math.cos(Ï†1)*Math.cos(Ï†2)*Math.sin(Î”Î»/2)**2
+  const phi1 = (lat1 * Math.PI) / 180
+  const phi2 = (lat2 * Math.PI) / 180
+  const dPhi = ((lat2 - lat1) * Math.PI) / 180
+  const dLam = ((lng2 - lng1) * Math.PI) / 180
+  const a = Math.sin(dPhi/2)**2 + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dLam/2)**2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
 
@@ -329,4 +329,6 @@ export default function Attendance() {
     </div>
   )
 }
+
+
 
