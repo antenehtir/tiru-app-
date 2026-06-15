@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
@@ -38,6 +38,8 @@ export default function AppShell() {
   const canAdmin      = CAN_ADMIN.includes(role)
   const canFlags      = CAN_FLAGS.includes(role)
   const canAudit      = CAN_AUDIT.includes(role)
+
+  const location = useLocation()
 
   const [drawerOpen,        setDrawerOpen]      = useState(false)
   const [unreadNotices,     setUnreadNotices]   = useState(0)
@@ -218,28 +220,23 @@ export default function AppShell() {
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-20"
         style={{background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)'}}>
         <div className="flex">
-          {MOBILE_MAIN.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold transition-all ${
-                  isActive
-                    ? 'text-white'
-                    : 'text-teal-100/70 hover:text-white'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-white/20 shadow-lg' : ''}`}>
-                    <Icon size={18} />
-                  </div>
-                  <span className="tracking-wide">{label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
+          {MOBILE_MAIN.map(({ to, label, icon: Icon }) => {
+            const isActive = location.pathname === to
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold transition-all ${
+                  isActive ? 'text-white' : 'text-teal-100/70 hover:text-white'
+                }`}
+              >
+                <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-white/20 shadow-lg' : ''}`}>
+                  <Icon size={18} />
+                </div>
+                <span className="tracking-wide">{label}</span>
+              </NavLink>
+            )
+          })}
 
           {/* More button */}
           <button
