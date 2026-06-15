@@ -33,6 +33,7 @@ type Profile = {
   avatar_url: string | null
   signature_url: string | null
   kiosk_id: string | null
+  pin: string | null
 }
 
 type Department = {
@@ -415,6 +416,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [editProfileForm,   setEditProfileForm]   = useState({
     full_name: '', email: '', phone: '', employee_id: '',
     role: 'staff', department_id: '', site_id: '', is_active: true,
+    pin: null as string | null,
   })
   const [editProfileErr,    setEditProfileErr]    = useState<string | null>(null)
   const [editProfileSaving, setEditProfileSaving] = useState(false)
@@ -424,6 +426,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [photoPreview,   setPhotoPreview]   = useState<string | null>(null)
   const [sigPreview,     setSigPreview]     = useState<string | null>(null)
   const [lightbox,       setLightbox]       = useState<string | null>(null)
+  const [showPinSet,     setShowPinSet]     = useState(false)
+  const [newPin,         setNewPin]         = useState('')
 
   const fetchUsers = useCallback(async () => {
     setLoading(true); setError(null)
@@ -608,6 +612,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     } else {
       setSigPreview(null)
     }
+    setShowPinSet(false)
+    setNewPin('')
     setEditProfileForm({
       full_name:     u.full_name ?? '',
       email:         u.email ?? '',
@@ -617,6 +623,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       department_id: u.department_id ?? '',
       site_id:       (u as any).site_id ?? '',
       is_active:     u.is_active,
+      pin:           u.pin ?? null,
     })
   }
 
@@ -951,6 +958,48 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <span className={`text-sm font-medium ${editProfileForm.is_active ? 'text-green-600' : 'text-red-500'}`}>
                   {editProfileForm.is_active ? 'Active' : 'Inactive'}
                 </span>
+              </div>
+
+              {/* ── Security / PIN ── */}
+              <div className="border-t border-gray-100 pt-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Kiosk Security</p>
+                <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Kiosk PIN</p>
+                    <p className="text-xs text-gray-400">
+                      {editProfileForm.pin ? '● ● ● ●  PIN is set' : 'No PIN set — staff cannot use kiosk'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowPinSet(p => !p)}
+                    className="text-xs text-teal-600 hover:text-teal-700 font-medium border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors">
+                    {editProfileForm.pin ? 'Change PIN' : 'Set PIN'}
+                  </button>
+                </div>
+                {showPinSet && (
+                  <div className="space-y-2">
+                    <input
+                      type="password"
+                      maxLength={4}
+                      value={newPin}
+                      onChange={e => setNewPin(e.target.value.replace(/\D/g,'').slice(0,4))}
+                      placeholder="Enter 4-digit PIN"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none tracking-widest text-center text-lg"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (newPin.length !== 4) return
+                        await supabase.from('profiles').update({ pin: newPin }).eq('id', editProfileTarget!.id)
+                        setEditProfileForm((f: any) => ({ ...f, pin: newPin }))
+                        setNewPin('')
+                        setShowPinSet(false)
+                      }}
+                      disabled={newPin.length !== 4}
+                      className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-sm transition-colors">
+                      Save PIN
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* ── Photo & Signature Upload ── */}
