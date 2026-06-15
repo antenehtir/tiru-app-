@@ -23,7 +23,8 @@ const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 export default function Kiosk() {
   const [screen, setScreen]         = useState<KioskScreen>('idle')
   const [action, setAction]         = useState<Action | null>(null)
-  const [employeeId, setEmployeeId] = useState('')
+  const [numInput, setNumInput]     = useState('')
+  const [sitePrefix, setSitePrefix] = useState('TMC')
   const [pin, setPin]               = useState('')
   const [staff, setStaff]           = useState<StaffProfile | null>(null)
   const [loading, setLoading]       = useState(false)
@@ -67,19 +68,23 @@ export default function Kiosk() {
     supabase.auth.signInWithPassword({
       email: 'kiosk@tmc1.et',
       password: 'Kiosk1234!'
-    }).then(({ data, error }) => {
-      if (error) console.error('Kiosk auth failed:', error.message)
-      else {
-        console.log('Kiosk auth OK:', data.user?.email)
-        setKioskReady(true)
-      }
+    }).then(async ({ error }) => {
+      if (error) { console.error('Kiosk auth failed:', error.message); return }
+      // Fetch site prefix
+      const { data: siteData } = await supabase
+        .from('sites')
+        .select('prefix')
+        .eq('id', '252a6714-7d37-461f-bad2-826bfc2470b5')
+        .single()
+      if (siteData?.prefix) setSitePrefix(siteData.prefix)
+      setKioskReady(true)
     })
   }, [])
 
   function resetKiosk() {
     setScreen('idle')
     setAction(null)
-    setEmployeeId('')
+    setNumInput('')
     setPin('')
     setStaff(null)
     setErrorMsg('')
@@ -128,29 +133,25 @@ export default function Kiosk() {
   }
 
   async function lookupStaff() {
-    if (!employeeId.trim()) return
+    if (numInput.length < 1) return
     if (!kioskReady) {
       setErrorMsg('Terminal is initializing. Please wait a moment and try again.')
       setScreen('error')
       return
     }
     setLoading(true)
-
-    // Debug: log what we're searching for
-    console.log('Looking up kiosk_id:', employeeId.trim().toUpperCase())
-
+    const fullId = `${sitePrefix}-${numInput.padStart(3, '0')}`
+    console.log('Looking up employee_id:', fullId)
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role, employee_id, kiosk_id, pin, department:departments!profiles_department_id_fkey(id, name)')
-      .eq('kiosk_id', employeeId.trim().toUpperCase())
+      .eq('employee_id', fullId)
       .eq('is_active', true)
       .maybeSingle()
-
     console.log('Lookup result:', JSON.stringify(data), 'Error:', error?.message)
     setLoading(false)
-
     if (error || !data) {
-      setErrorMsg(`ID "${employeeId.trim().toUpperCase()}" not found. Please check and try again.`)
+      setErrorMsg(`Staff ID "${fullId}" not found. Please try again or contact reception.`)
       setScreen('error')
       return
     }
@@ -433,26 +434,47 @@ export default function Kiosk() {
         <ArrowLeft className="w-5 h-5" />Back
       </button>
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="w-16 h-16 rounded-2xl bg-teal-600 flex items-center justify-center mx-auto mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Enter Kiosk ID</h2>
-          <p className="text-gray-500 text-sm mt-1">e.g. K001 — assigned by HR</p>
+          <h2 className="text-2xl font-bold text-gray-900">Enter Your Staff Number</h2>
+          <p className="text-gray-500 text-sm mt-1">Type the number from your ID card</p>
         </div>
-        <input
-          type="text"
-          value={employeeId}
-          onChange={e => setEmployeeId(e.target.value.toUpperCase())}
-          onKeyDown={e => e.key === 'Enter' && lookupStaff()}
-          placeholder="K001"
-          autoFocus
-          className="w-full text-center text-3xl font-mono font-bold border-2 border-gray-200 rounded-2xl px-4 py-5 focus:ring-2 focus:ring-teal-500 outline-none tracking-widest mb-6"
-        />
-        <button onClick={lookupStaff} disabled={loading || !employeeId.trim()}
+
+        {/* ID Display */}
+        <div className="bg-white rounded-2xl border-2 border-gray-200 px-6 py-4 mb-6 text-center">
+          <p className="text-xs text-gray-400 mb-1 uppercase tracking-wider">Staff ID</p>
+          <p className="text-4xl font-mono font-bold text-gray-800 tracking-widest">
+            {sitePrefix}-<span className={numInput ? 'text-teal-600' : 'text-gray-300'}>
+              {numInput ? numInput.padStart(3, '0') : '___'}
+            </span>
+          </p>
+        </div>
+
+        {/* Numeric Keypad */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k, i) => (
+            <button key={i} disabled={k === ''}
+              onClick={() => {
+                if (k === '⌫') { setNumInput(p => p.slice(0,-1)); return }
+                if (k === '') return
+                if (numInput.length < 3) setNumInput(p => p + k)
+              }}
+              className={`h-16 rounded-2xl text-2xl font-bold transition-all active:scale-95 ${
+                k === '' ? 'invisible' :
+                k === '⌫' ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' :
+                'bg-white border-2 border-gray-200 text-gray-800 hover:bg-teal-50 hover:border-teal-300 shadow-sm'
+              }`}>
+              {k}
+            </button>
+          ))}
+        </div>
+
+        <button onClick={lookupStaff} disabled={loading || numInput.length === 0}
           className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-lg transition-colors flex items-center justify-center gap-2">
           {loading && <Loader2 className="w-5 h-5 animate-spin" />}
-          {loading ? 'Looking up…' : 'Continue'}
+          {loading ? 'Looking up…' : `Continue as ${sitePrefix}-${numInput.padStart(3,'0') || '___'}`}
         </button>
       </div>
     </div>
