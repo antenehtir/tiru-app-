@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { Activity, RefreshCw, Phone, Clock, Building2 } from 'lucide-react'
+import { Activity, RefreshCw, Phone, Clock, Building2, Search, X } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +63,10 @@ export default function OnDuty() {
   const [error,     setError]     = useState<string | null>(null)
   const [now,       setNow]       = useState(new Date())
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
+
+  const [deptFilter,   setDeptFilter]   = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<ShiftStatus | null>(null)
+  const [search,       setSearch]       = useState('')
 
   // Clock tick every minute
   useEffect(() => {
@@ -132,6 +136,19 @@ export default function OnDuty() {
     return acc
   }, {})
 
+  const filteredGrouped = Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .reduce<Record<string, EnrichedShift[]>>((acc, [dept, deptShifts]) => {
+      if (deptFilter && dept !== deptFilter) return acc
+      const filtered = deptShifts.filter(s => {
+        if (statusFilter && s.status !== statusFilter) return false
+        if (search && !s.user?.full_name?.toLowerCase().includes(search.toLowerCase())) return false
+        return true
+      })
+      if (filtered.length > 0) acc[dept] = filtered
+      return acc
+    }, {})
+
   // Summary counts
   const counts = shifts.reduce<Record<ShiftStatus, number>>(
     (acc, s) => { acc[s.status]++; return acc },
@@ -179,17 +196,63 @@ export default function OnDuty() {
       {/* ── Summary bar ── */}
       {!loading && shifts.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {([ 'PRESENT', 'EXPECTED', 'LATE', 'UPCOMING', 'CLOCKED_OUT'] as ShiftStatus[]).map(s => (
+          {(['PRESENT', 'EXPECTED', 'LATE', 'UPCOMING', 'CLOCKED_OUT'] as ShiftStatus[]).map(s => (
             counts[s] > 0 && (
-              <span key={s} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${STATUS_META[s].badge}`}>
+              <button key={s}
+                onClick={() => setStatusFilter(statusFilter === s ? null : s)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  STATUS_META[s].badge
+                } ${statusFilter === s ? 'ring-2 ring-offset-1 ring-teal-500 scale-105' : 'hover:scale-105'}`}>
                 <span className={`w-2 h-2 rounded-full ${STATUS_META[s].dot}`} />
                 {counts[s]} {STATUS_META[s].label}
-              </span>
+              </button>
             )
           ))}
+          {(deptFilter || statusFilter || search) && (
+            <button onClick={() => { setDeptFilter(null); setStatusFilter(null); setSearch('') }}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all">
+              <X className="w-3 h-3" /> Clear filters
+            </button>
+          )}
           <span className="text-xs text-gray-400 self-center ml-auto">
             {lastFetch ? `Updated ${lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
+        </div>
+      )}
+
+      {/* ── Search bar ── */}
+      {!loading && shifts.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search staff..."
+            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white"
+          />
+        </div>
+      )}
+
+      {/* ── Department filter chips ── */}
+      {!loading && shifts.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <button
+            onClick={() => setDeptFilter(null)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              !deptFilter ? 'bg-teal-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300'
+            }`}>
+            All Depts
+          </button>
+          {Object.keys(grouped).sort().map(dept => (
+            <button key={dept}
+              onClick={() => setDeptFilter(deptFilter === dept ? null : dept)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                deptFilter === dept ? 'bg-teal-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300'
+              }`}>
+              {dept} ({grouped[dept].length})
+            </button>
+          ))}
         </div>
       )}
 
@@ -216,7 +279,7 @@ export default function OnDuty() {
       )}
 
       {/* ── Grouped cards ── */}
-      {!loading && !error && Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([dept, deptShifts]) => (
+      {!loading && !error && Object.entries(filteredGrouped).map(([dept, deptShifts]) => (
         <div key={dept} className="space-y-2">
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-gray-400" />
@@ -226,70 +289,53 @@ export default function OnDuty() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {deptShifts.map(shift => {
-              const meta   = STATUS_META[shift.status]
-              const startT = shift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00'
-              const endT   = shift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00'
-              const phone  = shift.user?.phone
+              const meta      = STATUS_META[shift.status]
+              const status    = shift.status
+              const latestLog = shift.latestLog
+              const startT    = shift.starts_at.split('T')[1]?.substring(0, 5) ?? '00:00'
+              const endT      = shift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00'
 
               return (
-                <div
-                  key={shift.id}
-                  className={`bg-white rounded-xl border ${meta.border} p-4 space-y-2 shadow-sm`}
-                >
-                  {/* Name + status */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">
-                        {shift.user?.full_name ?? '—'}
+                <div key={shift.id} className={`bg-white rounded-xl border-l-4 ${meta.border} p-4 shadow-sm hover:shadow-md transition-shadow`}>
+                  <div className="flex items-start gap-3">
+                    {/* Avatar */}
+                    <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold text-white ${
+                      status === 'PRESENT'    ? 'bg-teal-500' :
+                      status === 'LATE'       ? 'bg-red-500'  :
+                      status === 'EXPECTED'   ? 'bg-amber-500':
+                      status === 'CLOCKED_OUT'? 'bg-gray-400' : 'bg-blue-400'
+                    }`}>
+                      {(shift.user?.full_name ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className="font-semibold text-gray-900 text-sm truncate">{shift.user?.full_name ?? '—'}</p>
+                        <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${meta.badge}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />{meta.label}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 capitalize mb-1">
+                        {shift.user?.role?.replace(/_/g, ' ')}{shift.specialty ? ` · ${shift.specialty}` : ''}
                       </p>
-                      {shift.user?.role && (
-                        <p className="text-xs text-gray-500 capitalize truncate">
-                          {shift.user.role.replace(/_/g, ' ')}
+                      <p className="text-xs text-gray-500">{fmt12(startT)} – {fmt12(endT)}</p>
+                      {latestLog?.attendance_type === 'clock_in' && (
+                        <p className="text-xs text-teal-600 mt-0.5">
+                          ✓ In at {new Date(latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          {latestLog.within_geofence === false && <span className="text-amber-500 ml-1">(off-site)</span>}
                         </p>
                       )}
-                    </div>
-                    <span className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${meta.badge}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-                      {meta.label}
-                    </span>
-                  </div>
-
-                  {/* Time + specialty */}
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {fmt12(startT)} – {fmt12(endT)}
-                    </span>
-                    {shift.specialty && (
-                      <span className="truncate opacity-75">{shift.specialty}</span>
-                    )}
-                  </div>
-
-                  {/* Clock-in time if present */}
-                  {shift.latestLog?.attendance_type === 'clock_in' && (
-                    <p className="text-xs text-green-600">
-                      Clocked in {new Date(shift.latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      {shift.latestLog.within_geofence === false && (
-                        <span className="ml-1 text-amber-500">(off-site)</span>
+                      {latestLog?.attendance_type === 'clock_out' && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          ✓ Out at {new Date(latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
                       )}
-                    </p>
-                  )}
-                  {shift.latestLog?.attendance_type === 'clock_out' && (
-                    <p className="text-xs text-gray-400">
-                      Clocked out {new Date(shift.latestLog.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  )}
-
-                  {/* Phone */}
-                  {phone && (
-                    <a
-                      href={`tel:${phone}`}
-                      className="inline-flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium transition-colors"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      {phone}
-                    </a>
-                  )}
+                      {shift.user?.phone && (
+                        <a href={`tel:${shift.user.phone}`} className="inline-flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 mt-1">
+                          <Phone className="w-3 h-3" />{shift.user.phone}
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )
             })}
