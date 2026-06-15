@@ -215,37 +215,48 @@ export default function AppShell() {
       </div>
 
       {/* ── Bottom tab bar (mobile) ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 flex z-20">
-        {MOBILE_MAIN.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-medium transition-colors ${
-                isActive ? 'text-teal-700' : 'text-gray-500'
-              }`
-            }
-          >
-            <Icon size={20} />
-            {label}
-          </NavLink>
-        ))}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20"
+        style={{background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)'}}>
+        <div className="flex">
+          {MOBILE_MAIN.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold transition-all ${
+                  isActive
+                    ? 'text-white'
+                    : 'text-teal-100/70 hover:text-white'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-white/20 shadow-lg' : ''}`}>
+                    <Icon size={18} />
+                  </div>
+                  <span className="tracking-wide">{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
 
-        {/* More button */}
-        <button
-          onClick={() => setDrawerOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-medium text-gray-500 relative"
-        >
-          <span className="relative">
-            <MoreHorizontal size={20} />
-            {badgeCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
-                {badgeLabel}
-              </span>
-            )}
-          </span>
-          More
-        </button>
+          {/* More button */}
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold text-teal-100/70 hover:text-white transition-all relative"
+          >
+            <div className="p-1.5 rounded-xl relative">
+              <MoreHorizontal size={18} />
+              {badgeCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {badgeLabel}
+                </span>
+              )}
+            </div>
+            <span className="tracking-wide">More</span>
+          </button>
+        </div>
       </nav>
 
       {/* ── More drawer ── */}

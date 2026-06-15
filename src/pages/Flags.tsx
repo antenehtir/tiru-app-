@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
@@ -30,59 +30,59 @@ const SUMMARY_CARDS = [
   {
     label: 'No Shows',
     icon: UserX,
-    card:  'border-red-200    bg-red-50    dark:bg-red-900/20    dark:border-red-800',
+    card:  'border-red-200    bg-red-50      ',
     icon_: 'text-red-500',
-    count: 'text-red-600      dark:text-red-400',
-    zero:  'text-red-300      dark:text-red-700',
+    count: 'text-red-600     ',
+    zero:  'text-red-300     ',
   },
   {
     label: 'Late Arrivals',
     icon: Clock,
-    card:  'border-orange-200 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-800',
+    card:  'border-orange-200 bg-orange-50',
     icon_: 'text-orange-500',
-    count: 'text-orange-600   dark:text-orange-400',
-    zero:  'text-orange-300   dark:text-orange-700',
+    count: 'text-orange-600  ',
+    zero:  'text-orange-300  ',
   },
   {
     label: 'Outside Geofence',
     icon: MapPin,
-    card:  'border-amber-200  bg-amber-50  dark:bg-amber-900/20  dark:border-amber-800',
+    card:  'border-amber-200  bg-amber-50  ',
     icon_: 'text-amber-500',
-    count: 'text-amber-600    dark:text-amber-400',
-    zero:  'text-amber-300    dark:text-amber-700',
+    count: 'text-amber-600   ',
+    zero:  'text-amber-300   ',
   },
   {
     label: 'Low Attendance',
     icon: TrendingDown,
-    card:  'border-blue-200   bg-blue-50   dark:bg-blue-900/20   dark:border-blue-800',
+    card:  'border-blue-200   bg-blue-50    ',
     icon_: 'text-blue-500',
-    count: 'text-blue-600     dark:text-blue-400',
-    zero:  'text-blue-300     dark:text-blue-700',
+    count: 'text-blue-600    ',
+    zero:  'text-blue-300    ',
   },
 ] as const
 
 const FLAG_RULES = [
   {
     icon: UserX,
-    iconClass: 'text-red-500 bg-red-50 dark:bg-red-900/30',
+    iconClass: 'text-red-500 bg-red-50',
     title: 'No Show',
     desc: 'Staff member has no clock-in recorded 2 hours after their scheduled shift start.',
   },
   {
     icon: Clock,
-    iconClass: 'text-orange-500 bg-orange-50 dark:bg-orange-900/30',
+    iconClass: 'text-orange-500 bg-orange-50',
     title: 'Late Arrival',
     desc: 'Clock-in time is 15 or more minutes after the scheduled shift start.',
   },
   {
     icon: MapPin,
-    iconClass: 'text-amber-500 bg-amber-50 dark:bg-amber-900/30',
+    iconClass: 'text-amber-500 bg-amber-50',
     title: 'Geofence Breach',
     desc: 'GPS location at clock-in was outside the 150 m facility radius.',
   },
   {
     icon: TrendingDown,
-    iconClass: 'text-blue-500 bg-blue-50 dark:bg-blue-900/30',
+    iconClass: 'text-blue-500 bg-blue-50',
     title: 'Low Attendance',
     desc: 'Staff attendance rate fell below 80% over the last 30 days.',
   },
@@ -120,7 +120,7 @@ export default function Flags() {
 
       {/* ── Header ── */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <AlertTriangle className="w-6 h-6 text-red-500" />
           Flags &amp; Alerts
         </h1>
@@ -130,7 +130,7 @@ export default function Flags() {
       </div>
 
       {/* ── Period filter ── */}
-      <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-sm w-fit">
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm w-fit">
         {PERIODS.map(({ value, label }) => (
           <button
             key={value}
@@ -138,7 +138,7 @@ export default function Flags() {
             className={`px-4 py-1.5 font-medium transition-colors ${
               period === value
                 ? 'bg-teal-600 text-white'
-                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
             {label}
@@ -159,13 +159,13 @@ export default function Flags() {
               className={`rounded-xl border-2 p-5 flex flex-col gap-2 ${card}`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{label}</p>
+                <p className="text-sm font-medium text-gray-600">{label}</p>
                 <Icon className={`w-5 h-5 ${icon_}`} />
               </div>
               <p className={`text-3xl font-bold ${count}`}>0</p>
               <p className={`text-xs font-medium ${zero}`}>{subtitle}</p>
               {isLowAttendance && (
-                <p className="text-xs text-blue-400 dark:text-blue-600 -mt-1">30-day rolling</p>
+                <p className="text-xs text-blue-400 -mt-1">30-day rolling</p>
               )}
             </div>
           )
@@ -173,16 +173,16 @@ export default function Flags() {
       </div>
 
       {/* ── Flags table ── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400" />
             Active Flags
           </h2>
         </div>
 
         {/* Table header — hidden on mobile */}
-        <div className="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1.5fr_1fr] gap-4 px-5 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <div className="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1.5fr_1fr] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
           <span>Staff Member</span>
           <span>Department</span>
           <span>Flag Type</span>
@@ -193,8 +193,8 @@ export default function Flags() {
 
         {/* Empty state */}
         <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-          <ShieldCheck className="w-12 h-12 text-teal-300 dark:text-teal-700 mb-4" />
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+          <ShieldCheck className="w-12 h-12 text-teal-300 mb-4" />
+          <p className="text-sm font-medium text-gray-600">
             No flags raised
           </p>
           <p className="text-xs text-gray-400 mt-1 max-w-sm leading-relaxed">
@@ -204,26 +204,26 @@ export default function Flags() {
       </div>
 
       {/* ── How flags work ── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
           <Info className="w-4 h-4 text-teal-500" />
-          <h2 className="text-base font-semibold text-gray-800 dark:text-white">
+          <h2 className="text-base font-semibold text-gray-800">
             How flags work
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100 dark:bg-gray-700">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100">
           {FLAG_RULES.map(({ icon: Icon, iconClass, title, desc }) => (
             <div
               key={title}
-              className="bg-white dark:bg-gray-800 px-5 py-4 flex items-start gap-3"
+              className="bg-white px-5 py-4 flex items-start gap-3"
             >
               <div className={`rounded-lg p-2 flex-shrink-0 ${iconClass}`}>
                 <Icon className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+                <p className="text-sm font-semibold text-gray-800">{title}</p>
+                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
                   {desc}
                 </p>
               </div>
@@ -235,3 +235,4 @@ export default function Flags() {
     </div>
   )
 }
+
