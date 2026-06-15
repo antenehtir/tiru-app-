@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { MapPin } from 'lucide-react'
+import { MapPin, Activity, ChevronRight } from 'lucide-react'
 
 const LEADERSHIP_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
 
@@ -20,6 +20,46 @@ export default function Dashboard() {
   const [myIncidents, setMyIncidents] = useState<any[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [liveStats, setLiveStats] = useState<{
+    present: number; expected: number; late: number; total: number
+  } | null>(null)
+
+  const fetchLive = useCallback(async () => {
+    const now = new Date()
+    const todayStart = new Date(now); todayStart.setHours(0,0,0,0)
+    const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999)
+
+    const { data: shifts } = await supabase
+      .from('shifts')
+      .select('id, starts_at, ends_at, user_id')
+      .gte('starts_at', todayStart.toISOString())
+      .lte('starts_at', todayEnd.toISOString())
+
+    const { data: logs } = await supabase
+      .from('attendance_logs')
+      .select('user_id, log_type, scanned_at')
+      .gte('scanned_at', todayStart.toISOString())
+
+    const logMap = new Map<string, string>()
+    ;(logs ?? []).forEach((l: any) => logMap.set(l.user_id, l.log_type))
+
+    let present = 0, expected = 0, late = 0
+    const nowMs = now.getTime()
+
+    ;(shifts ?? []).forEach((s: any) => {
+      const start = new Date(s.starts_at).getTime()
+      const end = new Date(s.ends_at).getTime()
+      if (nowMs > end) return
+      const lastLog = logMap.get(s.user_id)
+      if (lastLog === 'check_in') { present++; return }
+      if (lastLog === 'check_out') return
+      const minsLate = (nowMs - start) / 60000
+      if (minsLate > 30) late++
+      else if (minsLate > -30) expected++
+    })
+
+    setLiveStats({ present, expected, late, total: present + expected + late })
+  }, [])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -95,7 +135,10 @@ export default function Dashboard() {
     }
 
     fetchData()
-  }, [profile?.id, isLeadership])
+    fetchLive()
+    const interval = setInterval(fetchLive, 120000)
+    return () => clearInterval(interval)
+  }, [profile?.id, isLeadership, fetchLive])
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning'
@@ -170,6 +213,53 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* ── Live Now Strip ── */}
+      {liveStats !== null && (
+        <button
+          onClick={() => navigate('/onduty')}
+          className="w-full mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-teal-600" />
+                </div>
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-teal-500 rounded-full border-2 border-white animate-pulse" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 group-hover:text-teal-700 transition-colors">
+                  Who's On Duty Now
+                </p>
+                <p className="text-xs text-gray-400">Live · updates every 2 min</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-teal-500 transition-colors" />
+          </div>
+          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50">
+            {liveStats.present > 0 && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />{liveStats.present} Present
+              </span>
+            )}
+            {liveStats.expected > 0 && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{liveStats.expected} Expected
+              </span>
+            )}
+            {liveStats.late > 0 && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />{liveStats.late} Late
+              </span>
+            )}
+            {liveStats.total === 0 && (
+              <span className="text-xs text-gray-400">No shifts scheduled yet today</span>
+            )}
+          </div>
+        </button>
+      )}
+
       {isLeadership ? (
         <button
           onClick={() => navigate('/incidents')}
