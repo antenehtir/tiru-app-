@@ -533,8 +533,10 @@ export default function Kiosk() {
 
           <div className="grid grid-cols-3 gap-3">
             {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k, i) => (
-              <button key={i} disabled={k === ''}
-                onClick={() => {
+              <button key={i}
+                disabled={k === ''}
+                onPointerDown={e => {
+                  e.preventDefault()
                   if (k === '⌫') {
                     if (pin.length > 0) setPin(p => p.slice(0,-1))
                     else setNumInput(p => p.slice(0,-1))
@@ -563,6 +565,14 @@ export default function Kiosk() {
             ))}
           </div>
         </div>
+
+        {(numInput.length > 0 || pin.length > 0) && (
+          <button
+            onPointerDown={e => { e.preventDefault(); setNumInput(''); setPin('') }}
+            className="w-full text-teal-200 hover:text-white text-sm font-medium py-2 transition-colors mb-2">
+            ✕ Clear and start over
+          </button>
+        )}
 
         <button onClick={() => lookupAndVerify(numInput, pin)}
           disabled={loading || numInput.length === 0 || pin.length !== 4}
