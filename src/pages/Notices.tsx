@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 
 type NoticePriority = 'info' | 'important' | 'urgent'
-type NoticeAudience = 'all' | 'clinical' | 'administrative' | 'department'
+type NoticeAudience = 'all' | 'clinical' | 'administrative' | 'department' | 'individual'
 
 type Notice = {
   id: string
@@ -45,6 +45,7 @@ const AUDIENCE_OPTIONS: { value: NoticeAudience; label: string }[] = [
   { value:'clinical',       label:'Clinical Staff' },
   { value:'administrative', label:'Administrative Staff' },
   { value:'department',     label:'Specific Department(s)' },
+  { value:'individual',     label:'Specific Staff Members' },
 ]
 
 export default function Notices() {
@@ -60,6 +61,9 @@ export default function Notices() {
   const [formErr,       setFormErr]       = useState<string | null>(null)
   const [departments,   setDepartments]   = useState<DeptOption[]>([])
   const [selectedDepts, setSelectedDepts] = useState<string[]>([])
+  const [staffList,      setStaffList]      = useState<{id:string; full_name:string; role:string; department:string}[]>([])
+  const [selectedStaff,  setSelectedStaff]  = useState<string[]>([])
+  const [staffSearch,    setStaffSearch]    = useState('')
 
   const [form, setForm] = useState({
     title: '', body: '', priority: 'info' as NoticePriority,
@@ -163,6 +167,23 @@ export default function Notices() {
       const { data } = await supabase.from('departments').select('id, name').order('name')
       setDepartments((data as DeptOption[]) ?? [])
     }
+    if (staffList.length === 0) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, role, department:departments!profiles_department_id_fkey(name)')
+        .eq('facility_id', 'd917b86c-682c-4f11-b285-0a1cada2b54b')
+        .eq('is_active', true)
+        .neq('role', 'kiosk')
+        .order('full_name')
+      setStaffList(((data as any[]) ?? []).map(s => ({
+        id: s.id,
+        full_name: s.full_name,
+        role: s.role,
+        department: s.department?.name ?? '—'
+      })))
+    }
+    setSelectedStaff([])
+    setStaffSearch('')
     setModalOpen(true)
   }
 
@@ -172,12 +193,20 @@ export default function Notices() {
     )
   }
 
+  const toggleStaff = (id: string) => {
+    setSelectedStaff(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    )
+  }
+
   const publishNotice = async () => {
     setFormErr(null)
     if (!form.title.trim()) return setFormErr('Title is required.')
     if (!form.body.trim())  return setFormErr('Message body is required.')
     if (form.audience === 'department' && selectedDepts.length === 0)
       return setFormErr('Select at least one department.')
+    if (form.audience === 'individual' && selectedStaff.length === 0)
+      return setFormErr('Select at least one staff member.')
     setSaving(true)
 
     const payload: Record<string, unknown> = {
@@ -191,11 +220,30 @@ export default function Notices() {
                         ? 'broadcast' : null,
       department_id:  form.audience === 'department' ? selectedDepts[0] : null,
       department_ids: form.audience === 'department' ? selectedDepts : null,
+      target_staff_ids: form.audience === 'individual' ? selectedStaff : null,
     }
 
-    const { error: err } = await supabase.from('notices').insert(payload)
-    setSaving(false)
-    if (err) { setFormErr(err.message); return }
+    if (form.audience === 'individual') {
+      const inserts = selectedStaff.map(userId => ({
+        author_id:      profile!.id,
+        title:          form.title.trim(),
+        body:           form.body.trim(),
+        priority:       form.priority,
+        audience:       'individual' as NoticeAudience,
+        pinned:         form.pinned,
+        audience_type:  'personal' as const,
+        target_user_id: userId,
+        department_id:  null,
+        department_ids: null,
+      }))
+      const { error: err } = await supabase.from('notices').insert(inserts)
+      setSaving(false)
+      if (err) { setFormErr(err.message); return }
+    } else {
+      const { error: err } = await supabase.from('notices').insert(payload)
+      setSaving(false)
+      if (err) { setFormErr(err.message); return }
+    }
     setModalOpen(false)
     fetchNotices()
   }
@@ -389,6 +437,52 @@ export default function Notices() {
                   {selectedDepts.length > 0 && (
                     <p className="text-xs text-teal-600 mt-1.5 font-medium">
                       {selectedDepts.length} department{selectedDepts.length > 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                </div>
+              )}
+              {form.audience === 'individual' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    Staff Members * <span className="normal-case font-normal text-gray-400">(select one or more)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={staffSearch}
+                    onChange={e => setStaffSearch(e.target.value)}
+                    placeholder="Search by name or department..."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none mb-2"
+                  />
+                  <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100 max-h-52 overflow-y-auto">
+                    {staffList
+                      .filter(s =>
+                        s.full_name.toLowerCase().includes(staffSearch.toLowerCase()) ||
+                        s.department.toLowerCase().includes(staffSearch.toLowerCase()) ||
+                        s.role.toLowerCase().includes(staffSearch.toLowerCase())
+                      )
+                      .map(s => (
+                        <label key={s.id}
+                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors text-sm ${
+                            selectedStaff.includes(s.id) ? 'bg-teal-50' : 'hover:bg-gray-50'
+                          }`}>
+                          <input
+                            type="checkbox"
+                            checked={selectedStaff.includes(s.id)}
+                            onChange={() => toggleStaff(s.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-medium truncate ${selectedStaff.includes(s.id) ? 'text-teal-700' : 'text-gray-700'}`}>
+                              {s.full_name}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate">{s.role.replace(/_/g, ' ')} · {s.department}</p>
+                          </div>
+                        </label>
+                      ))}
+                  </div>
+                  {selectedStaff.length > 0 && (
+                    <p className="text-xs text-teal-600 mt-1.5 font-medium">
+                      {selectedStaff.length} staff member{selectedStaff.length > 1 ? 's' : ''} selected
                     </p>
                   )}
                 </div>
