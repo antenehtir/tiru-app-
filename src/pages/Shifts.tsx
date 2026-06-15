@@ -75,6 +75,7 @@ const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
   amber:  { card: 'border-amber-200 bg-amber-50 hover:bg-amber-100',  icon: 'text-amber-500' },
   teal:   { card: 'border-teal-200 bg-teal-50 hover:bg-teal-100',     icon: 'text-teal-500' },
   pink:   { card: 'border-pink-200 bg-pink-50 hover:bg-pink-100',     icon: 'text-pink-500' },
+  gray:   { card: 'border-gray-200 bg-gray-50 hover:bg-gray-100',     icon: 'text-gray-500' },
 }
 
 const CAN_ADD_SHIFT = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr', 'department_head', 'coordinator']
