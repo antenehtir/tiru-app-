@@ -529,6 +529,21 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         ? (gpDept?.id ?? null)
         : (inviteForm.department_id || null)
 
+      // Generate kiosk ID if not provided
+      let resolvedKioskId = inviteForm.kiosk_id.trim() || null
+      if (!resolvedKioskId) {
+        const { data: kioskData } = await supabase
+          .from('profiles')
+          .select('kiosk_id')
+          .like('kiosk_id', 'K%')
+          .order('kiosk_id', { ascending: false })
+          .limit(1)
+        const lastNum = kioskData?.[0]?.kiosk_id
+          ? parseInt(kioskData[0].kiosk_id.slice(1))
+          : 0
+        resolvedKioskId = `K${String(lastNum + 1).padStart(3, '0')}`
+      }
+
       await supabase.from('profiles').update({
         full_name:     inviteForm.full_name.trim(),
         role:          inviteForm.role,
@@ -536,7 +551,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         department_id: deptId,
         employee_id:   inviteForm.employee_id.trim() || null,
         facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
-        kiosk_id:      inviteForm.kiosk_id.trim() || null,
+        kiosk_id:      resolvedKioskId,
       }).eq('id', signUpData.user.id)
     }
 
