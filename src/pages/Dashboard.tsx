@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { MapPin, Activity, ChevronRight } from 'lucide-react'
+import { MapPin, Activity, ChevronRight, AlertTriangle } from 'lucide-react'
 
 const LEADERSHIP_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
 
@@ -22,6 +22,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [liveStats, setLiveStats] = useState<{
     present: number; expected: number; late: number; total: number
+  } | null>(null)
+  const [flagStats, setFlagStats] = useState<{
+    noShows: number; lateArrivals: number; geofence: number
   } | null>(null)
 
   const fetchLive = useCallback(async () => {
@@ -60,6 +63,49 @@ export default function Dashboard() {
 
     setLiveStats({ present, expected, late, total: present + expected + late })
   }, [])
+
+  const fetchFlags = useCallback(async () => {
+    if (!isLeadership) return
+    const now = new Date()
+    const todayStart = new Date(now); todayStart.setHours(0,0,0,0)
+    const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999)
+
+    const { data: shifts } = await supabase
+      .from('shifts')
+      .select('id, starts_at, ends_at, user_id')
+      .gte('starts_at', todayStart.toISOString())
+      .lte('starts_at', todayEnd.toISOString())
+
+    const { data: logs } = await supabase
+      .from('attendance_logs')
+      .select('user_id, log_type, scanned_at, within_geofence')
+      .gte('scanned_at', todayStart.toISOString())
+
+    const logMap = new Map<string, any>()
+    ;(logs ?? []).forEach((l: any) => logMap.set(l.user_id, l))
+
+    let noShows = 0, lateArrivals = 0, geofence = 0
+    const nowMs = now.getTime()
+
+    ;(shifts ?? []).forEach((s: any) => {
+      const start = new Date(s.starts_at).getTime()
+      if (nowMs < start) return
+      const log = logMap.get(s.user_id)
+      const minsAfterStart = (nowMs - start) / 60000
+      if (!log) {
+        if (minsAfterStart > 120) noShows++
+        return
+      }
+      if (log.log_type === 'check_in' || log.log_type === 'clock_in') {
+        const clockInMs = new Date(log.scanned_at).getTime()
+        const minsLate = (clockInMs - start) / 60000
+        if (minsLate > 15) lateArrivals++
+        if (log.within_geofence === false) geofence++
+      }
+    })
+
+    setFlagStats({ noShows, lateArrivals, geofence })
+  }, [isLeadership])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -136,7 +182,8 @@ export default function Dashboard() {
 
     fetchData()
     fetchLive()
-    const interval = setInterval(fetchLive, 120000)
+    fetchFlags()
+    const interval = setInterval(() => { fetchLive(); fetchFlags() }, 120000)
     return () => clearInterval(interval)
   }, [profile?.id, isLeadership, fetchLive])
 
@@ -255,6 +302,63 @@ export default function Dashboard() {
             )}
             {liveStats.total === 0 && (
               <span className="text-xs text-gray-400">No shifts scheduled yet today</span>
+            )}
+          </div>
+        </button>
+      )}
+
+      {/* ── Flags & Alerts Strip (leadership only) ── */}
+      {isLeadership && flagStats !== null && (
+        <button
+          onClick={() => navigate('/flags')}
+          className="w-full mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  flagStats.noShows > 0 ? 'bg-red-50' : 'bg-green-50'
+                }`}>
+                  <AlertTriangle className={`w-5 h-5 ${
+                    flagStats.noShows > 0 ? 'text-red-500' : 'text-green-500'
+                  }`} />
+                </div>
+                {(flagStats.noShows > 0 || flagStats.lateArrivals > 0) && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
+                  Flags & Alerts
+                </p>
+                <p className="text-xs text-gray-400">Today's attendance alerts</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-400 transition-colors" />
+          </div>
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50 flex-wrap">
+            {flagStats.noShows === 0 && flagStats.lateArrivals === 0 && flagStats.geofence === 0 ? (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />All clear today
+              </span>
+            ) : (
+              <>
+                {flagStats.noShows > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />{flagStats.noShows} No Show{flagStats.noShows > 1 ? 's' : ''}
+                  </span>
+                )}
+                {flagStats.lateArrivals > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-orange-700 bg-orange-50 px-2.5 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />{flagStats.lateArrivals} Late
+                  </span>
+                )}
+                {flagStats.geofence > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{flagStats.geofence} Off-site
+                  </span>
+                )}
+              </>
             )}
           </div>
         </button>
