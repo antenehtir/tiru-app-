@@ -877,7 +877,7 @@ export default function Kiosk() {
   // ── NOTICES SCREEN ───────────────────────────────────────────────────────
   if (screen === 'notices') return (
     <div className="min-h-screen bg-gray-50 flex flex-col p-8 pt-16">
-      <button onClick={resetKiosk} className="absolute top-6 left-6 flex items-center gap-2 text-gray-400 hover:text-gray-600">
+      <button onClick={() => staff ? setScreen('dashboard') : resetKiosk()} className="absolute top-6 left-6 flex items-center gap-2 text-gray-400 hover:text-gray-600">
         <ArrowLeft className="w-5 h-5" />Back
       </button>
       <div className="w-full max-w-lg mx-auto">
@@ -905,7 +905,7 @@ export default function Kiosk() {
             ))}
           </div>
         )}
-        <button onClick={resetKiosk} className="w-full mt-8 bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-2xl text-lg transition-colors">
+        <button onClick={() => staff ? setScreen('dashboard') : resetKiosk()} className="w-full mt-8 bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-2xl text-lg transition-colors">
           Done
         </button>
       </div>
