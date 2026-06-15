@@ -10,7 +10,7 @@ import {
   User, Building2, AlertCircle, Loader2,
   Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
   Upload, Edit2, Trash2, UserCheck, CheckCircle2, RefreshCw,
-  Phone, Activity,
+  Phone, Activity, Users,
 } from 'lucide-react'
 import ShiftUpload from '../components/ShiftUpload'
 
@@ -34,7 +34,7 @@ type ShiftRow = {
 type ShiftAction   = 'edit' | 'reassign' | 'delete'
 type ProfileOption = { id: string; full_name: string }
 type DeptOption    = { id: string; name: string }
-type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception'
+type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception' | 'Other Staff'
 type ScheduleType  = 'regular' | 'duty'
 type ViewMode      = 'week' | 'month'
 type NavStep       = 'group' | 'specialty' | 'calendar'
@@ -50,7 +50,8 @@ const GROUPS: { name: GroupName; icon: LucideIcon; color: string; description: s
   { name: 'Midwives',        icon: Baby,        color: 'purple', description: 'Midwifery staff' },
   { name: 'Pharmacy',        icon: Pill,        color: 'amber',  description: 'Pharmacists & technicians' },
   { name: 'Laboratory',      icon: Microscope,  color: 'teal',   description: 'Lab technicians' },
-  { name: 'Reception',       icon: PhoneCall,   color: 'pink',   description: 'Reception & front desk' },
+  { name: 'Reception',   icon: PhoneCall, color: 'pink', description: 'Reception & front desk' },
+  { name: 'Other Staff', icon: Users,     color: 'gray', description: 'IT, Janitorial & other departments' },
 ]
 
 const GROUP_CONFIG: Record<GroupName, {
@@ -63,7 +64,8 @@ const GROUP_CONFIG: Record<GroupName, {
   'Midwives':        { departmentName: 'Midwifery', specialties: ['Ward', 'OPD', 'ICU'],         skipLevel2: false },
   'Pharmacy':        { departmentName: 'Pharmacy',   specialties: [], skipLevel2: true },
   'Laboratory':      { departmentName: 'Laboratory', specialties: [], skipLevel2: true },
-  'Reception':       { departmentName: 'Reception',  specialties: [], skipLevel2: true },
+  'Reception':   { departmentName: 'Reception', specialties: [], skipLevel2: true },
+  'Other Staff': { departmentName: 'OTHER',     specialties: [], skipLevel2: true },
 }
 
 const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
@@ -329,6 +331,7 @@ export default function Shifts() {
     'General Practice': 'Medical Doctors',
     'Nursing': 'Nurses', 'Midwifery': 'Midwives',
     'Pharmacy': 'Pharmacy', 'Laboratory': 'Laboratory', 'Reception': 'Reception',
+    'IT': 'Other Staff', 'Janitorial': 'Other Staff', 'Quality': 'Other Staff',
   }
   const deptHeadGroup: GroupName | null =
     role === 'department_head' && userDeptName ? (DEPT_TO_GROUP[userDeptName] ?? null) : null
@@ -378,7 +381,14 @@ export default function Shifts() {
 
     let result = (data as ShiftRow[]) ?? []
     const config = GROUP_CONFIG[selectedGroup]
-    if (config.departmentName) {
+    if (selectedGroup === 'Other Staff') {
+      const coreDepNames = ['Nursing','Midwifery','Pharmacy','Laboratory','Reception',
+        'General Practice','Internal Medicine','Emergency','Surgery',
+        'Pediatrics','Gynecology & Obstetrics','Radiology']
+      result = result.filter(s =>
+        s.department?.name && !coreDepNames.includes(s.department.name)
+      )
+    } else if (config.departmentName) {
       result = result.filter(s => s.department?.name === config.departmentName)
     }
     setShifts(result)
