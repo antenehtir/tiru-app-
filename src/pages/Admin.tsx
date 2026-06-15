@@ -499,7 +499,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
     setSaving(true)
 
-    // Step 1: Create auth user via signUp â€" the DB trigger auto-creates the profile
+    // Step 1: Create auth user via signUp — the DB trigger auto-creates the profile
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email:    inviteForm.email.trim(),
       password: 'TiruAMC2026!' + Math.random().toString(36).slice(2),
@@ -524,9 +524,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
     // Step 2: Update the auto-created profile with remaining fields
     if (signUpData?.user?.id) {
-      const deptId = inviteForm.department_id === 'gp' || !inviteForm.department_id
-        ? null
-        : inviteForm.department_id
+      const gpDept = depts.find((d: DeptOption) => d.name === 'General Practice')
+      const deptId = inviteForm.department_id === 'gp'
+        ? (gpDept?.id ?? null)
+        : (inviteForm.department_id || null)
 
       await supabase.from('profiles').update({
         full_name:     inviteForm.full_name.trim(),
