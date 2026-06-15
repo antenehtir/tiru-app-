@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
 import {
@@ -30,17 +30,17 @@ const CAN_VIEW_ALL = ['ceo','general_manager','medical_director','hr','super_adm
 const CAN_ACTION   = ['ceo','general_manager','medical_director','super_admin']
 
 const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; dot: string }> = {
-  low:      { label:'Low',      color:'bg-gray-100 text-gray-600',            dot:'bg-gray-400' },
-  medium:   { label:'Medium',   color:'bg-amber-100 text-amber-700',     dot:'bg-amber-400' },
-  high:     { label:'High',     color:'bg-orange-100 text-orange-700', dot:'bg-orange-500' },
-  critical: { label:'Critical', color:'bg-red-100 text-red-700',             dot:'bg-red-600' },
+  low:      { label:'Low',      color:'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',            dot:'bg-gray-400' },
+  medium:   { label:'Medium',   color:'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',     dot:'bg-amber-400' },
+  high:     { label:'High',     color:'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', dot:'bg-orange-500' },
+  critical: { label:'Critical', color:'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',             dot:'bg-red-600' },
 }
 
 const STATUS_CONFIG: Record<IncidentStatus, { label: string; color: string }> = {
-  submitted:    { label:'Submitted',    color:'bg-blue-100 text-blue-700' },
-  under_review: { label:'Under Review', color:'bg-purple-100 text-purple-700' },
-  resolved:     { label:'Resolved',     color:'bg-green-100 text-green-700' },
-  dismissed:    { label:'Dismissed',    color:'bg-gray-100 text-gray-500' },
+  submitted:    { label:'Submitted',    color:'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  under_review: { label:'Under Review', color:'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
+  resolved:     { label:'Resolved',     color:'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  dismissed:    { label:'Dismissed',    color:'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' },
 }
 
 const CATEGORIES: { value: IncidentCategory; label: string }[] = [
@@ -158,17 +158,17 @@ export default function Incidents() {
     const { data: { user } } = await supabase.auth.getUser()
     const statusMessages: Record<string, { title: string; body: string; priority: string }> = {
       under_review: {
-        title: 'Incident Report â€” Under Review',
+        title: 'Incident Report — Under Review',
         body: `Your incident report "${inc?.title}" is currently under review by leadership. You will be notified when a resolution is reached.`,
         priority: 'info',
       },
       resolved: {
-        title: 'âœ“ Incident Report â€” Resolved',
+        title: '✓ Incident Report — Resolved',
         body: `Your incident report "${inc?.title}" has been reviewed and marked as resolved. Thank you for helping maintain facility safety standards.`,
         priority: 'info',
       },
       dismissed: {
-        title: 'Incident Report â€” Closed',
+        title: 'Incident Report — Closed',
         body: `Your incident report "${inc?.title}" has been reviewed and closed. Please contact your department head or HR if you have questions.`,
         priority: 'important',
       },
@@ -214,7 +214,7 @@ export default function Incidents() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <ShieldAlert className="w-6 h-6 text-teal-500" />Incident Reports
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">Report and track facility incidents</p>
@@ -225,7 +225,7 @@ export default function Incidents() {
         </button>
       </div>
 
-      <div className="flex items-center justify-between border-b border-gray-200">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
         <div className="flex gap-1">
           {tabs.filter(t => t.show).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -244,12 +244,12 @@ export default function Incidents() {
       {isLeadership && tab === 'all' && showFilters && (
         <div className="flex gap-3 flex-wrap">
           <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value as Severity | 'all')}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
             <option value="all">All severities</option>
             {SEVERITIES.map(s => <option key={s} value={s}>{SEVERITY_CONFIG[s].label}</option>)}
           </select>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as IncidentStatus | 'all')}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
             <option value="all">All statuses</option>
             {(Object.keys(STATUS_CONFIG) as IncidentStatus[]).map(s => (
               <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
@@ -266,7 +266,7 @@ export default function Incidents() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loadingâ€¦
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading…
         </div>
       ) : reports.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
@@ -280,18 +280,18 @@ export default function Incidents() {
             const isOpen = expanded.has(rep.id)
             const reporter = rep.anonymous && tab === 'all' ? 'Anonymous' : (rep.reporter?.full_name ?? 'Unknown')
             return (
-              <div key={rep.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                <div className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(rep.id)}>
+              <div key={rep.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50" onClick={() => toggleExpand(rep.id)}>
                   <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${sev.dot}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm text-gray-900">{rep.title}</span>
+                      <span className="font-medium text-sm text-gray-900 dark:text-white">{rep.title}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${sev.color}`}>{sev.label}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${stat.color}`}>{stat.label}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
                       <span className="capitalize">{rep.category.replace('_',' ')}</span>
-                      {isLeadership && <span>Â· {reporter}</span>}
+                      {isLeadership && <span>· {reporter}</span>}
                       <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{new Date(rep.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
@@ -299,12 +299,12 @@ export default function Incidents() {
                 </div>
 
                 {isOpen && (
-                  <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
-                    <p className="text-sm text-gray-700">{rep.description}</p>
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{rep.description}</p>
                     {rep.location    && <p className="text-xs text-gray-500"><span className="font-semibold">Location:</span> {rep.location}</p>}
                     {rep.occurred_at && <p className="text-xs text-gray-500"><span className="font-semibold">Occurred:</span> {new Date(rep.occurred_at).toLocaleString()}</p>}
                     {rep.resolution_note && (
-                      <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
                         <span className="font-semibold block mb-0.5">Resolution note:</span>{rep.resolution_note}
                       </p>
                     )}
@@ -337,10 +337,10 @@ export default function Incidents() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-10">
               <h2 className="text-lg font-semibold">Report an Incident</h2>
-              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button onClick={() => setModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {formErr && (
@@ -352,20 +352,20 @@ export default function Incidents() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Title *</label>
                 <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   placeholder="Brief summary of the incident"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Category</label>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as IncidentCategory }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Severity</label>
                   <select value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value as Severity }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
                     {SEVERITIES.map(s => <option key={s} value={s}>{SEVERITY_CONFIG[s].label}</option>)}
                   </select>
                 </div>
@@ -373,36 +373,36 @@ export default function Incidents() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description *</label>
                 <textarea rows={4} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Describe what happened in detailâ€¦"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                  placeholder="Describe what happened in detail…"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Location</label>
                   <input type="text" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                     placeholder="e.g. Ward 3, Pharmacy"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">When it occurred</label>
                   <input type="datetime-local" value={form.occurred_at} onChange={e => setForm(f => ({ ...f, occurred_at: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
               </div>
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <div onClick={() => setForm(f => ({ ...f, anonymous: !f.anonymous }))}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${form.anonymous ? 'bg-teal-500' : 'bg-gray-300'}`}>
+                  className={`relative w-10 h-5 rounded-full transition-colors ${form.anonymous ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.anonymous ? 'translate-x-5' : ''}`} />
                 </div>
-                <span className="text-sm text-gray-700">Submit anonymously</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Submit anonymously</span>
                 <span className="text-xs text-gray-400">(your name hidden from leadership)</span>
               </label>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={submitReport} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submittingâ€¦' : 'Submit Report'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submitting…' : 'Submit Report'}
               </button>
             </div>
           </div>
@@ -411,10 +411,10 @@ export default function Incidents() {
 
       {reviewMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="text-lg font-semibold">Update Status</h2>
-              <button onClick={() => { setReviewMode(null); setResolutionNote(''); setReviewErr(null) }} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setReviewMode(null); setResolutionNote(''); setReviewErr(null) }} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {reviewErr && (
@@ -425,7 +425,7 @@ export default function Incidents() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Status</label>
                 <select value={reviewStatus} onChange={e => { setReviewStatus(e.target.value as IncidentStatus); setReviewErr(null) }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="under_review">Under Review</option>
                   <option value="resolved">Resolved</option>
                   <option value="dismissed">Dismissed</option>
@@ -440,16 +440,16 @@ export default function Incidents() {
                     : 'Note (optional)'}
                 </label>
                 <textarea rows={3} value={resolutionNote} onChange={e => setResolutionNote(e.target.value)}
-                  placeholder={reviewStatus === 'dismissed' ? 'Required â€” explain why this report is being dismissedâ€¦' : 'Add a note or resolution detailâ€¦'}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 outline-none resize-none ${
+                  placeholder={reviewStatus === 'dismissed' ? 'Required — explain why this report is being dismissed…' : 'Add a note or resolution detail…'}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:ring-2 outline-none resize-none ${
                     reviewStatus === 'dismissed'
-                      ? 'border-amber-300 focus:ring-amber-400'
-                      : 'border-gray-200 focus:ring-teal-500'
+                      ? 'border-amber-300 dark:border-amber-600 focus:ring-amber-400'
+                      : 'border-gray-200 dark:border-gray-600 focus:ring-teal-500'
                   }`} />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
-              <button onClick={() => { setReviewMode(null); setResolutionNote(''); setReviewErr(null) }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={() => { setReviewMode(null); setResolutionNote(''); setReviewErr(null) }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
               <button onClick={applyReview} disabled={reviewing}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {reviewing && <Loader2 className="w-4 h-4 animate-spin" />}Update
@@ -461,4 +461,3 @@ export default function Incidents() {
     </div>
   )
 }
-
