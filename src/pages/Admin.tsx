@@ -401,7 +401,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [successMsg,  setSuccessMsg]  = useState<string | null>(null)
   const [inviteForm,  setInviteForm]  = useState({
     full_name: '', email: '', phone: '', role: 'staff',
-    department_id: '', employee_id: '', kiosk_id: '',
+    department_id: '', employee_id: '',
   })
 
   // Edit role modal
@@ -493,7 +493,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     const hasGP = fetched.some(d => d.name.toLowerCase().includes('general practice'))
     setDepts(hasGP ? fetched : [{ id: 'gp', name: 'General Practice (GP)' }, ...fetched])
 
-    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId, kiosk_id: '' })
+    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId })
     setInviteOpen(true)
   }
 
@@ -534,21 +534,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         ? (gpDept?.id ?? null)
         : (inviteForm.department_id || null)
 
-      // Generate kiosk ID if not provided
-      let resolvedKioskId = inviteForm.kiosk_id.trim() || null
-      if (!resolvedKioskId) {
-        const { data: kioskData } = await supabase
-          .from('profiles')
-          .select('kiosk_id')
-          .like('kiosk_id', 'K%')
-          .order('kiosk_id', { ascending: false })
-          .limit(1)
-        const lastNum = kioskData?.[0]?.kiosk_id
-          ? parseInt(kioskData[0].kiosk_id.slice(1))
-          : 0
-        resolvedKioskId = `K${String(lastNum + 1).padStart(3, '0')}`
-      }
-
       await supabase.from('profiles').update({
         full_name:     inviteForm.full_name.trim(),
         role:          inviteForm.role,
@@ -556,7 +541,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         department_id: deptId,
         employee_id:   inviteForm.employee_id.trim() || null,
         facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
-        kiosk_id:      resolvedKioskId,
       }).eq('id', signUpData.user.id)
     }
 
@@ -571,7 +555,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     const name = inviteForm.full_name.trim()
     const email = inviteForm.email.trim()
     setInviteOpen(false)
-    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '', kiosk_id: '' })
+    setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: '' })
     setSuccessMsg(`Account created for ${name}. They will receive an email to set their password.`)
     await fetchUsers()
     // Auto-open edit modal for photo/signature upload
@@ -744,7 +728,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       {u.email?.includes('@tiruplatform.com') && <span>Kiosk Staff</span>}
                       {u.department?.name && <span>· {u.department.name}</span>}
                       {u.employee_id && <span>· {u.employee_id}</span>}
-                      {u.kiosk_id && <span>· Kiosk: {u.kiosk_id}</span>}
                     </div>
                   </div>
                   {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -809,15 +792,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   value={inviteForm.email}
                   onChange={e => setInviteForm(x => ({ ...x, email: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Kiosk ID <span className="normal-case font-normal text-gray-400">(optional — auto-assigned if blank)</span>
-                </label>
-                <input type="text" value={inviteForm.kiosk_id}
-                  onChange={e => setInviteForm(f => ({ ...f, kiosk_id: e.target.value.toUpperCase() }))}
-                  placeholder="e.g. K019"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
