@@ -489,7 +489,7 @@ export default function Kiosk() {
           <p className="text-xs text-teal-300 mb-1 uppercase tracking-wider">Staff ID</p>
           <p className="text-4xl font-mono font-bold text-white tracking-widest">
             {sitePrefix}-<span className={numInput ? 'text-teal-300' : 'text-white/30'}>
-              {numInput || '___'}
+              {numInput ? numInput.padStart(3, '0') : '___'}
             </span>
           </p>
         </div>
@@ -541,8 +541,8 @@ export default function Kiosk() {
                     return
                   }
                   if (k === '') return
-                  // Fill ID first (up to 5 digits), then PIN (up to 4)
-                  if (numInput.length < 5 && pin.length === 0) {
+                  // Fill ID first (up to 3 digits), then PIN (up to 4)
+                  if (numInput.length < 3 && pin.length === 0) {
                     setNumInput(p => p + k)
                   } else if (pin.length < 4) {
                     const newPin = pin + k
