@@ -95,7 +95,7 @@ export default function Profile() {
 
   const changePin = async () => {
     setPinMsg(null)
-    if (currentPin !== (profile as any)?.pin) {
+    if (currentPin !== profile?.pin) {
       setPinMsg({ ok: false, text: 'Current PIN is incorrect.' }); return
     }
     if (newKioskPin.length !== 4) {
