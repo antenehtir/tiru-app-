@@ -509,6 +509,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         },
       },
     })
+    console.log('SignUp result:', JSON.stringify(signUpData), 'Error:', signUpError?.message)
 
     if (signUpError) {
       setSaving(false)
