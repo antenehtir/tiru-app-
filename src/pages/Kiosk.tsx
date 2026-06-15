@@ -494,6 +494,12 @@ export default function Kiosk() {
           </p>
         </div>
 
+        {numInput.length > 0 && pin.length === 0 && (
+          <p className="text-center text-teal-200 text-xs mb-1 animate-pulse">
+            ↓ Now enter your PIN
+          </p>
+        )}
+
         {/* PIN dots */}
         <div className="bg-white/10 rounded-2xl px-6 py-4 mb-6 text-center border-2 border-white/20">
           <p className="text-xs text-teal-300 mb-2 uppercase tracking-wider">PIN</p>
@@ -536,12 +542,13 @@ export default function Kiosk() {
                   }
                   if (k === '') return
                   // Fill ID first (up to 5 digits), then PIN (up to 4)
-                  if (numInput.length < 5) {
+                  if (numInput.length < 5 && pin.length === 0) {
                     setNumInput(p => p + k)
                   } else if (pin.length < 4) {
-                    setPin(p => p + k)
-                    if (pin.length === 3) {
-                      setTimeout(() => lookupAndVerify(numInput, pin + k), 100)
+                    const newPin = pin + k
+                    setPin(newPin)
+                    if (newPin.length === 4) {
+                      setTimeout(() => lookupAndVerify(numInput, newPin), 100)
                     }
                   }
                 }}
