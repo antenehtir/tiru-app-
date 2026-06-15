@@ -488,8 +488,8 @@ export default function Kiosk() {
         <div className="bg-white/10 rounded-2xl px-6 py-4 mb-3 text-center border-2 border-white/20">
           <p className="text-xs text-teal-300 mb-1 uppercase tracking-wider">Staff ID</p>
           <p className="text-4xl font-mono font-bold text-white tracking-widest">
-            {sitePrefix}-<span className={numInput ? 'text-teal-300' : 'text-white/30'}>
-              {numInput ? numInput.padStart(3, '0') : '___'}
+            TMC-<span className={numInput ? 'text-teal-300' : 'text-white/30'}>
+              {numInput || '___'}
             </span>
           </p>
         </div>
