@@ -122,8 +122,9 @@ export default function Profile() {
   const verifyPasswordForPinReset = async () => {
     setVerifyingPw(true)
     setPinMsg(null)
+    const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.auth.signInWithPassword({
-      email: profile!.email!,
+      email: user?.email ?? profile!.email!,
       password: recoveryPassword,
     })
     setVerifyingPw(false)
