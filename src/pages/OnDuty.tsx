@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { Activity, RefreshCw, Phone, Clock, Building2, Search, X } from 'lucide-react'
+import { Activity, RefreshCw, Phone, Clock, Building2, X } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,6 @@ export default function OnDuty() {
 
   const [deptFilter,   setDeptFilter]   = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<ShiftStatus | null>(null)
-  const [search,       setSearch]       = useState('')
 
   // Clock tick every minute
   useEffect(() => {
@@ -142,7 +141,6 @@ export default function OnDuty() {
       if (deptFilter && dept !== deptFilter) return acc
       const filtered = deptShifts.filter(s => {
         if (statusFilter && s.status !== statusFilter) return false
-        if (search && !s.user?.full_name?.toLowerCase().includes(search.toLowerCase())) return false
         return true
       })
       if (filtered.length > 0) acc[dept] = filtered
@@ -208,8 +206,8 @@ export default function OnDuty() {
               </button>
             )
           ))}
-          {(deptFilter || statusFilter || search) && (
-            <button onClick={() => { setDeptFilter(null); setStatusFilter(null); setSearch('') }}
+          {(deptFilter || statusFilter) && (
+            <button onClick={() => { setDeptFilter(null); setStatusFilter(null) }}
               className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all">
               <X className="w-3 h-3" /> Clear filters
             </button>
@@ -217,20 +215,6 @@ export default function OnDuty() {
           <span className="text-xs text-gray-400 self-center ml-auto">
             {lastFetch ? `Updated ${lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
-        </div>
-      )}
-
-      {/* ── Search bar ── */}
-      {!loading && shifts.length > 0 && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search staff..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white"
-          />
         </div>
       )}
 
