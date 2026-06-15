@@ -13,7 +13,6 @@ type StaffProfile = {
   full_name: string
   role: string
   employee_id: string
-  kiosk_id: string | null
   department: { id: string; name: string } | null
   pin: string | null
 }
@@ -146,7 +145,7 @@ export default function Kiosk() {
     console.log('Looking up employee_id:', fullId)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, role, employee_id, kiosk_id, pin, department:departments!profiles_department_id_fkey(id, name)')
+      .select('id, full_name, role, employee_id, pin, department:departments!profiles_department_id_fkey(id, name)')
       .eq('employee_id', fullId)
       .eq('is_active', true)
       .maybeSingle()
