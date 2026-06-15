@@ -264,25 +264,6 @@ export default function Kiosk() {
     logAttendance(data)
   }
 
-  // ── Check if photo capture needed this week ──────────────────────────────
-  async function checkPhotoRequired(): Promise<boolean> {
-    const now = new Date()
-    const dayOfWeek = now.getDay()
-    const startOfWeek = new Date(now)
-    startOfWeek.setDate(now.getDate() - dayOfWeek)
-    startOfWeek.setHours(0, 0, 0, 0)
-
-    const { data } = await supabase
-      .from('attendance_logs')
-      .select('id')
-      .eq('user_id', staff!.id)
-      .not('capture_url', 'is', null)
-      .gte('scanned_at', startOfWeek.toISOString())
-
-    const capturesThisWeek = (data ?? []).length
-    return capturesThisWeek < 3
-  }
-
   async function logAttendance(photoData?: string) {
     setLoading(true)
     let lat: number | null = null
@@ -568,12 +549,7 @@ export default function Kiosk() {
               const canvas = canvasRef.current
               if (!canvas) return
               setSignatureData(canvas.toDataURL('image/png'))
-              const needsPhoto = await checkPhotoRequired()
-              if (needsPhoto) {
-                setScreen('camera')
-              } else {
-                await logAttendance()
-              }
+              await logAttendance()
             }}
             className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-2xl transition-colors">
             Confirm & Continue
