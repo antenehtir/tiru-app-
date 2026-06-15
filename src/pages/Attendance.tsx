@@ -235,7 +235,7 @@ export default function Attendance() {
         {(['clock_in','clock_out'] as AttendanceType[]).map(t => (
           <button key={t} onClick={() => setAttType(t)}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${attType === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {t === 'clock_in' ? 'ðŸŸ¢ Clock In' : 'ðŸ”´ Clock Out'}
+            {t === 'clock_in' ? '🟢 Clock In' : '🔴 Clock Out'}
           </button>
         ))}
       </div>
@@ -329,6 +329,9 @@ export default function Attendance() {
     </div>
   )
 }
+
+
+
 
 
 
