@@ -16,7 +16,6 @@ type Notice = {
   body: string
   priority: NoticePriority
   audience: NoticeAudience
-  audience_type: 'broadcast' | 'personal' | null
   target_user_id: string | null
   department_id: string | null
   department_ids: string[] | null
@@ -93,34 +92,33 @@ export default function Notices() {
     const userDeptId = profile?.department_id ?? null
 
     const visible = ((noticeData as Notice[]) ?? []).filter(n => {
-      // Personal notice — ALWAYS check this first, regardless of audience field
-      if (n.audience_type === 'personal') return n.target_user_id === profile!.id
+      // Super admin and medical_director always see every notice
+      if (['super_admin', 'medical_director'].includes(role)) return true
 
-      // Block any notice that has a target_user_id but wasn't caught above
-      if (n.target_user_id) return false
+      // Individually-targeted notice — only the recipient sees it
+      if (n.audience === 'individual') return n.target_user_id === profile!.id
 
       // Department-targeted notice
       if (n.audience === 'department') {
         const ids = n.department_ids ?? (n.department_id ? [n.department_id] : [])
         if (ids.length === 0) return false
-        if (['super_admin','ceo','general_manager','medical_director','hr'].includes(role)) return true
         return userDeptId ? ids.includes(userDeptId) : false
       }
 
       // Clinical staff notices
       if (n.audience === 'clinical') {
-        const clinicalRoles = ['physician','nurse','medical_director','department_head','coordinator']
-        return clinicalRoles.includes(role) || ['super_admin','ceo','general_manager','hr'].includes(role)
+        const clinicalRoles = ['physician','nurse','pharmacist','department_head']
+        return clinicalRoles.includes(role)
       }
 
       // Administrative notices
       if (n.audience === 'administrative') {
-        const adminRoles = ['hr','coordinator','general_manager','ceo','super_admin']
+        const adminRoles = ['hr','coordinator','general_manager','ceo']
         return adminRoles.includes(role)
       }
 
       // All staff broadcast — everyone sees it
-      if (n.audience_type === 'broadcast' || n.audience === 'all') return true
+      if (n.audience === 'all') return true
 
       // Fallback — hide unknown types
       return false
@@ -216,9 +214,9 @@ export default function Notices() {
       priority:       form.priority,
       audience:       form.audience,
       pinned:         form.pinned,
-      department_id:  form.audience === 'department' ? selectedDepts[0] : null,
+      department_id:  form.audience === 'department' ? (selectedDepts[0] ?? null) : null,
       department_ids: form.audience === 'department' ? selectedDepts : null,
-      target_user_id: form.audience === 'individual' ? (selectedStaff[0] ?? null) : null,
+      target_user_id: null,
     }
 
     if (form.audience === 'individual') {
@@ -229,7 +227,6 @@ export default function Notices() {
         priority:       form.priority,
         audience:       'individual' as NoticeAudience,
         pinned:         form.pinned,
-        audience_type:  'personal' as const,
         target_user_id: userId,
         department_id:  null,
         department_ids: null,
@@ -257,7 +254,7 @@ export default function Notices() {
 
   // ── Audience label for notice card ───────────────────────────────────────
   const audienceLabel = (n: Notice) => {
-    if (n.audience_type === 'personal') return 'Personal'
+    if (n.audience === 'individual') return 'Personal'
     if (n.audience === 'all') return 'All Staff'
     if (n.audience === 'clinical') return 'Clinical'
     if (n.audience === 'administrative') return 'Administrative'
@@ -337,7 +334,7 @@ export default function Notices() {
                       <span className="font-semibold text-sm text-gray-900">{notice.title}</span>
                       <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                        notice.audience_type === 'personal'
+                        notice.audience === 'individual'
                           ? 'text-teal-600 bg-teal-50'
                           : 'text-gray-500 bg-gray-100'
                       }`}>
@@ -349,7 +346,7 @@ export default function Notices() {
                       <span>{notice.author?.full_name ?? 'System'}</span>
                       <span>·</span>
                       <span>{new Date(notice.created_at).toLocaleString()}</span>
-                      {notice.audience_type !== 'personal' && (profile!.id === notice.author_id || role === 'super_admin') && (
+                      {notice.audience !== 'individual' && (profile!.id === notice.author_id || role === 'super_admin') && (
                         <>
                           <span>·</span>
                           <button
