@@ -6,12 +6,9 @@ import {
   AlertTriangle, Loader2, Wifi, WifiOff, History, Users, Pencil, Trash2, X,
 } from 'lucide-react'
 
-// Test Medical Center 1 coordinates
-const FACILITY_LAT  = 9.0054
-const FACILITY_LNG  = 38.7636
-const GEOFENCE_M    = 150
 const OFFLINE_KEY   = 'tiru_attendance_queue'
 const FACILITY_ID   = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
+const SITE_ID       = '252a6714-7d37-461f-bad2-826bfc2470b5'
 
 type AttendanceType = 'clock_in' | 'clock_out'
 
@@ -108,6 +105,23 @@ export default function Attendance() {
   const [queueCount,    setQueueCount]    = useState(() => loadQueue().length)
   const [recentLogs,    setRecentLogs]    = useState<LogRow[]>([])
   const [logsLoading,   setLogsLoading]   = useState(false)
+  const [facilityCoords, setFacilityCoords] = useState({ lat: 9.0054, lng: 38.7636, radius: 150 })
+
+  useEffect(() => {
+    supabase
+      .from('sites')
+      .select('latitude, longitude, geofence_m')
+      .eq('id', SITE_ID)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) return
+        setFacilityCoords({
+          lat:    data.latitude    ?? 9.0054,
+          lng:    data.longitude   ?? 38.7636,
+          radius: data.geofence_m  ?? 150,
+        })
+      })
+  }, [])
 
   const isDeptHead = profile?.role === 'department_head'
   const [deptLogs,        setDeptLogs]        = useState<DeptLogRow[]>([])
@@ -255,15 +269,15 @@ export default function Attendance() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude; const lng = pos.coords.longitude
-          const dist = haversineM(lat, lng, FACILITY_LAT, FACILITY_LNG)
-          setCoords({ lat, lng }); setInsideGeofence(dist <= GEOFENCE_M); setGpsStatus('ok')
+          const dist = haversineM(lat, lng, facilityCoords.lat, facilityCoords.lng)
+          setCoords({ lat, lng }); setInsideGeofence(dist <= facilityCoords.radius); setGpsStatus('ok')
           resolve({ lat, lng })
         },
         () => { setGpsStatus('denied'); resolve(null) },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       )
     })
-  }, [])
+  }, [facilityCoords])
 
   const tick = useCallback(() => {
     const video = videoRef.current; const canvas = canvasRef.current
@@ -426,8 +440,8 @@ export default function Attendance() {
           <MapPin className="w-3.5 h-3.5" />
           {gpsStatus === 'fetching' && 'Fetching GPSâ€¦'}
           {gpsStatus === 'denied'   && 'GPS unavailable (advisory only)'}
-          {gpsStatus === 'ok' && insideGeofence  && `GPS: inside facility (${Math.round(haversineM(coords!.lat, coords!.lng, FACILITY_LAT, FACILITY_LNG))} m)`}
-          {gpsStatus === 'ok' && !insideGeofence && `GPS: ${Math.round(haversineM(coords!.lat, coords!.lng, FACILITY_LAT, FACILITY_LNG))} m from facility`}
+          {gpsStatus === 'ok' && insideGeofence  && `GPS: inside facility (${Math.round(haversineM(coords!.lat, coords!.lng, facilityCoords.lat, facilityCoords.lng))} m)`}
+          {gpsStatus === 'ok' && !insideGeofence && `GPS: ${Math.round(haversineM(coords!.lat, coords!.lng, facilityCoords.lat, facilityCoords.lng))} m from facility`}
         </div>
       )}
 

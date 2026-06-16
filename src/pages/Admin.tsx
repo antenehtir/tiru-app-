@@ -16,7 +16,7 @@ type Site = {
   address: string | null
   latitude: number | null
   longitude: number | null
-  geofence_radius: number | null
+  geofence_m: number | null
   is_active: boolean
 }
 
@@ -194,7 +194,7 @@ export default function Admin() {
 
 // â"€â"€â"€ Sites Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-const EMPTY_SITE_FORM = { name: '', address: '', latitude: '', longitude: '', geofence_radius: '150' }
+const EMPTY_SITE_FORM = { name: '', address: '', latitude: '', longitude: '', geofence_m: '150' }
 
 function SitesSection() {
   const [sites,     setSites]     = useState<Site[]>([])
@@ -228,7 +228,7 @@ function SitesSection() {
       address:         s.address ?? '',
       latitude:        s.latitude != null ? String(s.latitude) : '',
       longitude:       s.longitude != null ? String(s.longitude) : '',
-      geofence_radius: s.geofence_radius != null ? String(s.geofence_radius) : '150',
+      geofence_m:      s.geofence_m != null ? String(s.geofence_m) : '150',
     })
     setFormErr(null)
     setModalOpen(true)
@@ -245,11 +245,11 @@ function SitesSection() {
 
     setSaving(true)
     const payload = {
-      name:            form.name.trim(),
-      address:         form.address.trim() || null,
-      latitude:        lat,
-      longitude:       lng,
-      geofence_radius: form.geofence_radius ? parseInt(form.geofence_radius, 10) : 150,
+      name:       form.name.trim(),
+      address:    form.address.trim() || null,
+      latitude:   lat,
+      longitude:  lng,
+      geofence_m: form.geofence_m ? parseInt(form.geofence_m, 10) : 150,
     }
     const { error: err } = editSite
       ? await supabase.from('sites').update(payload).eq('id', editSite.id)
@@ -303,7 +303,7 @@ function SitesSection() {
                 }
               </div>
               <div className="text-xs text-gray-400">
-                Geofence: {s.geofence_radius ?? 150} m
+                Geofence: {s.geofence_m ?? 150} m
               </div>
               <div className="flex gap-2 mt-1">
                 <button onClick={() => openEdit(s)}
@@ -315,6 +315,7 @@ function SitesSection() {
                   {s.is_active ? 'Deactivate' : 'Activate'}
                 </button>
               </div>
+              <SiteGeofenceControl site={s} onSaved={fetchSites} />
             </div>
           ))}
         </div>
@@ -351,8 +352,8 @@ function SitesSection() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Geofence Radius (metres)</label>
                 <input type="number" min="1" placeholder="150"
-                  value={form.geofence_radius}
-                  onChange={e => setForm(x => ({ ...x, geofence_radius: e.target.value }))}
+                  value={form.geofence_m}
+                  onChange={e => setForm(x => ({ ...x, geofence_m: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
               <p className="text-xs text-gray-400">
@@ -370,6 +371,114 @@ function SitesSection() {
         </div>
       )}
     </section>
+  )
+}
+
+// â"€â"€â"€ Site Geofence Control â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+function SiteGeofenceControl({ site, onSaved }: { site: Site; onSaved: () => void }) {
+  const [expanded,        setExpanded]        = useState(false)
+  const [lat,             setLat]             = useState(site.latitude != null ? String(site.latitude) : '')
+  const [lng,             setLng]             = useState(site.longitude != null ? String(site.longitude) : '')
+  const [radius,          setRadius]          = useState(site.geofence_m != null ? String(site.geofence_m) : '150')
+  const [gettingLocation, setGettingLocation] = useState(false)
+  const [locError,        setLocError]        = useState<string | null>(null)
+  const [saving,          setSaving]          = useState(false)
+  const [saveMsg,         setSaveMsg]         = useState<{ ok: boolean; text: string } | null>(null)
+
+  const useMyLocation = () => {
+    setLocError(null)
+    setGettingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(String(pos.coords.latitude))
+        setLng(String(pos.coords.longitude))
+        setGettingLocation(false)
+      },
+      () => {
+        setLocError('Could not get location. Enter manually.')
+        setGettingLocation(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
+  const saveLocation = async () => {
+    setSaveMsg(null)
+    const latNum = parseFloat(lat)
+    const lngNum = parseFloat(lng)
+    const radiusNum = parseInt(radius, 10)
+    if (isNaN(latNum) || isNaN(lngNum) || isNaN(radiusNum)) {
+      setSaveMsg({ ok: false, text: 'Save failed. Try again.' })
+      return
+    }
+    setSaving(true)
+    const { error } = await supabase
+      .from('sites')
+      .update({ latitude: latNum, longitude: lngNum, geofence_m: radiusNum })
+      .eq('id', site.id)
+    setSaving(false)
+    if (error) {
+      setSaveMsg({ ok: false, text: 'Save failed. Try again.' })
+    } else {
+      setSaveMsg({ ok: true, text: 'Location saved ✓' })
+      onSaved()
+    }
+  }
+
+  return (
+    <div className="mt-1 pt-2 border-t border-gray-100">
+      <button onClick={() => setExpanded(e => !e)}
+        className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-medium">
+        <MapPin className="w-3.5 h-3.5" />
+        {expanded ? 'Hide Geofence Settings' : 'Set Geofence'}
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="text-xs text-gray-500 font-mono bg-gray-50 rounded-lg px-3 py-2">
+            Lat: {site.latitude ?? '—'} | Lng: {site.longitude ?? '—'} | Radius: {site.geofence_m ?? 150}m
+          </div>
+
+          <button onClick={useMyLocation} disabled={gettingLocation}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+            {gettingLocation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+            {gettingLocation ? 'Getting location...' : 'Use My Current Location'}
+          </button>
+          {locError && <p className="text-xs text-red-600">{locError}</p>}
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Latitude</label>
+              <input type="number" step="0.000001" value={lat} onChange={e => setLat(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Longitude</label>
+              <input type="number" step="0.000001" value={lng} onChange={e => setLng(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Radius (m)</label>
+              <input type="number" step="1" value={radius} onChange={e => setRadius(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+            </div>
+          </div>
+
+          <button onClick={saveLocation} disabled={saving}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {saving ? 'Saving...' : 'Save Location'}
+          </button>
+
+          {saveMsg && (
+            <p className={`text-xs font-medium ${saveMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
+              {saveMsg.text}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
