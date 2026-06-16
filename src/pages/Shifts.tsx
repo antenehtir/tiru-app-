@@ -283,6 +283,7 @@ export default function Shifts() {
   const [reassigning,    setReassigning]    = useState(false)
   const [deleting,       setDeleting]       = useState(false)
   const [actionError,    setActionError]    = useState<string | null>(null)
+  const [remark,         setRemark]         = useState('')
 
   // ── Bulk upload state ──
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -597,15 +598,33 @@ export default function Shifts() {
     else { setSelectedShift(null); setShiftAction(null); fetchShifts() }
   }
 
+  // ── Audit log (department_head actions only) ──
+  const insertShiftAuditLog = async (action: 'shift_deletion' | 'shift_reassignment', shift: ShiftRow) => {
+    const { error } = await supabase.from('audit_log').insert({
+      facility_id: FACILITY_ID,
+      actor_id: profile!.id,
+      actor_name: profile!.full_name,
+      action,
+      target_user_id: shift.user_id,
+      target_name: shift.user?.full_name ?? null,
+      details: remark.trim(),
+      created_at: new Date().toISOString(),
+    })
+    if (error) console.error('Audit log error:', error)
+  }
+
   // ── Reassign shift ──
-  const openReassign = () => { setReassignUserId(''); setActionError(null); setShiftAction('reassign') }
+  const openReassign = () => { setReassignUserId(''); setActionError(null); setRemark(''); setShiftAction('reassign') }
 
   const reassignShift = async () => {
     if (!reassignUserId || !selectedShift) return
+    if (role === 'department_head' && remark.trim().length < 10) return
     setReassigning(true); setActionError(null)
 
     const { error } = await supabase.from('shifts').update({ user_id: reassignUserId }).eq('id', selectedShift.id)
     if (error) { setReassigning(false); setActionError(error.message); return }
+
+    if (role === 'department_head') await insertShiftAuditLog('shift_reassignment', selectedShift)
 
     const shiftDate  = selectedShift.starts_at.split('T')[0]
     const startT     = selectedShift.starts_at.split('T')[1]?.substring(0, 5) ?? ''
@@ -625,21 +644,23 @@ export default function Shifts() {
     ]).then(() => {/* ignore notice errors */})
 
     setReassigning(false)
-    setSelectedShift(null); setShiftAction(null); setReassignUserId('')
+    setSelectedShift(null); setShiftAction(null); setReassignUserId(''); setRemark('')
     fetchShifts()
   }
 
   // ── Delete shift ──
   const deleteShift = async () => {
     if (!selectedShift) return
+    if (role === 'department_head' && remark.trim().length < 10) return
     setDeleting(true)
     const { error } = await supabase.from('shifts').delete().eq('id', selectedShift.id)
     setDeleting(false)
     if (error) { setActionError(error.message); return }
-    setSelectedShift(null); setShiftAction(null); fetchShifts()
+    if (role === 'department_head') await insertShiftAuditLog('shift_deletion', selectedShift)
+    setSelectedShift(null); setShiftAction(null); setRemark(''); fetchShifts()
   }
 
-  const closeDetail = () => { setSelectedShift(null); setShiftAction(null); setActionError(null); setReassignUserId('') }
+  const closeDetail = () => { setSelectedShift(null); setShiftAction(null); setActionError(null); setReassignUserId(''); setRemark('') }
 
   // Toggle repeat-day for custom pattern
   const toggleRepeatDay = (day: number) => {
@@ -1448,7 +1469,7 @@ export default function Shifts() {
                   <RefreshCw className="w-4 h-4" />Reassign
                 </button>
                 <button
-                  onClick={() => { setActionError(null); setShiftAction('delete') }}
+                  onClick={() => { setActionError(null); setRemark(''); setShiftAction('delete') }}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-red-200 hover:bg-red-50 rounded-lg transition-colors text-red-600"
                 >
                   <Trash2 className="w-4 h-4" />Delete
@@ -1498,6 +1519,16 @@ export default function Shifts() {
                 </select>
               </div>
 
+              {role === 'department_head' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason for change *</label>
+                  <textarea rows={3} value={remark} onChange={e => setRemark(e.target.value)}
+                    placeholder="Describe why this shift is being reassigned..."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                  <p className="text-xs text-gray-400 mt-1">{remark.trim().length}/10 characters minimum</p>
+                </div>
+              )}
+
               {actionError && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />{actionError}
@@ -1511,7 +1542,7 @@ export default function Shifts() {
               </button>
               <button
                 onClick={reassignShift}
-                disabled={!reassignUserId || reassigning}
+                disabled={!reassignUserId || reassigning || (role === 'department_head' && remark.trim().length < 10)}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
                 {reassigning && <Loader2 className="w-4 h-4 animate-spin" />}
                 {reassigning ? 'Reassigning…' : 'Confirm Reassign'}
@@ -1539,6 +1570,16 @@ export default function Shifts() {
               {fmt12(selectedShift.ends_at.split('T')[1]?.substring(0, 5) ?? '00:00')}
             </p>
 
+            {role === 'department_head' && (
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason for change *</label>
+                <textarea rows={3} value={remark} onChange={e => setRemark(e.target.value)}
+                  placeholder="Describe why this shift is being deleted..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-red-400 outline-none resize-none" />
+                <p className="text-xs text-gray-400 mt-1">{remark.trim().length}/10 characters minimum</p>
+              </div>
+            )}
+
             {actionError && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm mb-4">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />{actionError}
@@ -1550,7 +1591,7 @@ export default function Shifts() {
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                 Cancel
               </button>
-              <button onClick={deleteShift} disabled={deleting}
+              <button onClick={deleteShift} disabled={deleting || (role === 'department_head' && remark.trim().length < 10)}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 rounded-lg transition-colors">
                 {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {deleting ? 'Deleting…' : 'Delete Shift'}
