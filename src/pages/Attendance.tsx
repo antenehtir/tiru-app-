@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
+import jsQR from 'jsqr'
 import {
   QrCode, MapPin, CheckCircle2, XCircle, Clock,
   AlertTriangle, Loader2, Wifi, WifiOff, History, Users, Pencil, Trash2, X,
@@ -91,7 +92,6 @@ export default function Attendance() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef    = useRef<number>(0)
   const streamRef = useRef<MediaStream | null>(null)
-  const jsQRRef   = useRef<((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null>(null)
 
   const [scannerActive, setScannerActive] = useState(false)
   const [scanResult,    setScanResult]    = useState<'success'|'error'|'geofence_warn'|null>(null)
@@ -151,23 +151,6 @@ export default function Attendance() {
   }, [])
 
   useEffect(() => { if (online) flushQueue() }, [online]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if ((window as any).jsQR) {
-      jsQRRef.current = (window as any).jsQR
-      console.log('jsQR already loaded')
-      return
-    }
-    const script = document.createElement('script')
-    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
-    script.async = true
-    script.onload = () => {
-      jsQRRef.current = (window as any).jsQR
-      console.log('jsQR loaded successfully')
-    }
-    script.onerror = () => { console.error('jsQR failed to load from CDN') }
-    document.head.appendChild(script)
-  }, [])
 
   const fetchRecentLogs = useCallback(async () => {
     if (!profile?.id) return
@@ -310,7 +293,7 @@ export default function Attendance() {
 
   const tick = useCallback(() => {
     const video = videoRef.current; const canvas = canvasRef.current
-    if (!video || !canvas || !jsQRRef.current) { rafRef.current = requestAnimationFrame(tick); return }
+    if (!video || !canvas) { rafRef.current = requestAnimationFrame(tick); return }
     if (video.readyState !== video.HAVE_ENOUGH_DATA) { rafRef.current = requestAnimationFrame(tick); return }
     if (video.videoWidth === 0 || video.videoHeight === 0) { rafRef.current = requestAnimationFrame(tick); return }
     console.log('scanning frame...')
@@ -318,7 +301,7 @@ export default function Attendance() {
     const ctx = canvas.getContext('2d')!
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    const code = jsQRRef.current(imageData.data, imageData.width, imageData.height)
+    const code = jsQR(imageData.data, imageData.width, imageData.height)
     console.log('jsQR result:', code)
     if (code) { stopCamera(); handleQRResult(code.data) }
     else rafRef.current = requestAnimationFrame(tick)
