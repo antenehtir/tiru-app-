@@ -9,6 +9,15 @@ const LEADERSHIP_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_dire
 const ADMIN_OVERVIEW_ROLES = ['super_admin', 'ceo', 'general_manager']
 const INCIDENTS_CARD_ROLES = ['physician', 'nurse', 'pharmacist', 'staff', 'department_head', 'coordinator', 'hr', 'medical_director']
 
+type StatValue = number | null | 'error'
+
+function isoDate(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function Dashboard() {
   const { profile } = useAuthStore()
   const navigate = useNavigate()
@@ -17,16 +26,16 @@ export default function Dashboard() {
   const showAdminOverview = ADMIN_OVERVIEW_ROLES.includes(role)
   const showIncidentsCard = INCIDENTS_CARD_ROLES.includes(role)
 
-  const [stats, setStats] = useState({
-    staff: 0, departments: 0, shifts: 0, leave: 0
+  const [stats, setStats] = useState<{
+    staff: StatValue; departments: StatValue; shifts: StatValue; leave: StatValue
+  }>({
+    staff: null, departments: null, shifts: null, leave: null
   })
-  const [sitesCount, setSitesCount] = useState(0)
+  const [sitesCount, setSitesCount] = useState<StatValue>(null)
   const [activeIncidentCount, setActiveIncidentCount] = useState(0)
   const [myIncidents, setMyIncidents] = useState<any[]>([])
   const [incidentModalOpen, setIncidentModalOpen] = useState(false)
   const [reportsExpanded, setReportsExpanded] = useState(false)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
   const [liveStats, setLiveStats] = useState<{
     present: number; expected: number; late: number; total: number
   } | null>(null)
@@ -140,65 +149,45 @@ export default function Dashboard() {
     if (!profile?.id) return
 
     async function fetchData() {
+      const fid = profile!.facility_id
+      const today = isoDate(new Date())
+      const dayStart = `${today}T00:00:00+03:00`
+      const dayEnd   = `${today}T23:59:59+03:00`
+
       try {
-        const fid = profile!.facility_id
+        const [staffRes, deptsRes, shiftsRes, leaveRes, sitesRes] = await Promise.all([
+          supabase.from('profiles').select('*', { count: 'exact', head: true })
+            .eq('facility_id', fid).eq('is_active', true).neq('role', 'kiosk'),
+          supabase.from('departments').select('*', { count: 'exact', head: true })
+            .eq('facility_id', fid),
+          supabase.from('shifts').select('*', { count: 'exact', head: true })
+            .eq('facility_id', fid).gte('starts_at', dayStart).lte('starts_at', dayEnd),
+          supabase.from('leave_requests').select('*', { count: 'exact', head: true })
+            .eq('facility_id', fid).in('status', ['pending', 'approved']),
+          supabase.from('sites').select('*', { count: 'exact', head: true })
+            .eq('is_active', true),
+        ])
 
-        const { count: staff, error: e1 } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true)
-        if (e1) { setError('Staff: ' + e1.message); setLoading(false); return }
-
-        const { count: depts, error: e2 } = await supabase
-          .from('departments')
-          .select('*', { count: 'exact', head: true })
-        if (e2) { setError('Depts: ' + e2.message); setLoading(false); return }
-
-        const today = new Date().toISOString().split('T')[0]
-        const { count: shifts, error: e3 } = await supabase
-          .from('shifts')
-          .select('*', { count: 'exact', head: true })
-          .eq('facility_id', fid)
-          .gte('starts_at', today + 'T00:00:00')
-          .lte('starts_at', today + 'T23:59:59')
-        if (e3) { setError('Shifts: ' + e3.message); setLoading(false); return }
-
-        const { count: leave, error: e4 } = await supabase
-          .from('leave_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('facility_id', fid)
-          .eq('status', 'pending')
-        if (e4) { setError('Leave: ' + e4.message); setLoading(false); return }
-
-        const { count: sites, error: e5 } = await supabase
-          .from('sites')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true)
-        if (e5) { setError('Sites: ' + e5.message); setLoading(false); return }
+        setStats({
+          staff:       staffRes.error  ? 'error' : (staffRes.count  ?? 0),
+          departments: deptsRes.error  ? 'error' : (deptsRes.count  ?? 0),
+          shifts:      shiftsRes.error ? 'error' : (shiftsRes.count ?? 0),
+          leave:       leaveRes.error  ? 'error' : (leaveRes.count  ?? 0),
+        })
+        setSitesCount(sitesRes.error ? 'error' : (sitesRes.count ?? 0))
 
         if (showAdminOverview) {
-          const { count: activeInc, error: e7 } = await supabase
+          const { count: activeInc } = await supabase
             .from('incident_reports')
             .select('*', { count: 'exact', head: true })
             .in('status', ['submitted', 'under_review'])
-          if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
           setActiveIncidentCount(activeInc ?? 0)
         } else if (showIncidentsCard) {
           await fetchMyIncidents()
         }
-
-        setStats({
-          staff: staff ?? 0,
-          departments: depts ?? 0,
-          shifts: shifts ?? 0,
-          leave: leave ?? 0
-        })
-        setSitesCount(sites ?? 0)
-
-        setLoading(false)
-      } catch (e: any) {
-        setError(e.message)
-        setLoading(false)
+      } catch {
+        setStats({ staff: 'error', departments: 'error', shifts: 'error', leave: 'error' })
+        setSitesCount('error')
       }
     }
 
@@ -238,28 +227,6 @@ export default function Dashboard() {
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-  if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-      <div className="relative w-16 h-16">
-        <div className="absolute inset-0 rounded-2xl bg-teal-600 animate-pulse" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-white text-lg font-bold tracking-tight z-10">Tiru</span>
-        </div>
-        <div className="absolute -inset-1 rounded-2xl border-2 border-teal-400 animate-ping opacity-30" />
-      </div>
-      <p className="text-sm text-gray-400 animate-pulse">Loading...</p>
-    </div>
-  )
-
-  if (error) return (
-    <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-700 font-medium">Query error:</p>
-        <p className="text-red-600 text-sm mt-1">{error}</p>
-      </div>
-    </div>
-  )
-
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-8">
@@ -285,7 +252,13 @@ export default function Dashboard() {
                 ? 'col-span-2 md:col-span-1 bg-white border border-gray-200 rounded-lg flex flex-row md:flex-col items-center md:items-start gap-3 md:gap-0 p-3 md:p-4'
                 : 'bg-white border border-gray-200 rounded-lg p-3 md:p-4'}>
               {hasIcon && card.icon}
-              <p className="text-2xl md:text-3xl font-bold text-teal-700">{card.value}</p>
+              {card.value === null ? (
+                <span className="inline-block h-7 md:h-9 w-10 bg-gray-200 rounded animate-pulse" />
+              ) : card.value === 'error' ? (
+                <p className="text-2xl md:text-3xl font-bold text-gray-300">—</p>
+              ) : (
+                <p className="text-2xl md:text-3xl font-bold text-teal-700">{card.value}</p>
+              )}
               <p className="text-xs md:text-sm text-gray-500 md:mt-1">{card.label}</p>
             </div>
           )
