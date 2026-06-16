@@ -211,11 +211,24 @@ function NoticeActivityTab() {
   )
 }
 
+const ACTION_BADGE_COLOR: Record<string, string> = {
+  attendance_edit:    'bg-yellow-100 text-yellow-700',
+  attendance_removal: 'bg-red-100    text-red-600',
+  shift_deletion:      'bg-red-100    text-red-600',
+  shift_reassignment:  'bg-amber-100  text-amber-700',
+}
+
+const ACTION_BADGE_LABEL: Record<string, string> = {
+  attendance_edit:    'Attendance Edit',
+  attendance_removal: 'Attendance Removed',
+  shift_deletion:      'Shift Deleted',
+  shift_reassignment:  'Shift Reassigned',
+}
+
 function AttendanceActionBadge({ action }: { action: string }) {
-  const isEdit = action === 'attendance_edit'
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isEdit ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'}`}>
-      {isEdit ? 'Edited' : 'Removed'}
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ACTION_BADGE_COLOR[action] ?? 'bg-gray-100 text-gray-600'}`}>
+      {ACTION_BADGE_LABEL[action] ?? action}
     </span>
   )
 }
@@ -235,7 +248,7 @@ function AttendanceActivityTab() {
   }, [])
 
   if (loading) return <LoadingRow />
-  if (!rows.length) return <EmptyRow text="No attendance changes recorded yet" />
+  if (!rows.length) return <EmptyRow text="No staff changes recorded yet" />
 
   return (
     <table className="w-full text-sm">
@@ -290,7 +303,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'leave',           label: 'Leave Activity'   },
   { value: 'incidents',       label: 'Incident Activity'},
   { value: 'notices',         label: 'Notice Activity'  },
-  { value: 'attendance',      label: 'Attendance Changes' },
+  { value: 'attendance',      label: 'Staff Changes' },
 ]
 
 export default function AuditLog() {
