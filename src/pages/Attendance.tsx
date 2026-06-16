@@ -312,7 +312,7 @@ export default function Attendance() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       streamRef.current = stream
-      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play() }
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}) }
       setScannerActive(true); captureGPS(); tick()
     } catch (err) {
       const name = err instanceof Error ? err.name : ''
@@ -424,8 +424,16 @@ export default function Attendance() {
         ))}
       </div>
 
-      <div className="rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50">
-        {!scannerActive ? (
+      <div className="relative rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full aspect-video object-cover ${scannerActive ? 'block' : 'hidden'}`}
+        />
+
+        {!scannerActive && (
           cameraError ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4 px-6 text-center">
               <XCircle className="w-12 h-12 text-red-400" />
@@ -443,9 +451,10 @@ export default function Attendance() {
               </button>
             </div>
           )
-        ) : (
-          <div className="relative">
-            <video ref={videoRef} className="w-full aspect-video object-cover" playsInline muted />
+        )}
+
+        {scannerActive && (
+          <>
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-48 h-48 border-4 border-teal-400 rounded-xl opacity-80" />
             </div>
@@ -455,8 +464,9 @@ export default function Attendance() {
               </div>
             )}
             <button onClick={stopCamera} className="absolute top-3 right-3 bg-black/50 text-white rounded-lg px-3 py-1.5 text-xs hover:bg-black/70">Stop</button>
-          </div>
+          </>
         )}
+
         <canvas ref={canvasRef} className="hidden" />
       </div>
 
