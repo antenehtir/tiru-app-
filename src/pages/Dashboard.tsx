@@ -250,15 +250,20 @@ export default function Dashboard() {
           { label: 'Departments', value: stats.departments },
           { label: "Today's Shifts", value: stats.shifts },
           { label: 'Pending Leave', value: stats.leave },
-          { label: 'Active Sites', value: sitesCount, icon: <MapPin className="w-4 h-4 text-teal-500 mb-1" /> },
-        ].map((card) => (
-          <div key={card.label}
-            className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
-            {'icon' in card && card.icon}
-            <p className="text-2xl md:text-3xl font-bold text-teal-700">{card.value}</p>
-            <p className="text-xs md:text-sm text-gray-500 mt-1">{card.label}</p>
-          </div>
-        ))}
+          { label: 'Active Sites', value: sitesCount, icon: <MapPin className="w-4 h-4 text-teal-500 md:mb-1" /> },
+        ].map((card) => {
+          const hasIcon = 'icon' in card
+          return (
+            <div key={card.label}
+              className={hasIcon
+                ? 'col-span-2 md:col-span-1 bg-white border border-gray-200 rounded-lg flex flex-row md:flex-col items-center md:items-start gap-3 md:gap-0 p-3 md:p-4'
+                : 'bg-white border border-gray-200 rounded-lg p-3 md:p-4'}>
+              {hasIcon && card.icon}
+              <p className="text-2xl md:text-3xl font-bold text-teal-700">{card.value}</p>
+              <p className="text-xs md:text-sm text-gray-500 md:mt-1">{card.label}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* ── Live Now Strip ── */}

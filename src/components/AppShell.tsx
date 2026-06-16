@@ -217,7 +217,7 @@ export default function AppShell() {
       </div>
 
       {/* ── Bottom tab bar (mobile) ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 rounded-t-2xl shadow-lg"
         style={{background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)'}}>
         <div className="flex">
           {MOBILE_MAIN.map(({ to, label, icon: Icon }) => {
@@ -226,7 +226,7 @@ export default function AppShell() {
               <NavLink
                 key={to}
                 to={to}
-                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold transition-all ${
+                className={`flex-1 flex flex-col items-center justify-center py-1.5 gap-1 text-[10px] font-semibold transition-all ${
                   isActive ? 'text-white' : 'text-teal-100/70 hover:text-white'
                 }`}
               >
@@ -241,7 +241,7 @@ export default function AppShell() {
           {/* More button */}
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold text-teal-100/70 hover:text-white transition-all relative"
+            className="flex-1 flex flex-col items-center justify-center py-1.5 gap-1 text-[10px] font-semibold text-teal-100/70 hover:text-white transition-all relative"
           >
             <div className="p-1.5 rounded-xl relative">
               <MoreHorizontal size={18} />
