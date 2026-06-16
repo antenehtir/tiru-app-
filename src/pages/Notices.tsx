@@ -216,11 +216,9 @@ export default function Notices() {
       priority:       form.priority,
       audience:       form.audience,
       pinned:         form.pinned,
-      audience_type:  form.audience === 'all' || form.audience === 'clinical' || form.audience === 'administrative'
-                        ? 'broadcast' : null,
       department_id:  form.audience === 'department' ? selectedDepts[0] : null,
       department_ids: form.audience === 'department' ? selectedDepts : null,
-      target_staff_ids: form.audience === 'individual' ? selectedStaff : null,
+      target_user_id: form.audience === 'individual' ? (selectedStaff[0] ?? null) : null,
     }
 
     if (form.audience === 'individual') {
