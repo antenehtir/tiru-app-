@@ -153,11 +153,19 @@ export default function Attendance() {
   useEffect(() => { if (online) flushQueue() }, [online]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if ((window as any).jsQR) { jsQRRef.current = (window as any).jsQR; return }
+    if ((window as any).jsQR) {
+      jsQRRef.current = (window as any).jsQR
+      console.log('jsQR already loaded')
+      return
+    }
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
     script.async = true
-    script.onload = () => { jsQRRef.current = (window as any).jsQR }
+    script.onload = () => {
+      jsQRRef.current = (window as any).jsQR
+      console.log('jsQR loaded successfully')
+    }
+    script.onerror = () => { console.error('jsQR failed to load from CDN') }
     document.head.appendChild(script)
   }, [])
 
@@ -304,11 +312,14 @@ export default function Attendance() {
     const video = videoRef.current; const canvas = canvasRef.current
     if (!video || !canvas || !jsQRRef.current) { rafRef.current = requestAnimationFrame(tick); return }
     if (video.readyState !== video.HAVE_ENOUGH_DATA) { rafRef.current = requestAnimationFrame(tick); return }
+    if (video.videoWidth === 0 || video.videoHeight === 0) { rafRef.current = requestAnimationFrame(tick); return }
+    console.log('scanning frame...')
     canvas.width = video.videoWidth; canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')!
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const code = jsQRRef.current(imageData.data, imageData.width, imageData.height)
+    console.log('jsQR result:', code)
     if (code) { stopCamera(); handleQRResult(code.data) }
     else rafRef.current = requestAnimationFrame(tick)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -342,11 +353,13 @@ export default function Attendance() {
   useEffect(() => () => stopCamera(), [])
 
   const handleQRResult = async (qrData: string) => {
+    console.log('scanned value:', qrData)
     setScanning(true); setScanResult(null)
     let qrCodeId: string | null = null
     if (qrData.match(/^[0-9a-f-]{36}$/i)) {
       const { data: qrRow } = await supabase
-        .from('entrance_qr_codes').select('id, is_active').eq('qr_payload', qrData).single()
+        .from('entrance_qr_codes').select('id, qr_payload, is_active').eq('qr_payload', qrData).single()
+      console.log('expected payload:', qrRow?.qr_payload)
       if (!qrRow || !qrRow.is_active) {
         setScanning(false); setScanResult('error')
         setScanMessage('QR code not recognised or has been deactivated.'); return
