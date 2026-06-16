@@ -153,6 +153,11 @@ export default function AppShell() {
           <NavLink to="/notices" className={navClass}>
             <Bell size={18} />
             Notices
+            {unreadNotices > 0 && (
+              <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                {unreadNotices > 9 ? '9+' : unreadNotices}
+              </span>
+            )}
           </NavLink>
           {canFlags && (
             <NavLink to="/flags" className={navClass}>

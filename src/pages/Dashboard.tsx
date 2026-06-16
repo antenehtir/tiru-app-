@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { MapPin, Activity, ChevronRight, AlertTriangle, ShieldAlert, CalendarOff } from 'lucide-react'
+import { MapPin, Activity, ChevronRight, ChevronDown, ChevronUp, AlertTriangle, ShieldAlert, CalendarOff } from 'lucide-react'
 import NewIncidentModal from '../components/NewIncidentModal'
 
 const LEADERSHIP_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [activeIncidentCount, setActiveIncidentCount] = useState(0)
   const [myIncidents, setMyIncidents] = useState<any[]>([])
   const [incidentModalOpen, setIncidentModalOpen] = useState(false)
+  const [reportsExpanded, setReportsExpanded] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [liveStats, setLiveStats] = useState<{
@@ -444,38 +445,46 @@ export default function Dashboard() {
           </button>
 
           <div className="border-t border-gray-100 mt-4 pt-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">My Recent Reports</p>
-            {myIncidents.length > 0 ? (
-              <ul className="space-y-1">
-                {myIncidents.map((inc) => {
-                  const stat = statusConfig[inc.status] ?? { label: inc.status, color: 'bg-gray-100 text-gray-600' }
-                  return (
-                    <li key={inc.id}
-                      onClick={() => navigate('/incidents')}
-                      className="flex items-start justify-between gap-3 py-2 px-1 -mx-1 rounded-lg border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-700 truncate">{inc.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{formatDate(inc.created_at)}</p>
-                      </div>
-                      <div className="flex gap-1.5 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {inc.severity}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stat.color}`}>
-                          {stat.label}
-                        </span>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-4">No reports submitted yet</p>
-            )}
-            <button onClick={() => navigate('/incidents')}
-              className="text-xs text-teal-600 hover:text-teal-700 font-medium mt-2">
-              View all reports →
+            <button
+              onClick={() => setReportsExpanded(e => !e)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"
+            >
+              <span>My Recent Reports ({myIncidents.length})</span>
+              {reportsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
+            <div className={`overflow-hidden transition-all duration-300 ${reportsExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+              {myIncidents.length > 0 ? (
+                <ul className="space-y-1">
+                  {myIncidents.map((inc) => {
+                    const stat = statusConfig[inc.status] ?? { label: inc.status, color: 'bg-gray-100 text-gray-600' }
+                    return (
+                      <li key={inc.id}
+                        onClick={() => navigate('/incidents')}
+                        className="flex items-start justify-between gap-3 py-2 px-1 -mx-1 rounded-lg border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 truncate">{inc.title}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{formatDate(inc.created_at)}</p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {inc.severity}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stat.color}`}>
+                            {stat.label}
+                          </span>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-4">No reports submitted yet</p>
+              )}
+              <button onClick={() => navigate('/incidents')}
+                className="text-xs text-teal-600 hover:text-teal-700 font-medium mt-2">
+                View all reports →
+              </button>
+            </div>
           </div>
 
           <NewIncidentModal

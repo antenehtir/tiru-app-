@@ -45,6 +45,7 @@ export default function Kiosk() {
   const [cameraActive, setCameraActive]   = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [todayShift, setTodayShift]   = useState<{starts_at:string; ends_at:string; specialty:string|null} | null>(null)
+  const activeField: 'id' | 'pin' = numInput.length >= 3 ? 'pin' : 'id'
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const videoRef     = useRef<HTMLVideoElement>(null)
   const streamRef    = useRef<MediaStream | null>(null)
@@ -493,18 +494,22 @@ export default function Kiosk() {
           </p>
         </div>
 
-        {numInput.length > 0 && pin.length === 0 && (
+        {numInput.length === 3 && pin.length === 0 && (
           <p className="text-center text-teal-200 text-xs mb-1 animate-pulse">
             ↓ Now enter your PIN
           </p>
         )}
 
         {/* PIN dots */}
-        <div className="bg-white/10 rounded-2xl px-6 py-4 mb-6 text-center border-2 border-white/20">
+        <div className={`bg-white/10 rounded-2xl px-6 py-4 mb-6 text-center border-2 transition-all duration-300 ${
+          activeField === 'pin' ? 'border-teal-400 ring-2 ring-teal-400' : 'border-white/20'
+        }`}>
           <p className="text-xs text-teal-300 mb-2 uppercase tracking-wider">PIN</p>
           <div className="flex justify-center gap-4">
             {[0,1,2,3].map(i => (
-              <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all ${
+              <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${
+                activeField === 'pin' ? 'scale-100 opacity-100' : 'scale-75 opacity-60'
+              } ${
                 pin.length > i ? 'bg-white border-white' : 'border-white/40'
               }`} />
             ))}
@@ -516,15 +521,15 @@ export default function Kiosk() {
           <div className="flex rounded-xl overflow-hidden border border-white/20 mb-4">
             <button
               onClick={() => { setNumInput(''); setPin('') }}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
-                pin.length === 0 ? 'bg-white text-teal-700' : 'text-white/60 hover:text-white'
+              className={`flex-1 py-2 text-sm font-semibold transition-all duration-300 ${
+                activeField === 'id' ? 'bg-white text-teal-700' : 'text-white/60 hover:text-white'
               }`}>
               Staff ID
             </button>
             <button
               onClick={() => {}}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
-                pin.length > 0 || numInput.length > 0 ? 'bg-white/20 text-white' : 'text-white/60'
+              className={`flex-1 py-2 text-sm font-semibold transition-all duration-300 ${
+                activeField === 'pin' ? 'bg-white text-teal-700' : 'text-white/60'
               }`}>
               PIN
             </button>
