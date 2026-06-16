@@ -197,17 +197,18 @@ export default function Attendance() {
   }
 
   const insertAuditLog = async (action: 'attendance_edit' | 'attendance_removal', log: DeptLogRow) => {
-    const { error } = await supabase.from('audit_log').insert({
+    if (!profile?.id) { console.error('Audit log insert skipped: profile not available'); return }
+    const { error: auditError } = await supabase.from('audit_log').insert({
       facility_id: FACILITY_ID,
-      actor_id: profile!.id,
-      actor_name: profile!.full_name,
+      actor_id: profile.id,
+      actor_name: profile.full_name,
       action,
       target_user_id: log.user_id,
       target_name: log.staff_name,
       details: remark.trim(),
       created_at: new Date().toISOString(),
     })
-    if (error) console.error('Audit log error:', error)
+    if (auditError) console.error('Audit log insert failed:', auditError)
   }
 
   const confirmRemove = async () => {
