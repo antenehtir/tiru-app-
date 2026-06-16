@@ -46,7 +46,9 @@ type Department = {
 
 type QRCode = {
   id: string
-  label: string
+  facility_id: string
+  entrance_label: string
+  qr_payload: string
   is_active: boolean
   created_at: string
 }
@@ -69,6 +71,8 @@ type ChangeRequest = {
 }
 
 // â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 const ROLES = [
   'physician','nurse','pharmacist','staff',
@@ -1457,6 +1461,7 @@ function QRCodesSection() {
     const { data } = await supabase
       .from('entrance_qr_codes')
       .select('*')
+      .eq('facility_id', FACILITY_ID)
       .order('created_at', { ascending: false })
     setQrCodes((data as QRCode[]) ?? [])
     setLoading(false)
@@ -1468,7 +1473,8 @@ function QRCodesSection() {
     if (!label.trim()) return
     setGenerating(true)
     const { error: err } = await supabase.from('entrance_qr_codes').insert({
-      label: label.trim(), is_active: true,
+      entrance_label: label.trim(), is_active: true,
+      facility_id: FACILITY_ID, qr_payload: crypto.randomUUID(),
     })
     setGenerating(false)
     if (!err) { setLabel(''); fetchQRCodes() }
@@ -1511,7 +1517,7 @@ function QRCodesSection() {
       ctx.fillRect(0, 0, 300, 300)
       ctx.drawImage(img, 0, 0, 300, 300)
       const a = document.createElement('a')
-      a.download = `Tiru-QR-${qr.label || qr.id}.png`
+      a.download = `Tiru-QR-${qr.entrance_label || qr.id}.png`
       a.href = canvas.toDataURL('image/png')
       a.click()
       URL.revokeObjectURL(url)
@@ -1527,11 +1533,11 @@ function QRCodesSection() {
     const svgData = new XMLSerializer().serializeToString(svg)
     win.document.write(`
       <html>
-        <head><title>${escapeHtml(qr.label)}</title></head>
+        <head><title>${escapeHtml(qr.entrance_label)}</title></head>
         <body style="margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-          <h2 style="margin-bottom:24px;color:#0f766e;">${escapeHtml(qr.label)}</h2>
+          <h2 style="margin-bottom:24px;color:#0f766e;">${escapeHtml(qr.entrance_label)}</h2>
           ${svgData}
-          <p style="font-family:monospace;font-size:11px;color:#888;margin-top:16px;">${qr.id}</p>
+          <p style="font-family:monospace;font-size:11px;color:#888;margin-top:16px;">${qr.qr_payload}</p>
         </body>
       </html>
     `)
@@ -1548,9 +1554,9 @@ function QRCodesSection() {
       const svgData = svg ? new XMLSerializer().serializeToString(svg) : ''
       return `
         <div style="display:flex;flex-direction:column;align-items:center;padding:24px;break-inside:avoid;">
-          <h3 style="margin-bottom:16px;color:#0f766e;font-family:sans-serif;">${escapeHtml(qr.label)}</h3>
+          <h3 style="margin-bottom:16px;color:#0f766e;font-family:sans-serif;">${escapeHtml(qr.entrance_label)}</h3>
           ${svgData}
-          <p style="font-family:monospace;font-size:10px;color:#888;margin-top:8px;">${qr.id}</p>
+          <p style="font-family:monospace;font-size:10px;color:#888;margin-top:8px;">${qr.qr_payload}</p>
         </div>
       `
     }).join('')
@@ -1610,7 +1616,7 @@ function QRCodesSection() {
           {qrCodes.map(qr => (
             <div key={qr.id} className="bg-white rounded-xl shadow-sm p-6 flex flex-col items-center text-center">
               <div className="flex items-center gap-2 mb-4">
-                <span className="font-bold text-teal-700">{qr.label}</span>
+                <span className="font-bold text-teal-700">{qr.entrance_label}</span>
                 {qr.is_active
                   ? <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Active</span>
                   : <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Inactive</span>
@@ -1619,7 +1625,7 @@ function QRCodesSection() {
 
               <QRCodeSVG
                 id={`qr-${qr.id}`}
-                value={qr.id}
+                value={qr.qr_payload}
                 size={220}
                 level="H"
                 includeMargin={true}
@@ -1627,7 +1633,7 @@ function QRCodesSection() {
                 bgColor="#ffffff"
               />
 
-              <p className="text-xs text-gray-400 font-mono mt-3 break-all">{qr.id}</p>
+              <p className="text-xs text-gray-400 font-mono mt-3 break-all">{qr.qr_payload}</p>
 
               <div className="flex gap-2 mt-4 w-full">
                 <button onClick={() => downloadQR(qr)}
@@ -1641,9 +1647,9 @@ function QRCodesSection() {
               </div>
 
               <div className="flex items-center gap-1 mt-3">
-                <button onClick={() => copyId(qr.id)} title="Copy UUID"
+                <button onClick={() => copyId(qr.qr_payload)} title="Copy QR Payload"
                   className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                  {copied === qr.id
+                  {copied === qr.qr_payload
                     ? <CheckCircle2 className="w-4 h-4 text-green-500" />
                     : <Copy className="w-4 h-4 text-gray-400" />
                   }

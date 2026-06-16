@@ -317,7 +317,7 @@ export default function Attendance() {
     let qrCodeId: string | null = null
     if (qrData.match(/^[0-9a-f-]{36}$/i)) {
       const { data: qrRow } = await supabase
-        .from('entrance_qr_codes').select('id, is_active').eq('id', qrData).single()
+        .from('entrance_qr_codes').select('id, is_active').eq('qr_payload', qrData).single()
       if (!qrRow || !qrRow.is_active) {
         setScanning(false); setScanResult('error')
         setScanMessage('QR code not recognised or has been deactivated.'); return
