@@ -157,13 +157,12 @@ export default function Dashboard() {
       try {
         const [staffRes, deptsRes, shiftsRes, leaveRes, sitesRes] = await Promise.all([
           supabase.from('profiles').select('*', { count: 'exact', head: true })
-            .eq('facility_id', fid).eq('is_active', true).neq('role', 'kiosk'),
-          supabase.from('departments').select('*', { count: 'exact', head: true })
-            .eq('facility_id', fid),
+            .eq('is_active', true).neq('role', 'kiosk'),
+          supabase.from('departments').select('*', { count: 'exact', head: true }),
           supabase.from('shifts').select('*', { count: 'exact', head: true })
             .eq('facility_id', fid).gte('starts_at', dayStart).lte('starts_at', dayEnd),
           supabase.from('leave_requests').select('*', { count: 'exact', head: true })
-            .eq('facility_id', fid).in('status', ['pending', 'approved']),
+            .in('status', ['pending', 'approved']),
           supabase.from('sites').select('*', { count: 'exact', head: true })
             .eq('is_active', true),
         ])
