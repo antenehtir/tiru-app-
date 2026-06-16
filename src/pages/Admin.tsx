@@ -6,7 +6,7 @@ import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
   ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle, MessageSquare,
-  Camera, PenLine, Download, Printer,
+  Camera, PenLine, Download, Printer, FlaskConical,
 } from 'lucide-react'
 
 // â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -188,12 +188,88 @@ export default function Admin() {
         <p className="text-sm text-gray-500 mt-0.5">Manage users, departments, and QR codes</p>
       </div>
 
+      {role === 'super_admin' && <DemoModeSection />}
       {role === 'super_admin' && <SitesSection />}
       <UsersSection currentRole={role} />
       <DepartmentsSection />
       <QRCodesSection />
       <FeedbackSection />
     </div>
+  )
+}
+
+// â”€â”€â”€ Demo Mode Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function DemoModeSection() {
+  const [demoMode, setDemoMode] = useState(false)
+  const [loading,  setLoading]  = useState(true)
+  const [saving,   setSaving]   = useState(false)
+  const [saved,    setSaved]    = useState(false)
+
+  useEffect(() => {
+    supabase
+      .from('facilities')
+      .select('demo_mode')
+      .eq('id', FACILITY_ID)
+      .single()
+      .then(({ data }) => {
+        setDemoMode(!!data?.demo_mode)
+        setLoading(false)
+      })
+  }, [])
+
+  const toggle = async () => {
+    const next = !demoMode
+    setDemoMode(next)
+    setSaving(true)
+    const { error } = await supabase.from('facilities').update({ demo_mode: next }).eq('id', FACILITY_ID)
+    setSaving(false)
+    if (error) { setDemoMode(!next); return }
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <section className={`rounded-2xl border-2 p-5 transition-colors ${demoMode ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${demoMode ? 'bg-amber-100' : 'bg-gray-100'}`}>
+            <FlaskConical className={`w-5 h-5 ${demoMode ? 'text-amber-600' : 'text-gray-400'}`} />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-800">Demo Mode</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Disables geofence enforcement for testing and demonstrations</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <span className={`text-xs font-medium text-teal-600 transition-opacity duration-500 ${saved ? 'opacity-100' : 'opacity-0'}`}>
+            Saved
+          </span>
+          {loading ? (
+            <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+          ) : (
+            <button
+              onClick={toggle}
+              disabled={saving}
+              role="switch"
+              aria-checked={demoMode}
+              className={`relative w-14 h-8 rounded-full transition-colors disabled:opacity-50 ${demoMode ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <span className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${demoMode ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!loading && (
+        <div className="mt-4">
+          {demoMode
+            ? <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full px-3 py-1">Demo Mode Active — Geofence disabled</span>
+            : <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-500 text-xs font-semibold rounded-full px-3 py-1">Normal Mode — Geofence enforced</span>
+          }
+        </div>
+      )}
+    </section>
   )
 }
 

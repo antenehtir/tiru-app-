@@ -106,6 +106,7 @@ export default function Attendance() {
   const [recentLogs,    setRecentLogs]    = useState<LogRow[]>([])
   const [logsLoading,   setLogsLoading]   = useState(false)
   const [facilityCoords, setFacilityCoords] = useState({ lat: 9.0054, lng: 38.7636, radius: 150 })
+  const [demoMode, setDemoMode] = useState(false)
 
   useEffect(() => {
     supabase
@@ -120,6 +121,15 @@ export default function Attendance() {
           lng:    data.longitude   ?? 38.7636,
           radius: data.geofence_m  ?? 150,
         })
+      })
+    supabase
+      .from('facilities')
+      .select('demo_mode')
+      .eq('id', FACILITY_ID)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) return
+        setDemoMode(!!data.demo_mode)
       })
   }, [])
 
@@ -264,20 +274,30 @@ export default function Attendance() {
 
   const captureGPS = useCallback((): Promise<{lat:number;lng:number}|null> => {
     return new Promise((resolve) => {
-      if (!navigator.geolocation) { resolve(null); return }
+      if (!navigator.geolocation) {
+        if (demoMode) setInsideGeofence(true)
+        resolve(null)
+        return
+      }
       setGpsStatus('fetching')
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude; const lng = pos.coords.longitude
-          const dist = haversineM(lat, lng, facilityCoords.lat, facilityCoords.lng)
-          setCoords({ lat, lng }); setInsideGeofence(dist <= facilityCoords.radius); setGpsStatus('ok')
+          setCoords({ lat, lng })
+          if (demoMode) {
+            setInsideGeofence(true)
+          } else {
+            const dist = haversineM(lat, lng, facilityCoords.lat, facilityCoords.lng)
+            setInsideGeofence(dist <= facilityCoords.radius)
+          }
+          setGpsStatus('ok')
           resolve({ lat, lng })
         },
-        () => { setGpsStatus('denied'); resolve(null) },
+        () => { setGpsStatus('denied'); if (demoMode) setInsideGeofence(true); resolve(null) },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       )
     })
-  }, [facilityCoords])
+  }, [facilityCoords, demoMode])
 
   const tick = useCallback(() => {
     const video = videoRef.current; const canvas = canvasRef.current
@@ -382,6 +402,13 @@ export default function Attendance() {
           )}
         </div>
       </div>
+
+      {demoMode && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium rounded-xl px-4 py-2.5">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          Demo Mode Active — Geofence check disabled
+        </div>
+      )}
 
       <div className="flex gap-2">
         {(['clock_in','clock_out'] as AttendanceType[]).map(t => (
