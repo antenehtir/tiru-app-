@@ -1124,8 +1124,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                             title: 'âœ" Your Profile Update was Approved',
                             body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
                             priority: 'info',
-                            audience: 'all',
-                            audience_type: 'personal',
+                            audience: 'individual',
                             target_user_id: req.user_id,
                             pinned: false,
                           })
@@ -1201,8 +1200,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     title: `Your Profile Update Request — ${fLabel}`,
                     body,
                     priority: 'important',
-                    audience: 'all',
-                    audience_type: 'personal',
+                    audience: 'individual',
                     target_user_id: rejectModal.userId,
                     pinned: false,
                   })

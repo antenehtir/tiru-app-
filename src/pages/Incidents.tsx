@@ -180,8 +180,7 @@ export default function Incidents() {
         title: msg.title,
         body: msg.body,
         priority: msg.priority,
-        audience: 'all',
-        audience_type: 'personal',
+        audience: 'individual',
         target_user_id: inc.reporter_id,
         pinned: false,
       })
