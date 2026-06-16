@@ -185,13 +185,13 @@ export default function Kiosk() {
 
     const { data } = await supabase
       .from('notices')
-      .select('id, title, body, priority, created_at, audience, audience_type, target_user_id, department_ids')
+      .select('id, title, body, priority, created_at, audience, target_user_id, department_ids')
       .order('created_at', { ascending: false })
       .limit(20)
 
     const filtered = ((data as any[]) ?? []).filter((n: any) => {
-      // Never show personal notices on kiosk
-      if (n.audience_type === 'personal') return false
+      // Personal notice — only show to the targeted staff member
+      if (n.audience === 'individual') return n.target_user_id === staffProfile.id
       if (n.audience === 'all') return true
       if (n.audience === 'department') {
         const ids: string[] = n.department_ids ?? []
@@ -212,7 +212,7 @@ export default function Kiosk() {
 
     const { data: noticeData } = await supabase
       .from('notices')
-      .select('id, audience_type, target_user_id, audience, department_ids, department_id')
+      .select('id, target_user_id, audience, department_ids, department_id')
 
     const { data: readData } = await supabase
       .from('notice_reads')
@@ -223,8 +223,7 @@ export default function Kiosk() {
     const deptId = staffProfile.department ? (staffProfile.department as any).id : null
 
     const visible = ((noticeData as any[]) ?? []).filter((n: any) => {
-      if (n.audience_type === 'personal') return n.target_user_id === staffProfile.id
-      if (n.target_user_id) return false
+      if (n.audience === 'individual') return n.target_user_id === staffProfile.id
       if (n.audience === 'department') {
         const ids = n.department_ids ?? (n.department_id ? [n.department_id] : [])
         return deptId ? ids.includes(deptId) : false
@@ -235,7 +234,7 @@ export default function Kiosk() {
       if (n.audience === 'administrative') {
         return ['hr','coordinator','general_manager','ceo','super_admin'].includes(staffProfile.role)
       }
-      return true
+      return n.audience === 'all'
     })
     setUnreadCount(visible.filter((n: any) => !readSet.has(n.id)).length)
 
