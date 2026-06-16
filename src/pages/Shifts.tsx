@@ -622,8 +622,9 @@ export default function Shifts() {
     if (role === 'department_head' && remark.trim().length < 10) return
     setReassigning(true); setActionError(null)
 
-    const originalUserId = selectedShift.user_id
+    const originalUserId = selectedShift.user_id // captured before update
     const newUserId       = reassignUserId
+    console.log('Notice targets:', originalUserId, newUserId)
 
     const { error } = await supabase.from('shifts').update({ user_id: newUserId }).eq('id', selectedShift.id)
     if (error) { setReassigning(false); setActionError(error.message); return }
@@ -635,33 +636,41 @@ export default function Shifts() {
     const endT       = selectedShift.ends_at.split('T')[1]?.substring(0, 5)   ?? ''
     const formattedDate = formatShiftDate(shiftDate)
 
-    // Notify the staff member who lost the shift
-    const { error: noticeError1 } = await supabase.from('notices').insert({
-      author_id: profile!.id,
-      title: 'Shift Reassigned',
-      body: `Your shift on ${formattedDate} (${fmt12(startT)} – ${fmt12(endT)}) has been reassigned to another staff member.`,
-      priority: 'info',
-      audience: 'individual',
-      target_user_id: originalUserId,
-      department_id: null,
-      department_ids: null,
-      pinned: false,
-    })
-    if (noticeError1) console.error('Notice insert failed:', noticeError1)
+    if (!profile?.id) {
+      console.error('No profile for notice insert')
+    } else {
+      // Notify the staff member who lost the shift
+      const noticePayload1 = {
+        author_id: profile.id,
+        title: 'Shift Reassigned',
+        body: `Your shift on ${formattedDate} (${fmt12(startT)} – ${fmt12(endT)}) has been reassigned to another staff member.`,
+        priority: 'info',
+        audience: 'individual',
+        target_user_id: originalUserId,
+        department_id: null,
+        department_ids: null,
+        pinned: false,
+      }
+      console.log('Notice payload (lost shift):', noticePayload1)
+      const { error: noticeError1 } = await supabase.from('notices').insert(noticePayload1)
+      if (noticeError1) console.error('Notice insert failed:', noticeError1)
 
-    // Notify the staff member who gained the shift
-    const { error: noticeError2 } = await supabase.from('notices').insert({
-      author_id: profile!.id,
-      title: 'New Shift Assigned',
-      body: `You have been assigned a shift on ${formattedDate} from ${fmt12(startT)} to ${fmt12(endT)}.`,
-      priority: 'info',
-      audience: 'individual',
-      target_user_id: newUserId,
-      department_id: null,
-      department_ids: null,
-      pinned: false,
-    })
-    if (noticeError2) console.error('Notice insert failed:', noticeError2)
+      // Notify the staff member who gained the shift
+      const noticePayload2 = {
+        author_id: profile.id,
+        title: 'New Shift Assigned',
+        body: `You have been assigned a shift on ${formattedDate} from ${fmt12(startT)} to ${fmt12(endT)}.`,
+        priority: 'info',
+        audience: 'individual',
+        target_user_id: newUserId,
+        department_id: null,
+        department_ids: null,
+        pinned: false,
+      }
+      console.log('Notice payload (new shift):', noticePayload2)
+      const { error: noticeError2 } = await supabase.from('notices').insert(noticePayload2)
+      if (noticeError2) console.error('Notice insert failed:', noticeError2)
+    }
 
     setReassigning(false)
     setSelectedShift(null); setShiftAction(null); setReassignUserId(''); setRemark('')
