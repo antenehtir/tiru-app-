@@ -1,65 +1,269 @@
-﻿import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabaseClient'
 
 // ─── Access control ───────────────────────────────────────────────────────────
 
 const ALLOWED_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director']
+const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FlagType    = 'no_show' | 'late_arrival' | 'geofence_breach' | 'low_attendance'
-type Severity    = 'low' | 'medium' | 'high' | 'critical'
-type FlagStatus  = 'open' | 'reviewed' | 'resolved'
+type Period = 'Today' | 'This Week' | 'This Month'
 
-// Future use: shape of rows returned from the flags table
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export type FlagRow = {
-  id: string
-  staff_name: string
-  department: string
-  flag_type: FlagType
-  severity: Severity
-  datetime: string
-  status: FlagStatus
+type FlaggedStaff = {
+  userId: string
+  name: string
+  employeeId: string
+  flagType: 'No Show' | 'Late Arrival' | 'Outside Geofence' | 'Low Attendance'
+  detail: string
+  severity: 'High' | 'Medium'
+  timestamp: string
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getPeriodRange(period: Period): { start: Date; end: Date } {
+  const now = new Date()
+  const end = now
+
+  if (period === 'Today') {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    return { start, end }
+  }
+
+  if (period === 'This Week') {
+    const day = now.getDay() // 0 = Sun … 6 = Sat
+    const diffToMonday = day === 0 ? 6 : day - 1
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday)
+    return { start, end }
+  }
+
+  // This Month
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  return { start, end }
+}
+
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+async function fetchProfilesMap(userIds: string[]): Promise<Map<string, { full_name: string; employee_id: string }>> {
+  const map = new Map<string, { full_name: string; employee_id: string }>()
+  if (userIds.length === 0) return map
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, employee_id')
+    .in('id', userIds)
+  if (error) throw error
+  for (const p of (data as any[]) ?? []) {
+    map.set(p.id, { full_name: p.full_name, employee_id: p.employee_id })
+  }
+  return map
+}
+
+// ─── Flag builders ────────────────────────────────────────────────────────────
+
+async function buildNoShows(start: Date): Promise<FlaggedStaff[]> {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+
+  const { data: shiftsData, error: shiftsErr } = await supabase
+    .from('shifts')
+    .select('id, user_id, starts_at, user:profiles!shifts_user_id_fkey(full_name, employee_id)')
+    .eq('facility_id', FACILITY_ID)
+    .lte('starts_at', twoHoursAgo.toISOString())
+    .gte('starts_at', start.toISOString())
+  if (shiftsErr) throw shiftsErr
+
+  const { data: logsData, error: logsErr } = await supabase
+    .from('attendance_logs')
+    .select('user_id, scanned_at')
+    .eq('facility_id', FACILITY_ID)
+    .eq('log_type', 'check_in')
+    .gte('scanned_at', start.toISOString())
+  if (logsErr) throw logsErr
+
+  const checkinDatesByUser = new Map<string, Set<string>>()
+  for (const log of (logsData as any[]) ?? []) {
+    const key = localDateKey(new Date(log.scanned_at))
+    if (!checkinDatesByUser.has(log.user_id)) checkinDatesByUser.set(log.user_id, new Set())
+    checkinDatesByUser.get(log.user_id)!.add(key)
+  }
+
+  const seen = new Set<string>()
+  const result: FlaggedStaff[] = []
+  for (const shift of (shiftsData as any[]) ?? []) {
+    if (seen.has(shift.user_id)) continue
+    const shiftDateKey = localDateKey(new Date(shift.starts_at))
+    const hasCheckin = checkinDatesByUser.get(shift.user_id)?.has(shiftDateKey)
+    if (!hasCheckin) {
+      seen.add(shift.user_id)
+      result.push({
+        userId: shift.user_id,
+        name: shift.user?.full_name ?? 'Unknown',
+        employeeId: shift.user?.employee_id ?? '—',
+        flagType: 'No Show',
+        severity: 'High',
+        detail: `Shift at ${formatTime(shift.starts_at)}, no check-in recorded`,
+        timestamp: shift.starts_at,
+      })
+    }
+  }
+  return result
+}
+
+async function buildLateArrivals(start: Date): Promise<FlaggedStaff[]> {
+  const { data: logsData, error: logsErr } = await supabase
+    .from('attendance_logs')
+    .select('user_id, scanned_at')
+    .eq('facility_id', FACILITY_ID)
+    .eq('log_type', 'check_in')
+    .gte('scanned_at', start.toISOString())
+  if (logsErr) throw logsErr
+
+  const { data: shiftsData, error: shiftsErr } = await supabase
+    .from('shifts')
+    .select('user_id, starts_at')
+    .eq('facility_id', FACILITY_ID)
+    .gte('starts_at', start.toISOString())
+  if (shiftsErr) throw shiftsErr
+
+  const shiftsByUserDate = new Map<string, Map<string, string>>()
+  for (const s of (shiftsData as any[]) ?? []) {
+    const key = localDateKey(new Date(s.starts_at))
+    if (!shiftsByUserDate.has(s.user_id)) shiftsByUserDate.set(s.user_id, new Map())
+    shiftsByUserDate.get(s.user_id)!.set(key, s.starts_at)
+  }
+
+  const userIds = new Set<string>()
+  const flagged: { userId: string; scannedAt: string; startsAt: string; minutesLate: number }[] = []
+  for (const log of (logsData as any[]) ?? []) {
+    const dateKey = localDateKey(new Date(log.scanned_at))
+    const startsAt = shiftsByUserDate.get(log.user_id)?.get(dateKey)
+    if (!startsAt) continue
+    const minutesLate = (new Date(log.scanned_at).getTime() - new Date(startsAt).getTime()) / 60000
+    if (minutesLate > 15) {
+      userIds.add(log.user_id)
+      flagged.push({ userId: log.user_id, scannedAt: log.scanned_at, startsAt, minutesLate })
+    }
+  }
+
+  const profileMap = await fetchProfilesMap(Array.from(userIds))
+
+  return flagged.map(f => {
+    const p = profileMap.get(f.userId)
+    return {
+      userId: f.userId,
+      name: p?.full_name ?? 'Unknown',
+      employeeId: p?.employee_id ?? '—',
+      flagType: 'Late Arrival' as const,
+      severity: 'Medium' as const,
+      detail: `${Math.round(f.minutesLate)} min late (arrived ${formatTime(f.scannedAt)}, shift started ${formatTime(f.startsAt)})`,
+      timestamp: f.scannedAt,
+    }
+  })
+}
+
+async function buildOutsideGeofence(start: Date): Promise<FlaggedStaff[]> {
+  const { data, error } = await supabase
+    .from('attendance_logs')
+    .select('user_id, scanned_at, log_type, within_geofence')
+    .eq('facility_id', FACILITY_ID)
+    .eq('within_geofence', false)
+    .gte('scanned_at', start.toISOString())
+  if (error) throw error
+
+  const rows = (data as any[]) ?? []
+  const userIds = Array.from(new Set(rows.map(r => r.user_id)))
+  const profileMap = await fetchProfilesMap(userIds)
+
+  return rows.map(r => {
+    const p = profileMap.get(r.user_id)
+    return {
+      userId: r.user_id,
+      name: p?.full_name ?? 'Unknown',
+      employeeId: p?.employee_id ?? '—',
+      flagType: 'Outside Geofence' as const,
+      severity: 'Medium' as const,
+      detail: `Clocked ${r.log_type === 'check_in' ? 'in' : 'out'} outside facility perimeter`,
+      timestamp: r.scanned_at,
+    }
+  })
+}
+
+async function buildLowAttendance(): Promise<FlaggedStaff[]> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+  const { data: shiftsData, error: shiftsErr } = await supabase
+    .from('shifts')
+    .select('user_id')
+    .eq('facility_id', FACILITY_ID)
+    .gte('starts_at', thirtyDaysAgo.toISOString())
+  if (shiftsErr) throw shiftsErr
+
+  const { data: logsData, error: logsErr } = await supabase
+    .from('attendance_logs')
+    .select('user_id')
+    .eq('facility_id', FACILITY_ID)
+    .eq('log_type', 'check_in')
+    .gte('scanned_at', thirtyDaysAgo.toISOString())
+  if (logsErr) throw logsErr
+
+  const scheduledCount = new Map<string, number>()
+  for (const s of (shiftsData as any[]) ?? []) {
+    scheduledCount.set(s.user_id, (scheduledCount.get(s.user_id) ?? 0) + 1)
+  }
+  const checkinCount = new Map<string, number>()
+  for (const l of (logsData as any[]) ?? []) {
+    checkinCount.set(l.user_id, (checkinCount.get(l.user_id) ?? 0) + 1)
+  }
+
+  const userIds = Array.from(scheduledCount.keys())
+  const profileMap = await fetchProfilesMap(userIds)
+
+  const result: FlaggedStaff[] = []
+  for (const [userId, scheduled] of scheduledCount) {
+    if (scheduled <= 0) continue
+    const checkins = checkinCount.get(userId) ?? 0
+    const rate = checkins / scheduled
+    if (rate < 0.8) {
+      const p = profileMap.get(userId)
+      result.push({
+        userId,
+        name: p?.full_name ?? 'Unknown',
+        employeeId: p?.employee_id ?? '—',
+        flagType: 'Low Attendance',
+        severity: 'High',
+        detail: `${Math.round(rate * 100)}% attendance over last 30 days (${checkins}/${scheduled} shifts)`,
+        timestamp: thirtyDaysAgo.toISOString(),
+      })
+    }
+  }
+  return result
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const SUMMARY_CARDS = [
-  {
-    label: 'No Shows',
-    icon: UserX,
-    card:  'border-red-200    bg-red-50      ',
-    icon_: 'text-red-500',
-    count: 'text-red-600     ',
-    zero:  'text-red-300     ',
-  },
-  {
-    label: 'Late Arrivals',
-    icon: Clock,
-    card:  'border-orange-200 bg-orange-50',
-    icon_: 'text-orange-500',
-    count: 'text-orange-600  ',
-    zero:  'text-orange-300  ',
-  },
-  {
-    label: 'Outside Geofence',
-    icon: MapPin,
-    card:  'border-amber-200  bg-amber-50  ',
-    icon_: 'text-amber-500',
-    count: 'text-amber-600   ',
-    zero:  'text-amber-300   ',
-  },
-  {
-    label: 'Low Attendance',
-    icon: TrendingDown,
-    card:  'border-blue-200   bg-blue-50    ',
-    icon_: 'text-blue-500',
-    count: 'text-blue-600    ',
-    zero:  'text-blue-300    ',
-  },
-] as const
+const FLAG_TYPE_BADGE: Record<FlaggedStaff['flagType'], string> = {
+  'No Show':          'bg-red-100 text-red-700',
+  'Late Arrival':     'bg-orange-100 text-orange-700',
+  'Outside Geofence': 'bg-amber-100 text-amber-700',
+  'Low Attendance':   'bg-blue-100 text-blue-700',
+}
+
+const SEVERITY_BADGE: Record<FlaggedStaff['severity'], string> = {
+  High:   'bg-red-100 text-red-700',
+  Medium: 'bg-yellow-100 text-yellow-800',
+}
 
 const FLAG_RULES = [
   {
@@ -94,15 +298,43 @@ export default function Flags() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
 
-  type Period = 'today' | 'week' | 'month'
-  const [period, setPeriod] = useState<Period>('today')
+  const [period, setPeriod]   = useState<Period>('Today')
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState<string | null>(null)
 
-  const PERIODS: { value: Period; label: string; subtitle: string }[] = [
-    { value: 'today', label: 'Today',      subtitle: 'No data yet — today'      },
-    { value: 'week',  label: 'This Week',  subtitle: 'No data yet — this week'  },
-    { value: 'month', label: 'This Month', subtitle: 'No data yet — this month' },
+  const [noShows,         setNoShows]         = useState<FlaggedStaff[]>([])
+  const [lateArrivals,    setLateArrivals]    = useState<FlaggedStaff[]>([])
+  const [outsideGeofence, setOutsideGeofence] = useState<FlaggedStaff[]>([])
+  const [lowAttendance,   setLowAttendance]   = useState<FlaggedStaff[]>([])
+
+  const PERIODS: { value: Period; label: string }[] = [
+    { value: 'Today',      label: 'Today' },
+    { value: 'This Week',  label: 'This Week' },
+    { value: 'This Month', label: 'This Month' },
   ]
-  const currentPeriod = PERIODS.find(p => p.value === period)!
+
+  const loadFlags = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const { start } = getPeriodRange(period)
+      const [ns, la, og, lowAtt] = await Promise.all([
+        buildNoShows(start),
+        buildLateArrivals(start),
+        buildOutsideGeofence(start),
+        buildLowAttendance(),
+      ])
+      setNoShows(ns)
+      setLateArrivals(la)
+      setOutsideGeofence(og)
+      setLowAttendance(lowAtt)
+    } catch {
+      setError('Failed to load flags data. Please refresh.')
+    } finally {
+      setLoading(false)
+    }
+  }, [period])
+
+  useEffect(() => { loadFlags() }, [loadFlags])
 
   // Access guard
   if (!ALLOWED_ROLES.includes(role)) {
@@ -114,6 +346,21 @@ export default function Flags() {
       </div>
     )
   }
+
+  const SUMMARY_CARDS = [
+    { label: 'No Shows',          icon: UserX,        card: 'border-red-200 bg-red-50',       icon_: 'text-red-500',    count: 'text-red-600',    items: noShows },
+    { label: 'Late Arrivals',     icon: Clock,        card: 'border-orange-200 bg-orange-50', icon_: 'text-orange-500', count: 'text-orange-600', items: lateArrivals },
+    { label: 'Outside Geofence',  icon: MapPin,       card: 'border-amber-200 bg-amber-50',   icon_: 'text-amber-500',  count: 'text-amber-600',  items: outsideGeofence },
+    { label: 'Low Attendance',    icon: TrendingDown, card: 'border-blue-200 bg-blue-50',     icon_: 'text-blue-500',   count: 'text-blue-600',   items: lowAttendance },
+  ] as const
+
+  const allFlags: FlaggedStaff[] = [...noShows, ...lateArrivals, ...outsideGeofence, ...lowAttendance]
+    .sort((a, b) => {
+      const sevRank = (s: FlaggedStaff['severity']) => (s === 'High' ? 0 : 1)
+      const sevDiff = sevRank(a.severity) - sevRank(b.severity)
+      if (sevDiff !== 0) return sevDiff
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    })
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -148,11 +395,8 @@ export default function Flags() {
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {SUMMARY_CARDS.map(({ label, icon: Icon, card, icon_, count, zero }) => {
+        {SUMMARY_CARDS.map(({ label, icon: Icon, card, icon_, count, items }) => {
           const isLowAttendance = label === 'Low Attendance'
-          const subtitle = isLowAttendance
-            ? 'No data yet — this month'
-            : currentPeriod.subtitle
           return (
             <div
               key={label}
@@ -162,15 +406,22 @@ export default function Flags() {
                 <p className="text-sm font-medium text-gray-600">{label}</p>
                 <Icon className={`w-5 h-5 ${icon_}`} />
               </div>
-              <p className={`text-3xl font-bold ${count}`}>0</p>
-              <p className={`text-xs font-medium ${zero}`}>{subtitle}</p>
-              {isLowAttendance && (
-                <p className="text-xs text-blue-400 -mt-1">30-day rolling</p>
+              {loading ? (
+                <div className="h-9 w-12 rounded bg-gray-200 animate-pulse" />
+              ) : (
+                <p className={`text-3xl font-bold ${count}`}>{items.length}</p>
               )}
+              <p className="text-xs font-medium text-gray-400">
+                {isLowAttendance ? '(30-day)' : period}
+              </p>
             </div>
           )
         })}
       </div>
+
+      {error && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
 
       {/* ── Flags table ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -182,25 +433,51 @@ export default function Flags() {
         </div>
 
         {/* Table header — hidden on mobile */}
-        <div className="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1.5fr_1fr] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
-          <span>Staff Member</span>
-          <span>Department</span>
+        <div className="hidden md:grid grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <span>Staff Name</span>
+          <span>Employee ID</span>
           <span>Flag Type</span>
+          <span>Detail</span>
           <span>Severity</span>
           <span>Date / Time</span>
-          <span>Status</span>
         </div>
 
-        {/* Empty state */}
-        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-          <ShieldCheck className="w-12 h-12 text-teal-300 mb-4" />
-          <p className="text-sm font-medium text-gray-600">
-            No flags raised
-          </p>
-          <p className="text-xs text-gray-400 mt-1 max-w-sm leading-relaxed">
-            Flags will appear here automatically once shift and attendance tracking begins.
-          </p>
-        </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <p className="text-sm text-gray-400">Loading flags…</p>
+          </div>
+        ) : allFlags.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <ShieldCheck className="w-12 h-12 text-teal-300 mb-4" />
+            <p className="text-sm font-medium text-gray-500">
+              No flags detected for this period
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {allFlags.map((flag, i) => (
+              <div
+                key={`${flag.userId}-${flag.flagType}-${flag.timestamp}-${i}`}
+                className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-1 md:gap-4 px-5 py-3 text-sm"
+              >
+                <span className="font-medium text-gray-800">{flag.name}</span>
+                <span className="text-gray-500">{flag.employeeId}</span>
+                <span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${FLAG_TYPE_BADGE[flag.flagType]}`}>
+                    {flag.flagType}
+                  </span>
+                </span>
+                <span className="text-gray-600">{flag.detail}</span>
+                <span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SEVERITY_BADGE[flag.severity]}`}>
+                    {flag.severity}
+                  </span>
+                </span>
+                <span className="text-gray-400 text-xs md:text-sm">{formatDateTime(flag.timestamp)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── How flags work ── */}
@@ -235,4 +512,3 @@ export default function Flags() {
     </div>
   )
 }
-
