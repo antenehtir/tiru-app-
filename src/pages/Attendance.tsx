@@ -96,6 +96,7 @@ export default function Attendance() {
   const [scannerActive, setScannerActive] = useState(false)
   const [scanResult,    setScanResult]    = useState<'success'|'error'|'geofence_warn'|null>(null)
   const [scanMessage,   setScanMessage]   = useState('')
+  const [cameraError,   setCameraError]   = useState<string | null>(null)
   const [scanning,      setScanning]      = useState(false)
   const [attType,       setAttType]       = useState<AttendanceType>('clock_in')
   const [gpsStatus,     setGpsStatus]     = useState<'idle'|'fetching'|'ok'|'denied'>('idle')
@@ -313,14 +314,22 @@ export default function Attendance() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startCamera = async () => {
-    setScanResult(null); setScanMessage(''); setScanning(false)
+    setScanResult(null); setScanMessage(''); setScanning(false); setCameraError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       streamRef.current = stream
       if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play() }
       setScannerActive(true); captureGPS(); tick()
-    } catch {
-      setScanResult('error'); setScanMessage('Camera access denied. Please allow camera permission.')
+    } catch (err) {
+      const name = err instanceof Error ? err.name : ''
+      if (name === 'NotAllowedError') {
+        setCameraError('Camera permission denied. Please allow camera access in your browser settings.')
+      } else if (name === 'NotFoundError') {
+        setCameraError('No camera found on this device.')
+      } else {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        setCameraError(`Camera error: ${message}`)
+      }
     }
   }
 
@@ -421,13 +430,23 @@ export default function Attendance() {
 
       <div className="rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50">
         {!scannerActive ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-4">
-            <QrCode className="w-16 h-16 text-gray-300" />
-            <p className="text-sm text-gray-400">Camera is off</p>
-            <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
-              Start Scanner
-            </button>
-          </div>
+          cameraError ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-4 px-6 text-center">
+              <XCircle className="w-12 h-12 text-red-400" />
+              <p className="text-sm text-red-600 font-medium">{cameraError}</p>
+              <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
+                Retry Camera
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <QrCode className="w-16 h-16 text-gray-300" />
+              <p className="text-sm text-gray-400">Camera is off</p>
+              <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
+                Start Scanner
+              </button>
+            </div>
+          )
         ) : (
           <div className="relative">
             <video ref={videoRef} className="w-full aspect-video object-cover" playsInline muted />
