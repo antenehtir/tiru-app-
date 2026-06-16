@@ -18,6 +18,7 @@ type AttendanceType = 'clock_in' | 'clock_out'
 type QueuedLog = {
   id: string
   user_id: string
+  facility_id: string
   qr_code_id: string | null
   scanned_at: string
   latitude: number | null
@@ -310,7 +311,7 @@ export default function Attendance() {
       qrCodeId = qrRow.id
     }
     const log: QueuedLog = {
-      id: localId(), user_id: profile!.id, qr_code_id: qrCodeId,
+      id: localId(), user_id: profile!.id, facility_id: FACILITY_ID, qr_code_id: qrCodeId,
       scanned_at: new Date().toISOString(), latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null, within_geofence: insideGeofence,
       attendance_type: attType, notes: null,
