@@ -244,7 +244,7 @@ export default function Dashboard() {
           {profile?.role?.replace(/_/g, ' ')}
         </span>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2 md:gap-4 mb-3 md:mb-8">
         {[
           { label: 'Total Staff', value: stats.staff },
           { label: 'Departments', value: stats.departments },
@@ -253,10 +253,10 @@ export default function Dashboard() {
           { label: 'Active Sites', value: sitesCount, icon: <MapPin className="w-4 h-4 text-teal-500 mb-1" /> },
         ].map((card) => (
           <div key={card.label}
-            className="bg-white border border-gray-200 rounded-lg p-4">
+            className="bg-white border border-gray-200 rounded-lg p-3 md:p-4">
             {'icon' in card && card.icon}
-            <p className="text-3xl font-bold text-teal-700">{card.value}</p>
-            <p className="text-sm text-gray-500 mt-1">{card.label}</p>
+            <p className="text-2xl md:text-3xl font-bold text-teal-700">{card.value}</p>
+            <p className="text-xs md:text-sm text-gray-500 mt-1">{card.label}</p>
           </div>
         ))}
       </div>
@@ -265,7 +265,7 @@ export default function Dashboard() {
       {liveStats !== null && (
         <button
           onClick={() => navigate('/onduty')}
-          className="w-full mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
+          className="w-full mb-3 md:mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -311,7 +311,7 @@ export default function Dashboard() {
       {isLeadership && flagStats !== null && (
         <button
           onClick={() => navigate('/flags')}
-          className="w-full mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
+          className="w-full mb-3 md:mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
