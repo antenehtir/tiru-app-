@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
 import {
   QrCode, MapPin, CheckCircle2, XCircle, Clock,
-  AlertTriangle, Loader2, Wifi, WifiOff, History,
+  AlertTriangle, Loader2, Wifi, WifiOff, History, Users, Pencil, Trash2, X,
 } from 'lucide-react'
 
 // Test Medical Center 1 coordinates
@@ -11,6 +11,7 @@ const FACILITY_LAT  = 9.0054
 const FACILITY_LNG  = 38.7636
 const GEOFENCE_M    = 150
 const OFFLINE_KEY   = 'tiru_attendance_queue'
+const FACILITY_ID   = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 type AttendanceType = 'clock_in' | 'clock_out'
 
@@ -33,6 +34,35 @@ type LogRow = {
   within_geofence: boolean | null
   latitude: number | null
   longitude: number | null
+}
+
+type DeptLogRow = {
+  id: string
+  user_id: string
+  staff_name: string
+  scanned_at: string
+  log_type: string | null
+  attendance_type: string | null
+  within_geofence: boolean | null
+}
+
+type ActionMode = {
+  mode: 'edit' | 'remove'
+  log: DeptLogRow
+  step: 'remark' | 'edit_fields'
+} | null
+
+function normalizeLogType(log: { log_type?: string | null; attendance_type?: string | null }): 'in' | 'out' | null {
+  const t = log.log_type ?? log.attendance_type
+  if (t === 'check_in' || t === 'clock_in') return 'in'
+  if (t === 'check_out' || t === 'clock_out') return 'out'
+  return null
+}
+
+function toDatetimeLocalValue(iso: string) {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -78,6 +108,16 @@ export default function Attendance() {
   const [recentLogs,    setRecentLogs]    = useState<LogRow[]>([])
   const [logsLoading,   setLogsLoading]   = useState(false)
 
+  const isDeptHead = profile?.role === 'department_head'
+  const [deptLogs,        setDeptLogs]        = useState<DeptLogRow[]>([])
+  const [deptLogsLoading, setDeptLogsLoading]  = useState(false)
+  const [actionMode,      setActionMode]       = useState<ActionMode>(null)
+  const [remark,          setRemark]            = useState('')
+  const [editLogType,     setEditLogType]       = useState<'check_in' | 'check_out'>('check_in')
+  const [editScannedAt,   setEditScannedAt]     = useState('')
+  const [actionSaving,    setActionSaving]      = useState(false)
+  const [actionErr,       setActionErr]         = useState<string | null>(null)
+
   useEffect(() => {
     const up = () => setOnline(true); const down = () => setOnline(false)
     window.addEventListener('online', up); window.addEventListener('offline', down)
@@ -109,6 +149,102 @@ export default function Attendance() {
   }, [profile?.id])
 
   useEffect(() => { fetchRecentLogs() }, [fetchRecentLogs])
+
+  const fetchDeptAttendance = useCallback(async () => {
+    if (!isDeptHead || !profile?.department_id) return
+    setDeptLogsLoading(true)
+    const { data: deptStaff } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('department_id', profile.department_id)
+    const staffMap = new Map((deptStaff ?? []).map((s: any) => [s.id, s.full_name as string]))
+    const staffIds = Array.from(staffMap.keys())
+    if (staffIds.length === 0) { setDeptLogs([]); setDeptLogsLoading(false); return }
+    const { data } = await supabase
+      .from('attendance_logs')
+      .select('id, user_id, scanned_at, log_type, attendance_type, within_geofence')
+      .in('user_id', staffIds)
+      .order('scanned_at', { ascending: false })
+      .limit(50)
+    const enriched: DeptLogRow[] = ((data as any[]) ?? []).map(d => ({
+      ...d,
+      staff_name: staffMap.get(d.user_id) ?? 'Unknown',
+    }))
+    setDeptLogs(enriched)
+    setDeptLogsLoading(false)
+  }, [isDeptHead, profile?.department_id])
+
+  useEffect(() => { fetchDeptAttendance() }, [fetchDeptAttendance])
+
+  const openEditModal = (log: DeptLogRow) => {
+    setActionMode({ mode: 'edit', log, step: 'remark' })
+    setRemark('')
+    setActionErr(null)
+    setEditLogType(normalizeLogType(log) === 'out' ? 'check_out' : 'check_in')
+    setEditScannedAt(toDatetimeLocalValue(log.scanned_at))
+  }
+
+  const openRemoveModal = (log: DeptLogRow) => {
+    setActionMode({ mode: 'remove', log, step: 'remark' })
+    setRemark('')
+    setActionErr(null)
+  }
+
+  const closeActionModal = () => {
+    setActionMode(null)
+    setRemark('')
+    setActionErr(null)
+  }
+
+  const insertAuditLog = async (action: 'attendance_edit' | 'attendance_removal', log: DeptLogRow) => {
+    const { error } = await supabase.from('audit_log').insert({
+      facility_id: FACILITY_ID,
+      actor_id: profile!.id,
+      actor_name: profile!.full_name,
+      action,
+      target_user_id: log.user_id,
+      target_name: log.staff_name,
+      details: remark.trim(),
+      created_at: new Date().toISOString(),
+    })
+    if (error) console.error('Audit log error:', error)
+  }
+
+  const confirmRemove = async () => {
+    if (!actionMode) return
+    setActionSaving(true)
+    setActionErr(null)
+    const { error } = await supabase.from('attendance_logs').delete().eq('id', actionMode.log.id)
+    if (error) { setActionErr(error.message); setActionSaving(false); return }
+    await insertAuditLog('attendance_removal', actionMode.log)
+    setActionSaving(false)
+    closeActionModal()
+    fetchDeptAttendance()
+  }
+
+  const proceedFromRemark = () => {
+    if (!actionMode || remark.trim().length < 10) return
+    if (actionMode.mode === 'edit') {
+      setActionMode({ ...actionMode, step: 'edit_fields' })
+    } else {
+      confirmRemove()
+    }
+  }
+
+  const confirmEdit = async () => {
+    if (!actionMode) return
+    setActionSaving(true)
+    setActionErr(null)
+    const { error } = await supabase
+      .from('attendance_logs')
+      .update({ log_type: editLogType, scanned_at: new Date(editScannedAt).toISOString() })
+      .eq('id', actionMode.log.id)
+    if (error) { setActionErr(error.message); setActionSaving(false); return }
+    await insertAuditLog('attendance_edit', actionMode.log)
+    setActionSaving(false)
+    closeActionModal()
+    fetchDeptAttendance()
+  }
 
   const captureGPS = useCallback((): Promise<{lat:number;lng:number}|null> => {
     return new Promise((resolve) => {
@@ -326,6 +462,119 @@ export default function Attendance() {
           </div>
         )}
       </div>
+
+      {isDeptHead && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Users className="w-4 h-4" />Department Attendance
+          </h2>
+          {deptLogsLoading ? (
+            <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
+              <Loader2 className="w-4 h-4 animate-spin" />Loading…
+            </div>
+          ) : deptLogs.length === 0 ? (
+            <p className="text-sm text-gray-400 py-4">No department attendance records yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {deptLogs.map(log => {
+                const type = normalizeLogType(log)
+                return (
+                  <div key={log.id} className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{log.staff_name}</div>
+                        <div className="text-xs text-gray-400">{new Date(log.scanned_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        type === 'in' ? 'bg-green-100 text-green-700' : type === 'out' ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        {type === 'in' ? 'In' : type === 'out' ? 'Out' : '—'}
+                      </span>
+                      {log.within_geofence === true  && <span className="text-green-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />On-site</span>}
+                      {log.within_geofence === false && <span className="text-amber-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />Off-site</span>}
+                      <button onClick={() => openEditModal(log)} title="Edit"
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-teal-600 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => openRemoveModal(log)} title="Remove"
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {actionMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold">
+                {actionMode.mode === 'edit' ? 'Edit Attendance Record' : 'Remove Attendance Record'}
+              </h2>
+              <button onClick={closeActionModal} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {actionErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />{actionErr}
+                </div>
+              )}
+              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
+                <p className="font-medium text-gray-800">{actionMode.log.staff_name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Original: {new Date(actionMode.log.scanned_at).toLocaleString()}</p>
+              </div>
+
+              {actionMode.step === 'remark' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason for change *</label>
+                  <textarea rows={3} value={remark} onChange={e => setRemark(e.target.value)}
+                    placeholder="Describe why this attendance record is being modified..."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+                  <p className="text-xs text-gray-400 mt-1">{remark.trim().length}/10 characters minimum</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Type</label>
+                    <select value={editLogType} onChange={e => setEditLogType(e.target.value as 'check_in' | 'check_out')}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+                      <option value="check_in">Check In</option>
+                      <option value="check_out">Check Out</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date &amp; Time</label>
+                    <input type="datetime-local" value={editScannedAt} onChange={e => setEditScannedAt(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={closeActionModal} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
+              {actionMode.step === 'remark' ? (
+                <button onClick={proceedFromRemark} disabled={remark.trim().length < 10 || actionSaving}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors">
+                  {actionSaving && <Loader2 className="w-4 h-4 animate-spin" />}Confirm
+                </button>
+              ) : (
+                <button onClick={confirmEdit} disabled={actionSaving}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+                  {actionSaving && <Loader2 className="w-4 h-4 animate-spin" />}Save Changes
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

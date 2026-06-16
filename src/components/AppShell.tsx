@@ -21,7 +21,7 @@ const MOBILE_MAIN = NAV_ITEMS.filter(n => n.to !== '/onduty')
 const LEADERSHIP  = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
 const CAN_ADMIN   = ['super_admin', 'ceo', 'general_manager']
 const CAN_FLAGS   = ['super_admin', 'ceo', 'general_manager', 'medical_director']
-const CAN_AUDIT   = ['super_admin', 'ceo']
+const CAN_AUDIT   = ['super_admin', 'ceo', 'hr', 'medical_director', 'general_manager']
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${

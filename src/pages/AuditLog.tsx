@@ -5,11 +5,13 @@ import { ClipboardList, Loader2, Shield } from 'lucide-react'
 
 // ─── Access ───────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = ['super_admin', 'ceo']
+const CAN_VIEW_FULL_AUDIT = ['super_admin', 'ceo']
+const CAN_VIEW_ATTENDANCE = ['super_admin', 'hr', 'medical_director', 'ceo', 'general_manager']
+const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile_changes' | 'leave' | 'incidents' | 'notices'
+type Tab = 'profile_changes' | 'leave' | 'incidents' | 'notices' | 'attendance'
 
 type Row = {
   id: string
@@ -209,6 +211,54 @@ function NoticeActivityTab() {
   )
 }
 
+function AttendanceActionBadge({ action }: { action: string }) {
+  const isEdit = action === 'attendance_edit'
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isEdit ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'}`}>
+      {isEdit ? 'Edited' : 'Removed'}
+    </span>
+  )
+}
+
+function AttendanceActivityTab() {
+  const [rows, setRows]     = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase
+      .from('audit_log')
+      .select('*')
+      .eq('facility_id', FACILITY_ID)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => { setRows((data as Row[]) ?? []); setLoading(false) })
+  }, [])
+
+  if (loading) return <LoadingRow />
+  if (!rows.length) return <EmptyRow text="No attendance changes recorded yet" />
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <Th>Date / Time</Th><Th>Action</Th><Th>Actor</Th><Th>Target</Th><Th>Details</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={r.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+            <Td>{fmtDate(r.created_at)}</Td>
+            <Td><AttendanceActionBadge action={r.action} /></Td>
+            <Td>{r.actor_name ?? '—'}</Td>
+            <Td>{r.target_name ?? '—'}</Td>
+            <Td className="max-w-xs truncate">{r.details ?? '—'}</Td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 // ─── Small shared primitives ──────────────────────────────────────────────────
 
 function Th({ children }: { children: React.ReactNode }) {
@@ -227,9 +277,9 @@ function LoadingRow() {
   )
 }
 
-function EmptyRow() {
+function EmptyRow({ text = 'No activity recorded yet.' }: { text?: string }) {
   return (
-    <p className="text-sm text-gray-400 text-center py-10">No activity recorded yet.</p>
+    <p className="text-sm text-gray-400 text-center py-10">{text}</p>
   )
 }
 
@@ -240,19 +290,25 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'leave',           label: 'Leave Activity'   },
   { value: 'incidents',       label: 'Incident Activity'},
   { value: 'notices',         label: 'Notice Activity'  },
+  { value: 'attendance',      label: 'Attendance Changes' },
 ]
 
 export default function AuditLog() {
   const profile = useAuthStore(s => s.profile)
   const role    = profile?.role ?? ''
-  const [activeTab, setActiveTab] = useState<Tab>('profile_changes')
+  const canViewFullAudit  = CAN_VIEW_FULL_AUDIT.includes(role)
+  const canViewAttendance = CAN_VIEW_ATTENDANCE.includes(role)
+  const canViewPage = canViewFullAudit || canViewAttendance
 
-  if (!ALLOWED_ROLES.includes(role)) {
+  const visibleTabs = TABS.filter(t => t.value === 'attendance' ? canViewAttendance : canViewFullAudit)
+  const [activeTab, setActiveTab] = useState<Tab>(canViewFullAudit ? 'profile_changes' : 'attendance')
+
+  if (!canViewPage) {
     return (
       <div className="p-6 flex flex-col items-center justify-center py-32 text-gray-400">
         <Shield className="w-12 h-12 mb-3 opacity-40" />
         <p className="text-lg font-medium text-gray-500">Access Restricted</p>
-        <p className="text-sm mt-1">Audit Log is visible to Super Admin and CEO only.</p>
+        <p className="text-sm mt-1">You do not have access to the Audit Log.</p>
       </div>
     )
   }
@@ -270,7 +326,7 @@ export default function AuditLog() {
 
       {/* Tabs */}
       <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm w-fit flex-wrap">
-        {TABS.map(({ value, label }) => (
+        {visibleTabs.map(({ value, label }) => (
           <button
             key={value}
             onClick={() => setActiveTab(value)}
@@ -291,6 +347,7 @@ export default function AuditLog() {
         {activeTab === 'leave'           && <LeaveActivityTab />}
         {activeTab === 'incidents'       && <IncidentActivityTab />}
         {activeTab === 'notices'         && <NoticeActivityTab />}
+        {activeTab === 'attendance'      && <AttendanceActivityTab />}
       </div>
     </div>
   )
