@@ -1,11 +1,12 @@
 ﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
   ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle, MessageSquare,
-  Camera, PenLine,
+  Camera, PenLine, Download, Printer,
 } from 'lucide-react'
 
 // â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -1490,6 +1491,82 @@ function QRCodesSection() {
     setTimeout(() => setCopied(null), 2000)
   }
 
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+  const downloadQR = (qr: QRCode) => {
+    const svg = document.getElementById(`qr-${qr.id}`)
+    if (!svg) return
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const img = new Image()
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(svgBlob)
+    img.onload = () => {
+      canvas.width = 300
+      canvas.height = 300
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, 300, 300)
+      ctx.drawImage(img, 0, 0, 300, 300)
+      const a = document.createElement('a')
+      a.download = `Tiru-QR-${qr.label || qr.id}.png`
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
+  }
+
+  const printQR = (qr: QRCode) => {
+    const svg = document.getElementById(`qr-${qr.id}`)
+    if (!svg) return
+    const win = window.open('', '_blank', 'width=480,height=600')
+    if (!win) return
+    const svgData = new XMLSerializer().serializeToString(svg)
+    win.document.write(`
+      <html>
+        <head><title>${escapeHtml(qr.label)}</title></head>
+        <body style="margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
+          <h2 style="margin-bottom:24px;color:#0f766e;">${escapeHtml(qr.label)}</h2>
+          ${svgData}
+          <p style="font-family:monospace;font-size:11px;color:#888;margin-top:16px;">${qr.id}</p>
+        </body>
+      </html>
+    `)
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 300)
+  }
+
+  const printAll = () => {
+    const win = window.open('', '_blank', 'width=900,height=1200')
+    if (!win) return
+    const cards = qrCodes.map(qr => {
+      const svg = document.getElementById(`qr-${qr.id}`)
+      const svgData = svg ? new XMLSerializer().serializeToString(svg) : ''
+      return `
+        <div style="display:flex;flex-direction:column;align-items:center;padding:24px;break-inside:avoid;">
+          <h3 style="margin-bottom:16px;color:#0f766e;font-family:sans-serif;">${escapeHtml(qr.label)}</h3>
+          ${svgData}
+          <p style="font-family:monospace;font-size:10px;color:#888;margin-top:8px;">${qr.id}</p>
+        </div>
+      `
+    }).join('')
+    win.document.write(`
+      <html>
+        <head><title>All QR Codes</title></head>
+        <body style="margin:0;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;">${cards}</div>
+        </body>
+      </html>
+    `)
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 300)
+  }
+
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -1497,6 +1574,12 @@ function QRCodesSection() {
           <QrCode className="w-5 h-5 text-teal-500" />Entrance QR Codes
           <span className="text-sm font-normal text-gray-400">({qrCodes.length})</span>
         </h2>
+        {qrCodes.length > 0 && (
+          <button onClick={printAll}
+            className="flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
+            <Printer className="w-4 h-4" />Print All
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -1513,7 +1596,7 @@ function QRCodesSection() {
       </div>
 
       <p className="text-xs text-gray-400 mb-4">
-        Each QR code's UUID is its payload. Print the UUID as a QR code (use any QR generator) and mount it at the entrance. Staff scan it with the Attendance page.
+        Each QR code's UUID is its payload. Staff scan it with the Attendance page. Download or print the card below to mount it at the entrance.
       </p>
 
       {loading ? (
@@ -1523,20 +1606,41 @@ function QRCodesSection() {
       ) : qrCodes.length === 0 ? (
         <p className="text-sm text-gray-400 py-4">No QR codes yet. Generate one above.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {qrCodes.map(qr => (
-            <div key={qr.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm text-gray-900">{qr.label}</span>
-                  {qr.is_active
-                    ? <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Active</span>
-                    : <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Inactive</span>
-                  }
-                </div>
-                <div className="text-xs text-gray-400 font-mono mt-0.5 truncate">{qr.id}</div>
+            <div key={qr.id} className="bg-white rounded-xl shadow-sm p-6 flex flex-col items-center text-center">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="font-bold text-teal-700">{qr.label}</span>
+                {qr.is_active
+                  ? <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">Active</span>
+                  : <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Inactive</span>
+                }
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+
+              <QRCodeSVG
+                id={`qr-${qr.id}`}
+                value={qr.id}
+                size={220}
+                level="H"
+                includeMargin={true}
+                fgColor="#0f766e"
+                bgColor="#ffffff"
+              />
+
+              <p className="text-xs text-gray-400 font-mono mt-3 break-all">{qr.id}</p>
+
+              <div className="flex gap-2 mt-4 w-full">
+                <button onClick={() => downloadQR(qr)}
+                  className="flex-1 flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 rounded-lg transition-colors">
+                  <Download className="w-4 h-4" />Download QR
+                </button>
+                <button onClick={() => printQR(qr)}
+                  className="flex-1 flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 rounded-lg transition-colors">
+                  <Printer className="w-4 h-4" />Print
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 mt-3">
                 <button onClick={() => copyId(qr.id)} title="Copy UUID"
                   className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                   {copied === qr.id
