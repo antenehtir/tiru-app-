@@ -107,6 +107,30 @@ export default function Leave() {
     else if (actionMode.action === 'reject') { updates.status = 'rejected'; updates.medical_director_note = actionNote || null }
     else if (actionMode.action === 'record') { updates.status = 'recorded'; updates.hr_note = actionNote || null }
     const { error: err } = await supabase.from('leave_requests').update(updates).eq('id', actionMode.id)
+
+    if (!err && (actionMode.action === 'approve' || actionMode.action === 'reject')) {
+      const req = requests.find(r => r.id === actionMode.id)
+      if (req) {
+        const approved = actionMode.action === 'approve'
+        const note = actionNote.trim()
+        const { data: { user } } = await supabase.auth.getUser()
+        const { error: noticeErr } = await supabase.from('notices').insert({
+          author_id: user?.id ?? null,
+          title: approved ? 'Leave Request Approved ✓' : 'Leave Request Not Approved',
+          body: approved
+            ? `Your leave request from ${req.start_date} to ${req.end_date} has been approved.`
+            : `Your leave request from ${req.start_date} to ${req.end_date} was not approved.${note ? ` Reason: ${note}` : ''}`,
+          priority: 'info',
+          audience: 'individual',
+          target_user_id: req.user_id,
+          department_id: null,
+          department_ids: null,
+          pinned: false,
+        })
+        if (noticeErr) console.error('Notice error:', noticeErr)
+      }
+    }
+
     setActioning(false)
     if (!err) { setActionMode(null); setActionNote(''); fetchRequests() }
   }
@@ -153,7 +177,7 @@ export default function Leave() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loadingâ€¦
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading…
         </div>
       ) : requests.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
@@ -170,14 +194,14 @@ export default function Leave() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm text-gray-900">
-                        {req.requester?.full_name ?? (isOwn ? profile?.full_name : 'â€”')}
+                        {req.requester?.full_name ?? (isOwn ? profile?.full_name : '—')}
                       </span>
                       <span className="text-xs text-gray-400 capitalize">{req.leave_type}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${STATUS_COLOR[req.status]}`}>{req.status}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />{req.start_date} â†’ {req.end_date}
-                      &nbsp;Â·&nbsp;
+                      <Clock className="w-3 h-3" />{req.start_date} → {req.end_date}
+                      &nbsp;·&nbsp;
                       {Math.max(1, Math.round((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1)} day(s)
                     </div>
                   </div>
@@ -253,7 +277,7 @@ export default function Leave() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
                 <textarea rows={3} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
-                  placeholder="Optionalâ€¦"
+                  placeholder="Optional…"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
               </div>
             </div>
@@ -261,7 +285,7 @@ export default function Leave() {
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button onClick={submitRequest} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submittingâ€¦' : 'Submit Request'}
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? 'Submitting…' : 'Submit Request'}
               </button>
             </div>
           </div>
@@ -278,7 +302,7 @@ export default function Leave() {
             <div className="px-6 py-5 space-y-3">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
               <textarea rows={3} value={actionNote} onChange={e => setActionNote(e.target.value)}
-                placeholder="Add a noteâ€¦"
+                placeholder="Add a note…"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">

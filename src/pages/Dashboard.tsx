@@ -2,15 +2,20 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { MapPin, Activity, ChevronRight, AlertTriangle } from 'lucide-react'
+import { MapPin, Activity, ChevronRight, AlertTriangle, ShieldAlert, CalendarOff } from 'lucide-react'
+import NewIncidentModal from '../components/NewIncidentModal'
 
 const LEADERSHIP_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
+const ADMIN_OVERVIEW_ROLES = ['super_admin', 'ceo', 'general_manager']
+const INCIDENTS_CARD_ROLES = ['physician', 'nurse', 'pharmacist', 'staff', 'department_head', 'coordinator', 'hr', 'medical_director']
 
 export default function Dashboard() {
   const { profile } = useAuthStore()
   const navigate = useNavigate()
   const role = profile?.role ?? ''
   const isLeadership = LEADERSHIP_ROLES.includes(role)
+  const showAdminOverview = ADMIN_OVERVIEW_ROLES.includes(role)
+  const showIncidentsCard = INCIDENTS_CARD_ROLES.includes(role)
 
   const [stats, setStats] = useState({
     staff: 0, departments: 0, shifts: 0, leave: 0
@@ -18,6 +23,7 @@ export default function Dashboard() {
   const [sitesCount, setSitesCount] = useState(0)
   const [activeIncidentCount, setActiveIncidentCount] = useState(0)
   const [myIncidents, setMyIncidents] = useState<any[]>([])
+  const [incidentModalOpen, setIncidentModalOpen] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [liveStats, setLiveStats] = useState<{
@@ -26,6 +32,7 @@ export default function Dashboard() {
   const [flagStats, setFlagStats] = useState<{
     noShows: number; lateArrivals: number; geofence: number
   } | null>(null)
+  const [pendingLeaveCount, setPendingLeaveCount] = useState<number | null>(null)
 
   const fetchLive = useCallback(async () => {
     const now = new Date()
@@ -107,6 +114,27 @@ export default function Dashboard() {
     setFlagStats({ noShows, lateArrivals, geofence })
   }, [isLeadership])
 
+  const fetchMyIncidents = useCallback(async () => {
+    if (!showIncidentsCard || !profile?.id) return
+    const { data: myInc } = await supabase
+      .from('incident_reports')
+      .select('id, title, severity, status, created_at')
+      .eq('reporter_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(3)
+    setMyIncidents(myInc ?? [])
+  }, [showIncidentsCard, profile?.id])
+
+  const fetchPendingLeave = useCallback(async () => {
+    if (role !== 'medical_director' && role !== 'hr') return
+    const statusToCheck = role === 'medical_director' ? 'pending' : 'approved'
+    const { count } = await supabase
+      .from('leave_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', statusToCheck)
+    setPendingLeaveCount(count ?? 0)
+  }, [role])
+
   useEffect(() => {
     if (!profile?.id) return
 
@@ -147,22 +175,15 @@ export default function Dashboard() {
           .eq('is_active', true)
         if (e5) { setError('Sites: ' + e5.message); setLoading(false); return }
 
-        if (isLeadership) {
+        if (showAdminOverview) {
           const { count: activeInc, error: e7 } = await supabase
             .from('incident_reports')
             .select('*', { count: 'exact', head: true })
             .in('status', ['submitted', 'under_review'])
           if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
           setActiveIncidentCount(activeInc ?? 0)
-        } else {
-          const { data: myInc, error: e7 } = await supabase
-            .from('incident_reports')
-            .select('id, title, severity, status, created_at')
-            .eq('reporter_id', profile!.id)
-            .order('created_at', { ascending: false })
-            .limit(3)
-          if (e7) { setError('Incidents: ' + e7.message); setLoading(false); return }
-          setMyIncidents(myInc ?? [])
+        } else if (showIncidentsCard) {
+          await fetchMyIncidents()
         }
 
         setStats({
@@ -183,9 +204,10 @@ export default function Dashboard() {
     fetchData()
     fetchLive()
     fetchFlags()
-    const interval = setInterval(() => { fetchLive(); fetchFlags() }, 120000)
+    fetchPendingLeave()
+    const interval = setInterval(() => { fetchLive(); fetchFlags(); fetchPendingLeave() }, 120000)
     return () => clearInterval(interval)
-  }, [profile?.id, isLeadership, fetchLive])
+  }, [profile?.id, isLeadership, showAdminOverview, showIncidentsCard, fetchLive, fetchMyIncidents, fetchPendingLeave])
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning'
@@ -199,18 +221,21 @@ export default function Dashboard() {
   }
 
   const severityColors: Record<string, string> = {
-    low: 'bg-gray-100 text-gray-600',
-    medium: 'bg-amber-100 text-amber-700',
+    low: 'bg-green-100 text-green-700',
+    medium: 'bg-yellow-100 text-yellow-700',
     high: 'bg-orange-100 text-orange-700',
     critical: 'bg-red-100 text-red-700',
   }
 
-  const statusColors: Record<string, string> = {
-    submitted:    'bg-blue-100 text-blue-700',
-    under_review: 'bg-amber-100 text-amber-700',
-    resolved:     'bg-green-100 text-green-700',
-    dismissed:    'bg-gray-100 text-gray-500',
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    submitted:    { label: 'Open',         color: 'bg-blue-100 text-blue-700' },
+    under_review: { label: 'Under Review', color: 'bg-yellow-100 text-yellow-700' },
+    resolved:     { label: 'Resolved',      color: 'bg-green-100 text-green-700' },
+    dismissed:    { label: 'Dismissed',     color: 'bg-gray-100 text-gray-500' },
   }
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4">
@@ -369,7 +394,34 @@ export default function Dashboard() {
         </button>
       )}
 
-      {isLeadership ? (
+      {/* ── Pending Leave Requests Strip (medical_director + hr only) ── */}
+      {(role === 'medical_director' || role === 'hr') && pendingLeaveCount !== null && (
+        <button
+          onClick={() => navigate('/leave')}
+          className="w-full mb-3 md:mb-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 text-left group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
+                <CalendarOff className="w-5 h-5 text-teal-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 group-hover:text-teal-700 transition-colors">
+                  Pending Leave Requests
+                </p>
+                <p className={`text-xs mt-0.5 ${pendingLeaveCount === 0 ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
+                  {pendingLeaveCount === 0 ? 'All caught up ✓' : `${pendingLeaveCount} awaiting your review`}
+                </p>
+              </div>
+            </div>
+            {pendingLeaveCount > 0 && (
+              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-teal-500 transition-colors" />
+            )}
+          </div>
+        </button>
+      )}
+
+      {showAdminOverview ? (
         <button
           onClick={() => navigate('/incidents')}
           className="w-full text-left bg-white border border-gray-200 rounded-lg p-4 hover:border-teal-300 hover:shadow-sm transition-all">
@@ -377,31 +429,63 @@ export default function Dashboard() {
           <p className="text-3xl font-bold text-orange-600">{activeIncidentCount}</p>
           <p className="text-sm text-gray-400 mt-1">Submitted or under review — click to manage</p>
         </button>
-      ) : (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">My Reports</h2>
-          {myIncidents.length > 0 ? (
-            <ul className="space-y-3">
-              {myIncidents.map((inc) => (
-                <li key={inc.id}
-                  className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0 gap-3">
-                  <span className="text-sm text-gray-700 flex-1">{inc.title}</span>
-                  <div className="flex gap-1.5 flex-shrink-0">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {inc.severity}
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[inc.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {inc.status?.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-gray-400 text-center py-4">No incidents reported.</p>
-          )}
+      ) : showIncidentsCard ? (
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldAlert className="w-4 h-4 text-teal-600" />
+            <h2 className="font-bold text-gray-900">Incidents</h2>
+          </div>
+
+          <button
+            onClick={() => setIncidentModalOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-3 rounded-lg transition-colors">
+            <AlertTriangle className="w-4 h-4" />
+            Report an Incident
+          </button>
+
+          <div className="border-t border-gray-100 mt-4 pt-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">My Recent Reports</p>
+            {myIncidents.length > 0 ? (
+              <ul className="space-y-1">
+                {myIncidents.map((inc) => {
+                  const stat = statusConfig[inc.status] ?? { label: inc.status, color: 'bg-gray-100 text-gray-600' }
+                  return (
+                    <li key={inc.id}
+                      onClick={() => navigate('/incidents')}
+                      className="flex items-start justify-between gap-3 py-2 px-1 -mx-1 rounded-lg border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-700 truncate">{inc.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDate(inc.created_at)}</p>
+                      </div>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {inc.severity}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stat.color}`}>
+                          {stat.label}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">No reports submitted yet</p>
+            )}
+            <button onClick={() => navigate('/incidents')}
+              className="text-xs text-teal-600 hover:text-teal-700 font-medium mt-2">
+              View all reports →
+            </button>
+          </div>
+
+          <NewIncidentModal
+            open={incidentModalOpen}
+            onClose={() => setIncidentModalOpen(false)}
+            reporterId={profile!.id}
+            onSubmitted={fetchMyIncidents}
+          />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
