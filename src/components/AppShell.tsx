@@ -417,14 +417,20 @@ export default function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 20px))' }}
+        >
           <Outlet />
         </main>
       </div>
 
       {/* ── Bottom tab bar (mobile) ── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 rounded-t-2xl shadow-lg overflow-visible"
-        style={{background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)'}}>
+        style={{
+          background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}>
 
         <div className="flex items-end">
           {/* Left: Dashboard, Shifts */}
