@@ -317,7 +317,11 @@ export default function Notices() {
             const Icon = cfg.Icon
             return (
               <div key={notice.id}
-                className={`relative rounded-xl border p-4 transition-opacity cursor-pointer ${cfg.bg} ${notice.is_read ? 'opacity-70' : 'opacity-100'}`}
+                className={`relative rounded-xl border-l-4 p-4 transition-all cursor-pointer ${
+                  notice.is_read
+                    ? 'bg-white border-l-transparent border border-gray-100'
+                    : 'bg-teal-50 border-l-teal-500 border border-teal-100 shadow-sm'
+                }`}
                 onClick={() => !notice.is_read && markRead(notice.id)}>
                 {!notice.is_read && (
                   <span className="absolute top-4 right-4 w-2.5 h-2.5 rounded-full bg-teal-500" />
@@ -331,7 +335,7 @@ export default function Notices() {
                   <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${cfg.color}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-semibold text-sm text-gray-900">{notice.title}</span>
+                      <span className={`text-sm ${notice.is_read ? 'font-medium text-gray-500' : 'font-bold text-gray-900'}`}>{notice.title}</span>
                       <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
                         notice.audience === 'individual'

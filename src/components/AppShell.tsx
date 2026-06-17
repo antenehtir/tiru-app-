@@ -369,12 +369,16 @@ export default function AppShell() {
                       <button
                         key={notice.id}
                         onClick={() => { navigate('/notices'); setBellOpen(false) }}
-                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 text-left"
+                        className={`w-full flex items-start gap-3 px-4 py-3 transition-colors border-b border-gray-50 last:border-0 text-left border-l-4 ${
+                          notice.is_read
+                            ? 'bg-white border-l-transparent hover:bg-gray-50'
+                            : 'bg-teal-50 border-l-teal-500 hover:bg-teal-100'
+                        }`}
                       >
                         <span className="mt-1.5 shrink-0 w-2 h-2 rounded-full block"
                           style={{ background: notice.is_read ? 'transparent' : '#14b8a6' }} />
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm truncate ${notice.is_read ? 'text-gray-500 font-normal' : 'text-gray-900 font-semibold'}`}>
+                          <p className={`text-sm truncate ${notice.is_read ? 'font-normal text-gray-500' : 'font-bold text-gray-900'}`}>
                             {notice.title}
                           </p>
                           <p className="text-xs text-gray-400 truncate mt-0.5">{notice.body}</p>
