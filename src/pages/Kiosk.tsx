@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   LogIn, LogOut, AlertTriangle, Bell, ArrowLeft,
-  CheckCircle2, XCircle, Loader2, Shield
+  CheckCircle2, XCircle, Loader2, Shield, CalendarDays
 } from 'lucide-react'
 
 type KioskScreen = 'idle' | 'identify' | 'pin' | 'dashboard' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
@@ -15,6 +15,13 @@ type StaffProfile = {
   employee_id: string
   department: { id: string; name: string } | null
   pin: string | null
+}
+
+type ScheduleShift = {
+  starts_at: string
+  ends_at: string
+  specialty: string | null
+  department: { name: string } | null
 }
 
 const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
@@ -43,8 +50,11 @@ export default function Kiosk() {
   const [signatureData, setSignatureData] = useState<string | null>(null)
   const [countdown, setCountdown]         = useState(3)
   const [cameraActive, setCameraActive]   = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [todayShift, setTodayShift]   = useState<{starts_at:string; ends_at:string; specialty:string|null} | null>(null)
+  const [unreadCount, setUnreadCount]       = useState(0)
+  const [todayShift, setTodayShift]         = useState<{starts_at:string; ends_at:string; specialty:string|null} | null>(null)
+  const [scheduleTab, setScheduleTab]       = useState<'week' | 'month'>('week')
+  const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([])
+  const [scheduleLoading, setScheduleLoading] = useState(false)
   const activeField: 'id' | 'pin' = numInput.length >= 3 ? 'pin' : 'id'
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const videoRef     = useRef<HTMLVideoElement>(null)
@@ -120,6 +130,9 @@ export default function Kiosk() {
     setCameraActive(false)
     setUnreadCount(0)
     setTodayShift(null)
+    setScheduleTab('week')
+    setScheduleShifts([])
+    setScheduleLoading(false)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -249,8 +262,33 @@ export default function Kiosk() {
       .limit(1)
       .maybeSingle()
     setTodayShift(shiftData as any)
+    setScheduleTab('week')
+    await fetchSchedule(staffProfile.id, 'week')
   }
 
+  async function fetchSchedule(staffId: string, tab: 'week' | 'month') {
+    setScheduleLoading(true)
+    const now = new Date()
+    let start: Date, end: Date
+    if (tab === 'week') {
+      const day = now.getDay()
+      const diffToMonday = day === 0 ? 6 : day - 1
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday, 0, 0, 0, 0)
+      end   = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999)
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+      end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    }
+    const { data } = await supabase
+      .from('shifts')
+      .select('starts_at, ends_at, specialty, department:departments(name)')
+      .eq('user_id', staffId)
+      .gte('starts_at', start.toISOString())
+      .lte('starts_at', end.toISOString())
+      .order('starts_at', { ascending: true })
+    setScheduleShifts((data as unknown as ScheduleShift[]) ?? [])
+    setScheduleLoading(false)
+  }
 
   async function verifyPin(enteredPin?: string) {
     const pinToCheck = enteredPin ?? pin
@@ -628,7 +666,7 @@ export default function Kiosk() {
       )}
 
       {/* Action buttons */}
-      <div className="grid grid-cols-2 gap-4 flex-1">
+      <div className="grid grid-cols-2 gap-4">
         <button onClick={() => startAction('checkin')}
           className="flex flex-col items-center justify-center gap-3 bg-white rounded-3xl p-6 shadow-lg hover:bg-teal-50 active:scale-95 transition-all">
           <div className="w-14 h-14 rounded-2xl bg-teal-100 flex items-center justify-center">
@@ -665,6 +703,74 @@ export default function Kiosk() {
           </div>
           <span className="text-lg font-bold text-gray-800">Notices</span>
         </button>
+      </div>
+
+      {/* My Schedule */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-teal-300" />My Schedule
+          </h2>
+          <div className="flex rounded-xl overflow-hidden border border-white/20 text-xs">
+            <button
+              onClick={() => { setScheduleTab('week'); fetchSchedule(staff!.id, 'week') }}
+              className={`px-3 py-1.5 font-semibold transition-colors ${scheduleTab === 'week' ? 'bg-white text-teal-700' : 'text-teal-200 hover:text-white'}`}
+            >This Week</button>
+            <button
+              onClick={() => { setScheduleTab('month'); fetchSchedule(staff!.id, 'month') }}
+              className={`px-3 py-1.5 font-semibold transition-colors ${scheduleTab === 'month' ? 'bg-white text-teal-700' : 'text-teal-200 hover:text-white'}`}
+            >This Month</button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+          {scheduleLoading ? (
+            <div className="py-6 flex justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
+            </div>
+          ) : scheduleShifts.length === 0 ? (
+            <div className="py-6 text-center text-gray-400 text-sm">
+              No shifts scheduled
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {scheduleShifts.map((s, i) => {
+                const shiftStart = new Date(s.starts_at)
+                const shiftEnd   = new Date(s.ends_at)
+                const now2       = new Date()
+                const todayMid   = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate())
+                const tomorrowMid = new Date(todayMid.getTime() + 86400000)
+                const isToday    = shiftStart >= todayMid && shiftStart < tomorrowMid
+                const isPast     = shiftEnd < now2 && !isToday
+                const dayLabel   = shiftStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                const startT     = shiftStart.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                const endT       = shiftEnd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                const deptLabel  = s.specialty ?? (s.department as any)?.name ?? null
+                return (
+                  <div key={i} className={`flex items-center gap-3 px-4 py-3.5 ${isToday ? 'bg-teal-50' : ''}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`text-sm font-bold ${isPast ? 'text-gray-300' : isToday ? 'text-teal-800' : 'text-gray-800'}`}>
+                          {dayLabel}
+                        </p>
+                        {isToday && (
+                          <span className="text-[10px] bg-teal-600 text-white font-bold px-1.5 py-0.5 rounded-full">Today</span>
+                        )}
+                      </div>
+                      <p className={`text-sm ${isPast ? 'text-gray-300' : isToday ? 'text-teal-700' : 'text-gray-600'}`}>
+                        {startT} – {endT}
+                      </p>
+                      {deptLabel && (
+                        <p className={`text-xs mt-0.5 ${isPast ? 'text-gray-300' : 'text-gray-400'}`}>{deptLabel}</p>
+                      )}
+                    </div>
+                    {isToday && <div className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0" />}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Sign out */}
