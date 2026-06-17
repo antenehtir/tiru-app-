@@ -149,7 +149,7 @@ export default function Login() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number</label>
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                  placeholder="Phone number (09XXXXXXXX or +2519XXXXXXXX)" required autoComplete="tel"
+                  placeholder="Phone number" required autoComplete="tel"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
               <div>
