@@ -23,6 +23,7 @@ type QueuedLog = {
   longitude: number | null
   within_geofence: boolean | null
   attendance_type: AttendanceType
+  log_type: 'check_in' | 'check_out'
   notes: string | null
 }
 
@@ -353,7 +354,9 @@ export default function Attendance() {
       id: localId(), user_id: profile!.id, facility_id: FACILITY_ID, qr_code_id: qrCodeId,
       scanned_at: new Date().toISOString(), latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null, within_geofence: insideGeofence,
-      attendance_type: attType, notes: null,
+      attendance_type: attType,
+      log_type: attType === 'clock_in' ? 'check_in' : 'check_out',
+      notes: null,
     }
     await persistLog(log); setScanning(false)
   }
@@ -378,8 +381,13 @@ export default function Attendance() {
 
   const flushQueue = async () => {
     const q = loadQueue(); if (q.length === 0) return
+    const valid = q.filter(l => !!l.log_type)
+    const invalid = q.filter(l => !l.log_type)
+    if (invalid.length > 0) {
+      console.warn(`Dropping ${invalid.length} queued log(s) with missing log_type`)
+    }
     const remaining: QueuedLog[] = []
-    for (const log of q) {
+    for (const log of valid) {
       const { id: _localId, ...payload } = log
       const { error } = await supabase.from('attendance_logs').insert(payload)
       if (error) remaining.push(log)
