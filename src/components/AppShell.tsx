@@ -2,8 +2,8 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
-  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, User, ClipboardList, Activity,
-  CheckCheck, Loader2,
+  Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal,
+  User, ClipboardList, Activity, CheckCheck, Loader2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -75,8 +75,9 @@ export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
 
+  const [drawerOpen,     setDrawerOpen]     = useState(false)
   const [unreadNotices,  setUnreadNotices]  = useState(0)
-  const [_openIncidents, setOpenIncidents]  = useState(0)
+  const [openIncidents,  setOpenIncidents]  = useState(0)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
   const [bellOpen,       setBellOpen]       = useState(false)
   const [panelNotices,   setPanelNotices]   = useState<PanelNotice[]>([])
@@ -137,6 +138,14 @@ export default function AppShell() {
     return () => clearInterval(interval)
   }, [fetchCounts])
 
+  const badgeCount  = unreadNotices + openIncidents
+  const badgeLabel  = badgeCount > 9 ? '9+' : String(badgeCount)
+
+  const closeDrawer = () => setDrawerOpen(false)
+  const go = (path: string) => { closeDrawer(); navigate(path) }
+  const confirmSignOut = () => { closeDrawer(); setSignOutConfirm(true) }
+  const doSignOut = () => { setSignOutConfirm(false); supabase.auth.signOut() }
+
   // ── Bell panel ────────────────────────────────────────────────────────────
   const openBell = useCallback(async () => {
     setBellOpen(true)
@@ -179,7 +188,6 @@ export default function AppShell() {
     setPanelNotices(withRead)
     setPanelLoading(false)
 
-    // Mark all visible notices as read
     const unread = withRead.filter(n => !n.is_read)
     if (unread.length > 0) {
       supabase.from('notice_reads').upsert(
@@ -203,11 +211,8 @@ export default function AppShell() {
     setUnreadNotices(0)
   }, [panelNotices, profile?.id])
 
-  const toggleBell = () => {
-    if (bellOpen) { setBellOpen(false) } else { openBell() }
-  }
+  const toggleBell = () => { if (bellOpen) { setBellOpen(false) } else { openBell() } }
 
-  // Close on click-outside or Escape
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
@@ -223,13 +228,9 @@ export default function AppShell() {
     }
   }, [])
 
-  // ── Sign out ──────────────────────────────────────────────────────────────
-  const doSignOut = () => { setSignOutConfirm(false); supabase.auth.signOut() }
-
-  // ── Initials for avatar ───────────────────────────────────────────────────
   const initials = (profile?.full_name ?? '')
     .split(' ').filter(Boolean).slice(0, 2)
-    .map((w: string) => w[0].toUpperCase()).join('') || '?'
+    .map((w: string) => w[0].toUpperCase()).join('')
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -318,9 +319,9 @@ export default function AppShell() {
       {/* ── Page content ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* ── Top header bar ── */}
-        <header className="sticky top-0 z-20 bg-white border-b border-gray-100 flex items-center h-14 px-4 shrink-0">
-          {/* Tiru branding — mobile only (desktop has sidebar) */}
+        {/* ── Top header bar — bell only, no sticky to avoid overlap ── */}
+        <header className="shrink-0 z-20 bg-white border-b border-gray-100 flex items-center h-14 px-4">
+          {/* Tiru branding — mobile only */}
           <span className="text-lg font-bold text-teal-700 md:hidden mr-auto">Tiru</span>
           {/* Spacer on desktop */}
           <span className="hidden md:block flex-1" />
@@ -343,7 +344,6 @@ export default function AppShell() {
             {/* Dropdown panel */}
             {bellOpen && (
               <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                {/* Panel header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-teal-100">
                   <span className="font-semibold text-gray-900 text-sm">Notifications</span>
                   <button
@@ -354,7 +354,6 @@ export default function AppShell() {
                   </button>
                 </div>
 
-                {/* Panel body */}
                 <div className="overflow-y-auto max-h-96">
                   {panelLoading ? (
                     <div className="flex items-center justify-center py-10">
@@ -391,7 +390,6 @@ export default function AppShell() {
                   )}
                 </div>
 
-                {/* Panel footer */}
                 <div className="border-t border-gray-100 px-4 py-3">
                   <button
                     onClick={() => { navigate('/notices'); setBellOpen(false) }}
@@ -403,14 +401,6 @@ export default function AppShell() {
               </div>
             )}
           </div>
-
-          {/* Avatar — mobile only, links to profile for sign-out etc. */}
-          <button
-            onClick={() => navigate('/profile')}
-            className="md:hidden ml-2 w-8 h-8 rounded-full bg-teal-600 hover:bg-teal-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 select-none transition-colors"
-          >
-            {initials}
-          </button>
         </header>
 
         <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
@@ -457,10 +447,9 @@ export default function AppShell() {
             }`}>Attendance</span>
           </NavLink>
 
-          {/* Right: Leave, Staff */}
+          {/* Right: Leave */}
           {[
-            { to: '/leave',  label: 'Leave', icon: CalendarOff },
-            { to: '/staff',  label: 'Staff', icon: Users },
+            { to: '/leave', label: 'Leave', icon: CalendarOff },
           ].map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to
             return (
@@ -475,8 +464,151 @@ export default function AppShell() {
               </NavLink>
             )
           })}
+
+          {/* More button */}
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center py-1.5 gap-1 text-[10px] font-semibold text-teal-100/70 hover:text-white transition-all relative"
+          >
+            <div className="p-1.5 rounded-xl relative">
+              <MoreHorizontal size={18} />
+              {badgeCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {badgeLabel}
+                </span>
+              )}
+            </div>
+            <span className="tracking-wide">More</span>
+          </button>
         </div>
       </nav>
+
+      {/* ── More drawer ── */}
+      {drawerOpen && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 bg-black/40 z-30"
+            onClick={closeDrawer}
+          />
+          <div className="md:hidden fixed bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-2xl z-40 pb-safe">
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-4" />
+
+            <div className="px-4 pb-6 space-y-1">
+              {/* My Profile */}
+              <button
+                onClick={() => go('/profile')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center
+                                text-white text-xs font-bold flex-shrink-0 select-none">
+                  {initials || <User size={14} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {profile?.full_name ?? 'My Profile'}
+                  </p>
+                  <p className="text-xs text-gray-400 capitalize truncate">
+                    {profile?.role?.replace(/_/g, ' ') ?? ''}
+                  </p>
+                </div>
+              </button>
+
+              {/* On Duty */}
+              <button
+                onClick={() => go('/onduty')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <span className="relative">
+                  <Activity size={20} className="text-green-600" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500">
+                    <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
+                  </span>
+                </span>
+                <span className="flex-1 text-sm font-medium text-gray-800">On Duty</span>
+              </button>
+
+              {/* Staff */}
+              <button
+                onClick={() => go('/staff')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <Users size={20} className="text-gray-600" />
+                <span className="flex-1 text-sm font-medium text-gray-800">Staff Directory</span>
+              </button>
+
+              {/* Incidents */}
+              <button
+                onClick={() => go('/incidents')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <ShieldAlert size={20} className="text-gray-600" />
+                <span className="flex-1 text-sm font-medium text-gray-800">Incidents</span>
+                {isLeadership && openIncidents > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                )}
+              </button>
+
+              {/* Notices */}
+              <button
+                onClick={() => go('/notices')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <Bell size={20} className="text-gray-600" />
+                <span className="flex-1 text-sm font-medium text-gray-800">Notices</span>
+                {unreadNotices > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                    {unreadNotices > 9 ? '9+' : unreadNotices}
+                  </span>
+                )}
+              </button>
+
+              {/* Flags (leadership) */}
+              {canFlags && (
+                <button
+                  onClick={() => go('/flags')}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                >
+                  <AlertTriangle size={20} className="text-red-500" />
+                  <span className="text-sm font-medium text-gray-800">Flags &amp; Alerts</span>
+                </button>
+              )}
+
+              {/* Audit Log */}
+              {canAudit && (
+                <button
+                  onClick={() => go('/audit')}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                >
+                  <ClipboardList size={20} className="text-gray-600" />
+                  <span className="text-sm font-medium text-gray-800">Audit Log</span>
+                </button>
+              )}
+
+              {/* Admin */}
+              {canAdmin && (
+                <button
+                  onClick={() => go('/admin')}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                >
+                  <Settings size={20} className="text-gray-600" />
+                  <span className="text-sm font-medium text-gray-800">Admin</span>
+                </button>
+              )}
+
+              <div className="border-t border-gray-100 my-2" />
+
+              {/* Sign out */}
+              <button
+                onClick={confirmSignOut}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-red-50 transition-colors text-left"
+              >
+                <LogOut size={20} className="text-red-500" />
+                <span className="text-sm font-medium text-red-500">Sign out</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Sign-out confirmation dialog ── */}
       {signOutConfirm && (
