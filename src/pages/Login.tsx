@@ -8,7 +8,9 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>('login')
 
   // Login form
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email')
   const [email,    setEmail]    = useState('')
+  const [phone,    setPhone]    = useState('')
   const [password, setPassword] = useState('')
   const [showPw,   setShowPw]   = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
@@ -29,12 +31,41 @@ export default function Login() {
 
   const SUPER_ADMIN_ID = 'de804b96-373e-43b8-9214-b088032d0db7'
 
+  // Normalize Ethiopian phone numbers to +2519XXXXXXXX format
+  const normalizePhone = (raw: string): string => {
+    const p = raw.trim().replace(/\s+/g, '')
+    if (p.startsWith('+251')) return p           // already normalized
+    if (p.startsWith('251'))  return `+${p}`     // 2519XXXXXXXX → +2519XXXXXXXX
+    if (p.startsWith('09'))   return `+251${p.slice(1)}`  // 09XXXXXXXX → +2519XXXXXXXX
+    if (p.startsWith('9') && p.length === 9) return `+251${p}` // 9XXXXXXXX → +2519XXXXXXXX
+    return p
+  }
+
   // ── Login ────────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginErr(null)
     setLoggingIn(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    let loginEmail = email
+
+    // Phone mode: resolve the phone number to an account email first
+    if (loginMethod === 'phone') {
+      const normalized = normalizePhone(phone)
+      const { data, error: lookupErr } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('phone', normalized)
+        .maybeSingle()
+      if (lookupErr || !data?.email) {
+        setLoginErr('No account found with this phone number')
+        setLoggingIn(false)
+        return
+      }
+      loginEmail = data.email
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password })
     if (error) setLoginErr(error.message)
     setLoggingIn(false)
   }
@@ -103,6 +134,27 @@ export default function Login() {
           <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4">
             <h2 className="text-lg font-semibold text-gray-800">Sign in to your account</h2>
 
+            {/* Sign-in method toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-400">Sign in with</span>
+              <div className="flex bg-gray-100 rounded-full p-0.5">
+                <button type="button"
+                  onClick={() => { setLoginMethod('email'); setLoginErr(null) }}
+                  className={`px-4 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    loginMethod === 'email' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  Email
+                </button>
+                <button type="button"
+                  onClick={() => { setLoginMethod('phone'); setLoginErr(null) }}
+                  className={`px-4 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    loginMethod === 'phone' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  Phone
+                </button>
+              </div>
+            </div>
+
             {loginErr && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />{loginErr}
@@ -110,12 +162,21 @@ export default function Login() {
             )}
 
             <form onSubmit={handleLogin} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="your@email.com" required autoComplete="email"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
-              </div>
+              {loginMethod === 'email' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder="your@email.com" required autoComplete="email"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number</label>
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                    placeholder="09XXXXXXXX or +2519XXXXXXXX" required autoComplete="tel"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Password</label>
                 <div className="relative">
