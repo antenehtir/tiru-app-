@@ -56,7 +56,9 @@ export default function Kiosk() {
   const [scheduleTab, setScheduleTab]       = useState<'week' | 'month'>('week')
   const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([])
   const [scheduleLoading, setScheduleLoading]   = useState(false)
-  const [selectedMonthDay, setSelectedMonthDay] = useState<string | null>(null)
+  const [selectedMonthDay, setSelectedMonthDay]   = useState<string | null>(null)
+  const [expandedNoticeId, setExpandedNoticeId]   = useState<string | null>(null)
+  const [readNoticeIds, setReadNoticeIds]         = useState<Set<string>>(new Set())
   const activeField: 'id' | 'pin' = numInput.length >= 3 ? 'pin' : 'id'
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const videoRef     = useRef<HTMLVideoElement>(null)
@@ -136,6 +138,8 @@ export default function Kiosk() {
     setScheduleShifts([])
     setScheduleLoading(false)
     setSelectedMonthDay(null)
+    setExpandedNoticeId(null)
+    setReadNoticeIds(new Set())
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -200,14 +204,19 @@ export default function Kiosk() {
       ? (staffProfile.department as any).id ?? null
       : null
 
-    const { data } = await supabase
-      .from('notices')
-      .select('id, title, body, priority, created_at, audience, target_user_id, department_ids')
-      .order('created_at', { ascending: false })
-      .limit(20)
+    const [{ data }, { data: readData }] = await Promise.all([
+      supabase
+        .from('notices')
+        .select('id, title, body, priority, created_at, audience, target_user_id, department_ids')
+        .order('created_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('notice_reads')
+        .select('notice_id')
+        .eq('user_id', staffProfile.id),
+    ])
 
     const filtered = ((data as any[]) ?? []).filter((n: any) => {
-      // Personal notice — only show to the targeted staff member
       if (n.audience === 'individual') return n.target_user_id === staffProfile.id
       if (n.audience === 'all') return true
       if (n.audience === 'department') {
@@ -220,6 +229,8 @@ export default function Kiosk() {
       return false
     })
     setNotices(filtered)
+    setReadNoticeIds(new Set(((readData as any[]) ?? []).map((r: any) => r.notice_id)))
+    setExpandedNoticeId(null)
   }
 
   async function fetchDashboardData(staffProfile: StaffProfile) {
@@ -1123,15 +1134,58 @@ export default function Kiosk() {
           <div className="text-center py-12 text-gray-400">No notices at this time.</div>
         ) : (
           <div className="space-y-3">
-            {notices.map(n => (
-              <div key={n.id} className={`rounded-2xl border p-4 ${priorityColor(n.priority)}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-sm">{n.title}</span>
-                  <span className="text-xs opacity-60">{new Date(n.created_at).toLocaleDateString()}</span>
-                </div>
-                <p className="text-sm opacity-80">{n.body}</p>
-              </div>
-            ))}
+            {notices.map(n => {
+              const isExpanded = expandedNoticeId === n.id
+              const isRead     = readNoticeIds.has(n.id)
+              return (
+                <button
+                  key={n.id}
+                  onClick={async () => {
+                    setExpandedNoticeId(prev => prev === n.id ? null : n.id)
+                    if (!isRead && staff) {
+                      await supabase.from('notice_reads').upsert(
+                        { user_id: staff.id, notice_id: n.id },
+                        { onConflict: 'user_id,notice_id' }
+                      )
+                      setReadNoticeIds(prev => new Set([...prev, n.id]))
+                      setUnreadCount(prev => Math.max(0, prev - 1))
+                    }
+                  }}
+                  className={`w-full text-left rounded-2xl border overflow-hidden transition-all duration-200 ${
+                    isExpanded
+                      ? 'border-teal-300 shadow-md'
+                      : isRead
+                        ? 'border-gray-200 bg-white'
+                        : 'border-blue-200 bg-blue-50'
+                  }`}
+                >
+                  <div className={`flex items-start gap-3 p-4 ${isExpanded ? 'border-l-4 border-teal-500' : !isRead ? 'border-l-4 border-blue-400' : ''}`}>
+                    {!isRead && (
+                      <span className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500 mt-1.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className={`font-semibold text-sm leading-snug ${isRead ? 'text-gray-600' : 'text-gray-900'} ${isExpanded ? '' : 'truncate'}`}>
+                          {n.title}
+                        </span>
+                        <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">
+                          {new Date(n.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border capitalize ${priorityColor(n.priority)}`}>
+                        {n.priority}
+                      </span>
+                      <div className={`overflow-hidden transition-all duration-200 ${isExpanded ? 'max-h-96 mt-3' : 'max-h-0'}`}>
+                        <p className="text-sm text-gray-600 leading-relaxed">{n.body}</p>
+                        <p className="text-xs text-gray-400 mt-2">
+                          {new Date(n.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
         <button onClick={() => staff ? setScreen('dashboard') : resetKiosk()} className="w-full mt-8 bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-2xl text-lg transition-colors">
