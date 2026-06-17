@@ -8,7 +8,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>('login')
 
   // Login form
-  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email')
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('phone')
   const [email,    setEmail]    = useState('')
   const [phone,    setPhone]    = useState('')
   const [password, setPassword] = useState('')
