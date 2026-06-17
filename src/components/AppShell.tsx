@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   LayoutDashboard, CalendarDays, QrCode, CalendarOff,
   Users, ShieldAlert, Bell, AlertTriangle, Settings, LogOut, MoreHorizontal,
-  User, ClipboardList, Activity, CheckCheck, Loader2,
+  User, ClipboardList, Activity, CheckCheck, Loader2, Plus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -17,10 +17,11 @@ const NAV_ITEMS = [
   { to: '/staff',      label: 'Staff',      icon: Users,           pulse: false },
 ]
 
-const LEADERSHIP  = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
-const CAN_ADMIN   = ['super_admin', 'ceo', 'general_manager']
-const CAN_FLAGS   = ['super_admin', 'ceo', 'general_manager', 'medical_director']
-const CAN_AUDIT   = ['super_admin', 'ceo', 'hr', 'medical_director', 'general_manager']
+const LEADERSHIP    = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
+const CAN_ADMIN     = ['super_admin', 'ceo', 'general_manager']
+const CAN_FLAGS     = ['super_admin', 'ceo', 'general_manager', 'medical_director']
+const CAN_AUDIT     = ['super_admin', 'ceo', 'hr', 'medical_director', 'general_manager']
+const CAN_BROADCAST = ['super_admin','ceo','general_manager','medical_director','hr','department_head','coordinator']
 
 type PanelNotice = {
   id: string
@@ -71,6 +72,7 @@ export default function AppShell() {
   const canAdmin      = CAN_ADMIN.includes(role)
   const canFlags      = CAN_FLAGS.includes(role)
   const canAudit      = CAN_AUDIT.includes(role)
+  const canBroadcast  = CAN_BROADCAST.includes(role)
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -187,17 +189,6 @@ export default function AppShell() {
     const withRead: PanelNotice[] = visible.map((n: any) => ({ ...n, is_read: readSet.has(n.id) }))
     setPanelNotices(withRead)
     setPanelLoading(false)
-
-    const unread = withRead.filter(n => !n.is_read)
-    if (unread.length > 0) {
-      supabase.from('notice_reads').upsert(
-        unread.map(n => ({ notice_id: n.id, user_id: profile!.id })),
-        { onConflict: 'notice_id,user_id', ignoreDuplicates: true }
-      ).then(() => {
-        setPanelNotices(prev => prev.map(n => ({ ...n, is_read: true })))
-        setUnreadNotices(0)
-      })
-    }
   }, [profile?.id, profile?.department_id, profile?.role])
 
   const markAllRead = useCallback(async () => {
@@ -317,10 +308,10 @@ export default function AppShell() {
       </aside>
 
       {/* ── Page content ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
 
-        {/* ── Top header bar — bell only, no sticky to avoid overlap ── */}
-        <header className="shrink-0 z-20 bg-white border-b border-gray-100 flex items-center h-14 px-4">
+        {/* ── Top header bar ── */}
+        <header className="relative shrink-0 z-20 bg-white border-b border-gray-100 flex items-center h-14 px-4">
           {/* Tiru branding — mobile only */}
           <span className="text-lg font-bold text-teal-700 md:hidden mr-auto">Tiru</span>
           {/* Spacer on desktop */}
@@ -344,8 +335,16 @@ export default function AppShell() {
             {/* Dropdown panel */}
             {bellOpen && (
               <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-teal-100">
-                  <span className="font-semibold text-gray-900 text-sm">Notifications</span>
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-teal-100">
+                  <span className="font-semibold text-gray-900 text-sm mr-auto">Notifications</span>
+                  {canBroadcast && (
+                    <button
+                      onClick={() => { navigate('/notices'); setBellOpen(false) }}
+                      className="flex items-center gap-0.5 text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <Plus size={11} />New
+                    </button>
+                  )}
                   <button
                     onClick={markAllRead}
                     className="text-xs text-teal-600 hover:text-teal-800 font-medium flex items-center gap-1 transition-colors"
@@ -368,7 +367,18 @@ export default function AppShell() {
                     panelNotices.slice(0, 10).map(notice => (
                       <button
                         key={notice.id}
-                        onClick={() => { navigate('/notices'); setBellOpen(false) }}
+                        onClick={() => {
+                          if (!notice.is_read) {
+                            supabase.from('notice_reads').upsert(
+                              { notice_id: notice.id, user_id: profile!.id },
+                              { onConflict: 'notice_id,user_id', ignoreDuplicates: true }
+                            )
+                            setPanelNotices(prev => prev.map(n => n.id === notice.id ? { ...n, is_read: true } : n))
+                            setUnreadNotices(prev => Math.max(0, prev - 1))
+                          }
+                          navigate('/notices')
+                          setBellOpen(false)
+                        }}
                         className={`w-full flex items-start gap-3 px-4 py-3 transition-colors border-b border-gray-50 last:border-0 text-left border-l-4 ${
                           notice.is_read
                             ? 'bg-white border-l-transparent hover:bg-gray-50'
