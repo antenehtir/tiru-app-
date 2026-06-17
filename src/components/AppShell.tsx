@@ -16,7 +16,6 @@ const NAV_ITEMS = [
   { to: '/staff',      label: 'Staff',      icon: Users,           pulse: false },
 ]
 
-const MOBILE_MAIN = NAV_ITEMS.filter(n => n.to !== '/onduty')
 
 const LEADERSHIP  = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
 const CAN_ADMIN   = ['super_admin', 'ceo', 'general_manager']
@@ -221,19 +220,54 @@ export default function AppShell() {
       </div>
 
       {/* ── Bottom tab bar (mobile) ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 rounded-t-2xl shadow-lg"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 rounded-t-2xl shadow-lg overflow-visible"
         style={{background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)'}}>
-        <div className="flex">
-          {MOBILE_MAIN.map(({ to, label, icon: Icon }) => {
+
+        {/* Notch background behind FAB */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-[55%] w-[68px] h-[68px] rounded-full bg-gray-50 pointer-events-none" />
+
+        <div className="flex items-end">
+          {/* Left: Dashboard, Shifts */}
+          {[
+            { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+            { to: '/shifts',    label: 'Shifts',    icon: CalendarDays },
+          ].map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to
             return (
-              <NavLink
-                key={to}
-                to={to}
+              <NavLink key={to} to={to}
                 className={`flex-1 flex flex-col items-center justify-center py-1.5 gap-1 text-[10px] font-semibold transition-all ${
                   isActive ? 'text-white' : 'text-teal-100/70 hover:text-white'
-                }`}
-              >
+                }`}>
+                <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-white/20 shadow-lg' : ''}`}>
+                  <Icon size={18} />
+                </div>
+                <span className="tracking-wide">{label}</span>
+              </NavLink>
+            )
+          })}
+
+          {/* Center: Attendance FAB */}
+          <NavLink to="/attendance" className="flex-1 flex flex-col items-center justify-end pb-1 gap-0.5">
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-[3px] border-gray-50 -mt-8 transition-colors ${
+              location.pathname === '/attendance' ? 'bg-teal-400' : 'bg-teal-600'
+            }`}>
+              <QrCode size={26} className="text-white" />
+            </div>
+            <span className={`text-[10px] font-semibold tracking-wide ${
+              location.pathname === '/attendance' ? 'text-white' : 'text-teal-100/70'
+            }`}>Attendance</span>
+          </NavLink>
+
+          {/* Right: Leave */}
+          {[
+            { to: '/leave', label: 'Leave', icon: CalendarOff },
+          ].map(({ to, label, icon: Icon }) => {
+            const isActive = location.pathname === to
+            return (
+              <NavLink key={to} to={to}
+                className={`flex-1 flex flex-col items-center justify-center py-1.5 gap-1 text-[10px] font-semibold transition-all ${
+                  isActive ? 'text-white' : 'text-teal-100/70 hover:text-white'
+                }`}>
                 <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-white/20 shadow-lg' : ''}`}>
                   <Icon size={18} />
                 </div>
@@ -309,6 +343,15 @@ export default function AppShell() {
                   </span>
                 </span>
                 <span className="flex-1 text-sm font-medium text-gray-800">On Duty</span>
+              </button>
+
+              {/* Staff */}
+              <button
+                onClick={() => go('/staff')}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+              >
+                <Users size={20} className="text-gray-600" />
+                <span className="flex-1 text-sm font-medium text-gray-800">Staff</span>
               </button>
 
               {/* Incidents */}

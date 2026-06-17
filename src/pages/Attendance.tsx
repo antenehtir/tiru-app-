@@ -24,6 +24,7 @@ type QueuedLog = {
   within_geofence: boolean | null
   attendance_type: AttendanceType
   log_type: 'check_in' | 'check_out'
+  status?: 'verified' | 'flagged'
   notes: string | null
 }
 
@@ -44,6 +45,7 @@ type DeptLogRow = {
   log_type: string | null
   attendance_type: string | null
   within_geofence: boolean | null
+  status?: string | null
 }
 
 type ActionMode = {
@@ -139,6 +141,7 @@ export default function Attendance() {
   const [todayCheckIn,  setTodayCheckIn]  = useState<TodayRecord | null>(null)
   const [todayCheckOut, setTodayCheckOut] = useState<TodayRecord | null>(null)
   const [todayLoaded,   setTodayLoaded]   = useState(false)
+  const [earlyClockOutModal, setEarlyClockOutModal] = useState<{ shiftEndsAt: string; pendingLog: QueuedLog } | null>(null)
   const [gpsStatus,     setGpsStatus]     = useState<'idle'|'fetching'|'ok'|'denied'>('idle')
   const [coords,        setCoords]        = useState<{lat:number;lng:number}|null>(null)
   const [insideGeofence,setInsideGeofence]= useState<boolean|null>(null)
@@ -239,7 +242,7 @@ export default function Attendance() {
     if (staffIds.length === 0) { setDeptLogs([]); setDeptLogsLoading(false); return }
     const { data } = await supabase
       .from('attendance_logs')
-      .select('id, user_id, scanned_at, log_type, attendance_type, within_geofence')
+      .select('id, user_id, scanned_at, log_type, attendance_type, within_geofence, status')
       .in('user_id', staffIds)
       .order('scanned_at', { ascending: false })
       .limit(50)
@@ -409,24 +412,27 @@ export default function Attendance() {
       }
       qrCodeId = qrRow.id
     }
-    // No-shift check
+    // Shift check — fetch ends_at for early clock-out detection
+    let shiftEndsAt: string | null = null
     try {
       const { start: sStart, end: sEnd } = todayRangeUTC()
       const { data: shiftRows } = await supabase
         .from('shifts')
-        .select('id')
+        .select('id, ends_at')
         .eq('user_id', profile!.id)
         .eq('facility_id', FACILITY_ID)
         .gte('starts_at', sStart)
         .lte('starts_at', sEnd)
         .limit(1)
-      if ((shiftRows ?? []).length === 0) {
+      const shiftRow = (shiftRows ?? [])[0] ?? null
+      if (!shiftRow) {
         setScanning(false)
         setScanResult('geofence_warn')
         setScanMessage('No shift scheduled for you today. Contact your department head if this is an error.')
         return
       }
-    } catch { /* allow scan if shift table unreachable */ }
+      shiftEndsAt = (shiftRow as any).ends_at ?? null
+    } catch { /* allow scan if shifts table unreachable */ }
 
     // Duplicate prevention
     const logType: 'check_in' | 'check_out' = attType === 'clock_in' ? 'check_in' : 'check_out'
@@ -460,7 +466,16 @@ export default function Attendance() {
       log_type: logType,
       notes: null,
     }
-    await persistLog(log); setScanning(false)
+
+    // Early clock-out check
+    if (attType === 'clock_out' && shiftEndsAt && new Date() < new Date(shiftEndsAt)) {
+      setEarlyClockOutModal({ shiftEndsAt, pendingLog: { ...log, status: 'flagged' } })
+      setScanning(false)
+      return
+    }
+
+    await persistLog(log)
+    setScanning(false)
   }
 
   const persistLog = async (log: QueuedLog) => {
@@ -565,18 +580,18 @@ export default function Attendance() {
         )}
       </div>
 
-      <div className="relative rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50">
+      <div className="relative rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50 h-[320px]">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className={`w-full aspect-video object-cover ${scannerActive ? 'block' : 'hidden'}`}
+          className={`w-full h-full object-cover ${scannerActive ? 'block' : 'hidden'}`}
         />
 
         {!scannerActive && (
           cameraError ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4 px-6 text-center">
+            <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
               <XCircle className="w-12 h-12 text-red-400" />
               <p className="text-sm text-red-600 font-medium">{cameraError}</p>
               <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
@@ -584,7 +599,7 @@ export default function Attendance() {
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="flex flex-col items-center justify-center h-full gap-4">
               <QrCode className="w-16 h-16 text-gray-300" />
               <p className="text-sm text-gray-400">Camera is off</p>
               <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
@@ -597,7 +612,7 @@ export default function Attendance() {
         {scannerActive && (
           <>
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-48 h-48 border-4 border-teal-400 rounded-xl opacity-80" />
+              <div className="w-64 h-64 border-4 border-teal-400 rounded-2xl opacity-80" />
             </div>
             {scanning && (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -710,6 +725,7 @@ export default function Attendance() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
                           Out {new Date(row.checkOut.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          {row.checkOut.status === 'flagged' && <span className="ml-1 text-orange-600">(early)</span>}
                         </span>
                         <button onClick={() => openEditModal(row.checkOut!)} title="Edit" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-teal-600"><Pencil className="w-3 h-3" /></button>
                         <button onClick={() => openRemoveModal(row.checkOut!)} title="Remove" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
@@ -724,6 +740,41 @@ export default function Attendance() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {earlyClockOutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-orange-500" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Early Clock Out</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Your shift ends at {new Date(earlyClockOutModal.shiftEndsAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}.
+                  Are you sure you want to clock out early?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4">
+              <button
+                onClick={() => setEarlyClockOutModal(null)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const log = earlyClockOutModal.pendingLog
+                  setEarlyClockOutModal(null)
+                  await persistLog(log)
+                }}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors">
+                Clock Out Anyway
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
