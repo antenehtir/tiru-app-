@@ -10,7 +10,7 @@ import {
   User, Building2, AlertCircle, Loader2,
   Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
   Upload, Edit2, Trash2, UserCheck, CheckCircle2, RefreshCw,
-  Phone, Activity, Users,
+  Phone, Activity, Users, Download,
 } from 'lucide-react'
 import ShiftUpload from '../components/ShiftUpload'
 
@@ -78,7 +78,8 @@ const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
   gray:   { card: 'border-gray-200 bg-gray-50 hover:bg-gray-100',     icon: 'text-gray-500' },
 }
 
-const CAN_ADD_SHIFT = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr', 'department_head', 'coordinator']
+const CAN_ADD_SHIFT    = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr', 'department_head', 'coordinator']
+const CAN_EXPORT_SHIFTS = ['super_admin', 'hr', 'medical_director', 'ceo', 'general_manager', 'department_head']
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -708,6 +709,33 @@ export default function Shifts() {
     shiftsByDate[key].push(s)
   }
 
+  const canExportShifts = CAN_EXPORT_SHIFTS.includes(role)
+
+  function exportShifts() {
+    const header = 'Staff Name,Department,Shift Type,Start Time,End Time,Date'
+    const rows = shifts.map(s => {
+      const startT = new Date(s.starts_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      const endT   = new Date(s.ends_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      const date   = new Date(s.starts_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+      return [
+        `"${s.user?.full_name ?? ''}"`,
+        `"${s.department?.name ?? ''}"`,
+        s.schedule_type ?? '',
+        startT,
+        endT,
+        date,
+      ].join(',')
+    })
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Tiru-Shifts-${viewMode}-${new Date().toLocaleDateString()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   // LEVEL 1 — Group selector
   // ════════════════════════════════════════════════════════════════════════════
@@ -813,6 +841,14 @@ export default function Shifts() {
           >
             <Activity className="w-4 h-4" />Live
           </button>
+          {canExportShifts && shifts.length > 0 && (
+            <button
+              onClick={exportShifts}
+              className="flex items-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <Download className="w-4 h-4" />Export
+            </button>
+          )}
           {showAddBtn && (
             <>
               <button

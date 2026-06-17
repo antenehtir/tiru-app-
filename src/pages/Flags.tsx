@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
-import { AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield, Download, ChevronDown, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabaseClient'
 
 // ─── Access control ───────────────────────────────────────────────────────────
 
 const ALLOWED_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director']
-const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
+const CAN_EXPORT    = ['super_admin', 'hr', 'medical_director', 'ceo', 'general_manager', 'department_head']
+const FACILITY_ID   = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -298,9 +299,11 @@ export default function Flags() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
 
-  const [period, setPeriod]   = useState<Period>('Today')
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState<string | null>(null)
+  const [period, setPeriod]               = useState<Period>('Today')
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState<string | null>(null)
+  const [flagsExpanded, setFlagsExpanded] = useState(false)
+  const [activeFilter, setActiveFilter]   = useState<FlaggedStaff['flagType'] | null>(null)
 
   const [noShows,         setNoShows]         = useState<FlaggedStaff[]>([])
   const [lateArrivals,    setLateArrivals]    = useState<FlaggedStaff[]>([])
@@ -347,12 +350,15 @@ export default function Flags() {
     )
   }
 
-  const SUMMARY_CARDS = [
-    { label: 'No Shows',          icon: UserX,        card: 'border-red-200 bg-red-50',       icon_: 'text-red-500',    count: 'text-red-600',    items: noShows },
-    { label: 'Late Arrivals',     icon: Clock,        card: 'border-orange-200 bg-orange-50', icon_: 'text-orange-500', count: 'text-orange-600', items: lateArrivals },
-    { label: 'Outside Geofence',  icon: MapPin,       card: 'border-amber-200 bg-amber-50',   icon_: 'text-amber-500',  count: 'text-amber-600',  items: outsideGeofence },
-    { label: 'Low Attendance',    icon: TrendingDown, card: 'border-blue-200 bg-blue-50',     icon_: 'text-blue-500',   count: 'text-blue-600',   items: lowAttendance },
-  ] as const
+  const SUMMARY_CARDS: {
+    label: string; filterKey: FlaggedStaff['flagType']; icon: React.ComponentType<{ className?: string }>
+    card: string; icon_: string; count: string; items: FlaggedStaff[]
+  }[] = [
+    { label: 'No Shows',         filterKey: 'No Show',           icon: UserX,        card: 'border-red-200 bg-red-50',       icon_: 'text-red-500',    count: 'text-red-600',    items: noShows },
+    { label: 'Late Arrivals',    filterKey: 'Late Arrival',      icon: Clock,        card: 'border-orange-200 bg-orange-50', icon_: 'text-orange-500', count: 'text-orange-600', items: lateArrivals },
+    { label: 'Outside Geofence', filterKey: 'Outside Geofence',  icon: MapPin,       card: 'border-amber-200 bg-amber-50',   icon_: 'text-amber-500',  count: 'text-amber-600',  items: outsideGeofence },
+    { label: 'Low Attendance',   filterKey: 'Low Attendance',    icon: TrendingDown, card: 'border-blue-200 bg-blue-50',     icon_: 'text-blue-500',   count: 'text-blue-600',   items: lowAttendance },
+  ]
 
   const allFlags: FlaggedStaff[] = [...noShows, ...lateArrivals, ...outsideGeofence, ...lowAttendance]
     .sort((a, b) => {
@@ -361,6 +367,24 @@ export default function Flags() {
       if (sevDiff !== 0) return sevDiff
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     })
+
+  const canExport    = CAN_EXPORT.includes(role)
+  const filteredFlags = activeFilter ? allFlags.filter(f => f.flagType === activeFilter) : allFlags
+
+  function exportFlags() {
+    const header = 'Staff Name,Employee ID,Flag Type,Detail,Severity,Date/Time'
+    const rows = filteredFlags.map(f =>
+      [f.name, f.employeeId, f.flagType, `"${f.detail.replace(/"/g, '""')}"`, f.severity, formatDateTime(f.timestamp)].join(',')
+    )
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Tiru-Flags-${period.replace(/ /g, '-')}-${new Date().toLocaleDateString()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -376,31 +400,50 @@ export default function Flags() {
         </p>
       </div>
 
-      {/* ── Period filter ── */}
-      <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm w-fit">
-        {PERIODS.map(({ value, label }) => (
+      {/* ── Period filter + Export ── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm w-fit">
+          {PERIODS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setPeriod(value)}
+              className={`px-4 py-1.5 font-medium transition-colors ${
+                period === value
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {canExport && (
           <button
-            key={value}
-            onClick={() => setPeriod(value)}
-            className={`px-4 py-1.5 font-medium transition-colors ${
-              period === value
-                ? 'bg-teal-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
-            }`}
+            onClick={exportFlags}
+            className="flex items-center gap-1.5 text-sm font-medium border border-gray-200 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
           >
-            {label}
+            <Download className="w-4 h-4" />Export
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {SUMMARY_CARDS.map(({ label, icon: Icon, card, icon_, count, items }) => {
+        {SUMMARY_CARDS.map(({ label, filterKey, icon: Icon, card, icon_, count, items }) => {
           const isLowAttendance = label === 'Low Attendance'
+          const isActive = activeFilter === filterKey
           return (
-            <div
+            <button
               key={label}
-              className={`rounded-xl border-2 p-5 flex flex-col gap-2 ${card}`}
+              onClick={() => {
+                if (isActive) {
+                  setActiveFilter(null)
+                } else {
+                  setActiveFilter(filterKey)
+                  setFlagsExpanded(true)
+                }
+              }}
+              className={`rounded-xl border-2 p-5 flex flex-col gap-2 text-left w-full transition-all ${card} ${isActive ? 'ring-2 ring-teal-500 ring-offset-1' : 'hover:opacity-90'}`}
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-600">{label}</p>
@@ -414,7 +457,7 @@ export default function Flags() {
               <p className="text-xs font-medium text-gray-400">
                 {isLowAttendance ? '(30-day)' : period}
               </p>
-            </div>
+            </button>
           )
         })}
       </div>
@@ -423,60 +466,80 @@ export default function Flags() {
         <p className="text-sm text-red-600">{error}</p>
       )}
 
-      {/* ── Flags table ── */}
+      {/* ── Active filter pill ── */}
+      {activeFilter && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 bg-teal-100 text-teal-800 text-sm font-medium px-3 py-1 rounded-full">
+            Showing: {activeFilter}
+            <button onClick={() => setActiveFilter(null)} className="text-teal-600 hover:text-teal-800 ml-0.5">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
+
+      {/* ── Flags table (collapsible) ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
+        <button
+          onClick={() => setFlagsExpanded(prev => !prev)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        >
           <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400" />
-            Active Flags
+            Active Flags ({allFlags.length})
           </h2>
-        </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${flagsExpanded ? 'rotate-180' : ''}`} />
+        </button>
 
-        {/* Table header — hidden on mobile */}
-        <div className="hidden md:grid grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
-          <span>Staff Name</span>
-          <span>Employee ID</span>
-          <span>Flag Type</span>
-          <span>Detail</span>
-          <span>Severity</span>
-          <span>Date / Time</span>
-        </div>
+        {flagsExpanded && (
+          <>
+            {/* Table header — hidden on mobile */}
+            <div className="hidden md:grid grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-4 px-5 py-3 bg-gray-50 border-t border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <span>Staff Name</span>
+              <span>Employee ID</span>
+              <span>Flag Type</span>
+              <span>Detail</span>
+              <span>Severity</span>
+              <span>Date / Time</span>
+            </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-            <p className="text-sm text-gray-400">Loading flags…</p>
-          </div>
-        ) : allFlags.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-            <ShieldCheck className="w-12 h-12 text-teal-300 mb-4" />
-            <p className="text-sm font-medium text-gray-500">
-              No flags detected for this period
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {allFlags.map((flag, i) => (
-              <div
-                key={`${flag.userId}-${flag.flagType}-${flag.timestamp}-${i}`}
-                className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-1 md:gap-4 px-5 py-3 text-sm"
-              >
-                <span className="font-medium text-gray-800">{flag.name}</span>
-                <span className="text-gray-500">{flag.employeeId}</span>
-                <span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${FLAG_TYPE_BADGE[flag.flagType]}`}>
-                    {flag.flagType}
-                  </span>
-                </span>
-                <span className="text-gray-600">{flag.detail}</span>
-                <span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SEVERITY_BADGE[flag.severity]}`}>
-                    {flag.severity}
-                  </span>
-                </span>
-                <span className="text-gray-400 text-xs md:text-sm">{formatDateTime(flag.timestamp)}</span>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                <p className="text-sm text-gray-400">Loading flags…</p>
               </div>
-            ))}
-          </div>
+            ) : filteredFlags.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                <ShieldCheck className="w-12 h-12 text-teal-300 mb-4" />
+                <p className="text-sm font-medium text-gray-500">
+                  {activeFilter ? `No ${activeFilter} flags for this period` : 'No flags detected for this period'}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {filteredFlags.map((flag, i) => (
+                  <div
+                    key={`${flag.userId}-${flag.flagType}-${flag.timestamp}-${i}`}
+                    className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-1 md:gap-4 px-5 py-3 text-sm"
+                  >
+                    <span className="font-medium text-gray-800">{flag.name}</span>
+                    <span className="text-gray-500">{flag.employeeId}</span>
+                    <span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${FLAG_TYPE_BADGE[flag.flagType]}`}>
+                        {flag.flagType}
+                      </span>
+                    </span>
+                    <span className="text-gray-600">{flag.detail}</span>
+                    <span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SEVERITY_BADGE[flag.severity]}`}>
+                        {flag.severity}
+                      </span>
+                    </span>
+                    <span className="text-gray-400 text-xs md:text-sm">{formatDateTime(flag.timestamp)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
