@@ -11,7 +11,7 @@ type ShiftEntry = {
   specialty: string | null
   schedule_type: string | null
   department_id: string | null
-  user: { id: string; full_name: string; phone: string | null; role: string | null } | null
+  user: { id: string; full_name: string; phone: string | null; role: string | null; department_id: string | null } | null
   department: { name: string } | null
 }
 
@@ -24,7 +24,7 @@ type AttendanceLog = {
 
 type ShiftStatus = 'PRESENT' | 'LATE' | 'EXPECTED' | 'UPCOMING' | 'CLOCKED_OUT'
 
-type EnrichedShift = ShiftEntry & { status: ShiftStatus; latestLog: AttendanceLog | null }
+type EnrichedShift = ShiftEntry & { status: ShiftStatus; latestLog: AttendanceLog | null; deptName: string }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -81,12 +81,12 @@ export default function OnDuty() {
     const dayStart  = `${dateStr}T00:00:00`
     const dayEnd    = `${dateStr}T23:59:59`
 
-    const [shiftsRes, attendanceRes] = await Promise.all([
+    const [shiftsRes, attendanceRes, deptsRes] = await Promise.all([
       supabase
         .from('shifts')
         .select(`
           id, starts_at, ends_at, specialty, schedule_type, department_id,
-          user:profiles!shifts_user_id_fkey(id, full_name, phone, role),
+          user:profiles!shifts_user_id_fkey(id, full_name, phone, role, department_id),
           department:departments(name)
         `)
         .gte('starts_at', dayStart)
@@ -99,6 +99,10 @@ export default function OnDuty() {
         .gte('scanned_at', dayStart)
         .lte('scanned_at', dayEnd)
         .order('scanned_at'),
+
+      supabase
+        .from('departments')
+        .select('id, name'),
     ])
 
     if (shiftsRes.error) { setError(shiftsRes.error.message); setLoading(false); return }
@@ -111,10 +115,18 @@ export default function OnDuty() {
       logMap.set(log.user_id, log)
     }
 
+    // Build map: department id → department name (all depts, not just those on shifts)
+    const deptMap = new Map<string, string>(
+      ((deptsRes.data ?? []) as { id: string; name: string }[]).map(d => [d.id, d.name])
+    )
+
     const enriched: EnrichedShift[] = ((shiftsRes.data ?? []) as unknown as ShiftEntry[]).map(s => {
       const latestLog = s.user ? (logMap.get(s.user.id) ?? null) : null
       const status    = getStatus(s, latestLog, currentNow)
-      return { ...s, status, latestLog }
+      // Resolve department: shift-level dept_id → profile dept_id → 'Other'
+      const deptId  = s.department_id ?? s.user?.department_id ?? null
+      const deptName = deptId ? (deptMap.get(deptId) ?? 'Other') : 'Other'
+      return { ...s, status, latestLog, deptName }
     })
 
     setShifts(enriched)
@@ -131,8 +143,7 @@ export default function OnDuty() {
 
   // Group by department
   const grouped = shifts.reduce<Record<string, EnrichedShift[]>>((acc, s) => {
-    const dept = s.department?.name ?? 'Unassigned'
-    ;(acc[dept] ??= []).push(s)
+    ;(acc[s.deptName] ??= []).push(s)
     return acc
   }, {})
 
