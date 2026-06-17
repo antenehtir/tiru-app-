@@ -467,7 +467,7 @@ export default function Dashboard() {
           />
         </div>
       ) : null}
-      <div style={{height: '100px'}} />
+      <div style={{height: '160px'}} />
     </div>
   )
 }
