@@ -18,6 +18,7 @@ type StaffProfile = {
 }
 
 type ScheduleShift = {
+  user_id: string
   starts_at: string
   ends_at: string
   specialty: string | null
@@ -54,7 +55,8 @@ export default function Kiosk() {
   const [todayShift, setTodayShift]         = useState<{starts_at:string; ends_at:string; specialty:string|null} | null>(null)
   const [scheduleTab, setScheduleTab]       = useState<'week' | 'month'>('week')
   const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([])
-  const [scheduleLoading, setScheduleLoading] = useState(false)
+  const [scheduleLoading, setScheduleLoading]   = useState(false)
+  const [selectedMonthDay, setSelectedMonthDay] = useState<string | null>(null)
   const activeField: 'id' | 'pin' = numInput.length >= 3 ? 'pin' : 'id'
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const videoRef     = useRef<HTMLVideoElement>(null)
@@ -133,6 +135,7 @@ export default function Kiosk() {
     setScheduleTab('week')
     setScheduleShifts([])
     setScheduleLoading(false)
+    setSelectedMonthDay(null)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -281,12 +284,20 @@ export default function Kiosk() {
     }
     const { data } = await supabase
       .from('shifts')
-      .select('starts_at, ends_at, specialty, department:departments(name)')
+      .select('user_id, starts_at, ends_at, specialty, department:departments(name)')
       .eq('user_id', staffId)
       .gte('starts_at', start.toISOString())
       .lte('starts_at', end.toISOString())
       .order('starts_at', { ascending: true })
-    setScheduleShifts((data as unknown as ScheduleShift[]) ?? [])
+    const raw = (data as unknown as ScheduleShift[]) ?? []
+    const seen = new Set<string>()
+    const unique = raw.filter(s => {
+      const key = s.starts_at + s.user_id
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    setScheduleShifts(unique)
     setScheduleLoading(false)
   }
 
@@ -626,6 +637,32 @@ export default function Kiosk() {
     </div>
   )
 
+  // ── Calendar precomputation ──────────────────────────────────────────────
+  const calFmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const calNow      = new Date()
+  const calTodayKey = calFmt(calNow)
+  const calDiffMon  = calNow.getDay() === 0 ? 6 : calNow.getDay() - 1
+  const calWeekMon  = new Date(calNow.getFullYear(), calNow.getMonth(), calNow.getDate() - calDiffMon)
+  const calWeekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(calWeekMon); d.setDate(calWeekMon.getDate() + i); return d
+  })
+  const calMonFirst = new Date(calNow.getFullYear(), calNow.getMonth(), 1)
+  const calMonLast  = new Date(calNow.getFullYear(), calNow.getMonth() + 1, 0)
+  const calGS = new Date(calMonFirst)
+  calGS.setDate(calMonFirst.getDate() - (calMonFirst.getDay() === 0 ? 6 : calMonFirst.getDay() - 1))
+  const calGE = new Date(calMonLast)
+  calGE.setDate(calMonLast.getDate() + (calMonLast.getDay() === 0 ? 0 : 7 - calMonLast.getDay()))
+  const calMonthDays: Date[] = []
+  for (let cur = new Date(calGS); cur <= calGE; cur.setDate(cur.getDate() + 1)) calMonthDays.push(new Date(cur))
+  const calShiftsByDate = new Map<string, ScheduleShift[]>()
+  for (const s of scheduleShifts) {
+    const k = calFmt(new Date(s.starts_at))
+    if (!calShiftsByDate.has(k)) calShiftsByDate.set(k, [])
+    calShiftsByDate.get(k)!.push(s)
+  }
+  const DAY_ABBR = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+
   // ── DASHBOARD SCREEN ─────────────────────────────────────────────────────
   if (screen === 'dashboard') return (
     <div className="min-h-screen bg-gradient-to-br from-teal-700 to-teal-900 flex flex-col p-6 select-none">
@@ -713,11 +750,11 @@ export default function Kiosk() {
           </h2>
           <div className="flex rounded-xl overflow-hidden border border-white/20 text-xs">
             <button
-              onClick={() => { setScheduleTab('week'); fetchSchedule(staff!.id, 'week') }}
+              onClick={() => { setScheduleTab('week'); setSelectedMonthDay(null); fetchSchedule(staff!.id, 'week') }}
               className={`px-3 py-1.5 font-semibold transition-colors ${scheduleTab === 'week' ? 'bg-white text-teal-700' : 'text-teal-200 hover:text-white'}`}
             >This Week</button>
             <button
-              onClick={() => { setScheduleTab('month'); fetchSchedule(staff!.id, 'month') }}
+              onClick={() => { setScheduleTab('month'); setSelectedMonthDay(null); fetchSchedule(staff!.id, 'month') }}
               className={`px-3 py-1.5 font-semibold transition-colors ${scheduleTab === 'month' ? 'bg-white text-teal-700' : 'text-teal-200 hover:text-white'}`}
             >This Month</button>
           </div>
@@ -728,46 +765,117 @@ export default function Kiosk() {
             <div className="py-6 flex justify-center">
               <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
             </div>
-          ) : scheduleShifts.length === 0 ? (
-            <div className="py-6 text-center text-gray-400 text-sm">
-              No shifts scheduled
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {scheduleShifts.map((s, i) => {
-                const shiftStart = new Date(s.starts_at)
-                const shiftEnd   = new Date(s.ends_at)
-                const now2       = new Date()
-                const todayMid   = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate())
-                const tomorrowMid = new Date(todayMid.getTime() + 86400000)
-                const isToday    = shiftStart >= todayMid && shiftStart < tomorrowMid
-                const isPast     = shiftEnd < now2 && !isToday
-                const dayLabel   = shiftStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                const startT     = shiftStart.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                const endT       = shiftEnd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                const deptLabel  = s.specialty ?? (s.department as any)?.name ?? null
-                return (
-                  <div key={i} className={`flex items-center gap-3 px-4 py-3.5 ${isToday ? 'bg-teal-50' : ''}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className={`text-sm font-bold ${isPast ? 'text-gray-300' : isToday ? 'text-teal-800' : 'text-gray-800'}`}>
-                          {dayLabel}
+          ) : scheduleTab === 'week' ? (
+
+            /* ── Week: 7-column horizontal calendar ── */
+            <div className="overflow-x-auto">
+              {scheduleShifts.length === 0 && (
+                <p className="py-6 text-center text-gray-400 text-sm">No shifts this week</p>
+              )}
+              <div className="flex" style={{ minWidth: '364px' }}>
+                {calWeekDays.map((day, i) => {
+                  const dk          = calFmt(day)
+                  const isToday     = dk === calTodayKey
+                  const todayMid    = new Date(calNow.getFullYear(), calNow.getMonth(), calNow.getDate())
+                  const isPast      = day < todayMid
+                  const dayShifts   = calShiftsByDate.get(dk) ?? []
+                  return (
+                    <div key={dk} className="flex-1 flex flex-col border-r border-gray-100 last:border-r-0">
+                      {/* Column header */}
+                      <div className={`py-2 text-center border-b border-gray-100 ${isToday ? 'bg-teal-600' : 'bg-gray-50'}`}>
+                        <p className={`text-[10px] font-semibold uppercase tracking-wide ${isToday ? 'text-teal-100' : isPast ? 'text-gray-300' : 'text-gray-400'}`}>
+                          {DAY_ABBR[i]}
                         </p>
-                        {isToday && (
-                          <span className="text-[10px] bg-teal-600 text-white font-bold px-1.5 py-0.5 rounded-full">Today</span>
-                        )}
+                        <p className={`text-base font-bold mt-0.5 ${isToday ? 'text-white' : isPast ? 'text-gray-300' : 'text-gray-800'}`}>
+                          {day.getDate()}
+                        </p>
                       </div>
-                      <p className={`text-sm ${isPast ? 'text-gray-300' : isToday ? 'text-teal-700' : 'text-gray-600'}`}>
-                        {startT} – {endT}
-                      </p>
-                      {deptLabel && (
-                        <p className={`text-xs mt-0.5 ${isPast ? 'text-gray-300' : 'text-gray-400'}`}>{deptLabel}</p>
-                      )}
+                      {/* Shift cards */}
+                      <div className="flex-1 p-1 flex flex-col gap-1 min-h-[64px] items-center justify-start pt-1.5">
+                        {dayShifts.length === 0 ? (
+                          <span className={`mt-3 text-lg leading-none ${isPast ? 'text-gray-200' : 'text-gray-300'}`}>–</span>
+                        ) : dayShifts.map((s, si) => {
+                          const st   = new Date(s.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                          const et   = new Date(s.ends_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                          const dept = s.specialty ?? (s.department as any)?.name ?? null
+                          return (
+                            <div key={si} className={`w-full rounded-lg p-1 text-[10px] leading-tight ${isToday ? 'bg-teal-500 text-white' : isPast ? 'bg-gray-100 text-gray-400' : 'bg-teal-50 text-teal-800'}`}>
+                              <p className="font-bold truncate">{st}</p>
+                              <p className="opacity-75 truncate">–{et}</p>
+                              {dept && <p className="opacity-60 truncate">{dept}</p>}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
-                    {isToday && <div className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0" />}
+                  )
+                })}
+              </div>
+            </div>
+
+          ) : (
+
+            /* ── Month: calendar grid ── */
+            <div>
+              {/* Day-of-week headers */}
+              <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-100">
+                {DAY_ABBR.map(d => (
+                  <div key={d} className="py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">{d}</div>
+                ))}
+              </div>
+              {/* Day cells */}
+              <div className="grid grid-cols-7">
+                {calMonthDays.map((day, i) => {
+                  const dk         = calFmt(day)
+                  const isToday    = dk === calTodayKey
+                  const isCurMonth = day.getMonth() === calNow.getMonth()
+                  const dayShifts  = calShiftsByDate.get(dk) ?? []
+                  const isSelected = selectedMonthDay === dk
+                  return (
+                    <button
+                      key={dk}
+                      onClick={() => { if (dayShifts.length > 0) setSelectedMonthDay(p => p === dk ? null : dk) }}
+                      className={`flex flex-col items-center py-2 px-1 transition-colors ${i >= 7 ? 'border-t border-gray-100' : ''} ${isSelected ? 'bg-teal-50' : dayShifts.length > 0 && isCurMonth ? 'hover:bg-gray-50 active:bg-teal-50' : ''}`}
+                    >
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        isToday    ? 'bg-teal-600 text-white' :
+                        isSelected ? 'bg-teal-100 text-teal-700' :
+                        isCurMonth ? 'text-gray-800' : 'text-gray-300'
+                      }`}>
+                        {day.getDate()}
+                      </span>
+                      {dayShifts.length > 0 && isCurMonth
+                        ? <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isToday ? 'bg-white' : 'bg-teal-500'}`} />
+                        : <span className="h-2 mt-0.5" />
+                      }
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Tapped-day detail card */}
+              {selectedMonthDay && calShiftsByDate.has(selectedMonthDay) && (() => {
+                const selDate   = new Date(selectedMonthDay + 'T00:00:00')
+                const dateLabel = selDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+                return (
+                  <div className="border-t border-teal-100 bg-teal-50 px-4 py-3 space-y-2">
+                    <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide">{dateLabel}</p>
+                    {(calShiftsByDate.get(selectedMonthDay) ?? []).map((s, i) => {
+                      const st   = new Date(s.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                      const et   = new Date(s.ends_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                      const dept = s.specialty ?? (s.department as any)?.name ?? null
+                      return (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500 flex-shrink-0 mt-1.5" />
+                          <div>
+                            <p className="text-sm font-bold text-teal-800">{st} – {et}</p>
+                            {dept && <p className="text-xs text-teal-600">{dept}</p>}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )
-              })}
+              })()}
             </div>
           )}
         </div>
