@@ -437,28 +437,59 @@ export default function Attendance() {
       shiftEndsAt = (shiftRow as any).ends_at ?? null
     } catch { /* allow scan if shifts table unreachable */ }
 
-    // Duplicate prevention
+    // Duplicate prevention — tab-aware
     const logType: 'check_in' | 'check_out' = attType === 'clock_in' ? 'check_in' : 'check_out'
     const { start: dupStart, end: dupEnd } = todayRangeUTC()
-    const { data: existing } = await supabase
-      .from('attendance_logs')
-      .select('id, scanned_at')
-      .eq('user_id', profile!.id)
-      .eq('facility_id', FACILITY_ID)
-      .eq('log_type', logType)
-      .gte('scanned_at', dupStart)
-      .lte('scanned_at', dupEnd)
-      .maybeSingle()
-    if (existing) {
-      const time = new Date((existing as TodayRecord).scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      setScanning(false)
-      setScanResult('warn')
-      setScanMessage(
-        logType === 'check_in'
-          ? `You have already clocked in today at ${time}. Use Clock Out to end your shift.`
-          : `You have already clocked out today at ${time}.`
-      )
-      return
+
+    if (attType === 'clock_in') {
+      const { data: existingIn } = await supabase
+        .from('attendance_logs')
+        .select('id, scanned_at')
+        .eq('user_id', profile!.id)
+        .eq('facility_id', FACILITY_ID)
+        .eq('log_type', 'check_in')
+        .gte('scanned_at', dupStart)
+        .lte('scanned_at', dupEnd)
+        .maybeSingle()
+      if (existingIn) {
+        const time = new Date((existingIn as TodayRecord).scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        setScanning(false)
+        setScanResult('warn')
+        setScanMessage(`You have already clocked in today at ${time}. Use Clock Out to end your shift.`)
+        return
+      }
+    } else {
+      const { data: existingOut } = await supabase
+        .from('attendance_logs')
+        .select('id, scanned_at')
+        .eq('user_id', profile!.id)
+        .eq('facility_id', FACILITY_ID)
+        .eq('log_type', 'check_out')
+        .gte('scanned_at', dupStart)
+        .lte('scanned_at', dupEnd)
+        .maybeSingle()
+      if (existingOut) {
+        const time = new Date((existingOut as TodayRecord).scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        setScanning(false)
+        setScanResult('warn')
+        setScanMessage(`You have already clocked out today at ${time}.`)
+        return
+      }
+      const { data: existingIn } = await supabase
+        .from('attendance_logs')
+        .select('id, scanned_at')
+        .eq('user_id', profile!.id)
+        .eq('facility_id', FACILITY_ID)
+        .eq('log_type', 'check_in')
+        .gte('scanned_at', dupStart)
+        .lte('scanned_at', dupEnd)
+        .maybeSingle()
+      if (!existingIn) {
+        setScanning(false)
+        setScanResult('warn')
+        setScanMessage("You haven't clocked in yet today. Please clock in first.")
+        return
+      }
     }
 
     const log: QueuedLog = {
@@ -483,9 +514,9 @@ export default function Attendance() {
 
   const persistLog = async (log: QueuedLog) => {
     const { id: _localId, ...insertPayload } = log
-    if (!online) { enqueue(log); setScanResult('success'); setScanMessage('Saved offline â€” will sync when connected.'); return }
+    if (!online) { enqueue(log); setScanResult('success'); setScanMessage('Saved offline — will sync when connected.'); return }
     const { error } = await supabase.from('attendance_logs').insert(insertPayload)
-    if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save â€” queued for retry. ' + error.message) }
+    if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save — queued for retry. ' + error.message) }
     else {
       if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded ✓ — GPS shows you may be outside the facility.') }
       else { setScanResult('success'); setScanMessage(log.log_type === 'check_in' ? 'Clocked in successfully! ✓' : 'Clocked out successfully! ✓') }
@@ -651,7 +682,7 @@ export default function Attendance() {
           ${gpsStatus === 'denied'   ? 'bg-gray-100 text-gray-400' : ''}
         `}>
           <MapPin className="w-3.5 h-3.5" />
-          {gpsStatus === 'fetching' && 'Fetching GPSâ€¦'}
+          {gpsStatus === 'fetching' && 'Fetching GPS…'}
           {gpsStatus === 'denied'   && 'GPS unavailable (advisory only)'}
           {gpsStatus === 'ok' && insideGeofence  && `GPS: inside facility (${Math.round(haversineM(coords!.lat, coords!.lng, facilityCoords.lat, facilityCoords.lng))} m)`}
           {gpsStatus === 'ok' && !insideGeofence && `GPS: ${Math.round(haversineM(coords!.lat, coords!.lng, facilityCoords.lat, facilityCoords.lng))} m from facility`}
@@ -664,7 +695,7 @@ export default function Attendance() {
         </h2>
         {logsLoading ? (
           <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
-            <Loader2 className="w-4 h-4 animate-spin" />Loadingâ€¦
+            <Loader2 className="w-4 h-4 animate-spin" />Loading…
           </div>
         ) : recentLogs.length === 0 ? (
           <p className="text-sm text-gray-400 py-4">No attendance records yet.</p>
@@ -684,7 +715,7 @@ export default function Attendance() {
                 <div className="flex items-center gap-2">
                   {log.within_geofence === true  && <span className="text-green-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />In</span>}
                   {log.within_geofence === false && <span className="text-amber-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />Out</span>}
-                  {log.within_geofence === null  && <span className="text-gray-300 text-xs">â€”</span>}
+                  {log.within_geofence === null  && <span className="text-gray-300 text-xs">{'—'}</span>}
                 </div>
               </div>
             ))}
