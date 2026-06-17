@@ -138,6 +138,8 @@ export default function Attendance() {
   const [cameraError,   setCameraError]   = useState<string | null>(null)
   const [scanning,      setScanning]      = useState(false)
   const [attType,       setAttType]       = useState<AttendanceType>('clock_in')
+  const attTypeRef = useRef<AttendanceType>('clock_in')
+  useEffect(() => { attTypeRef.current = attType }, [attType])
   const [todayCheckIn,  setTodayCheckIn]  = useState<TodayRecord | null>(null)
   const [todayCheckOut, setTodayCheckOut] = useState<TodayRecord | null>(null)
   const [todayLoaded,   setTodayLoaded]   = useState(false)
@@ -226,6 +228,11 @@ export default function Attendance() {
     setTodayCheckOut(co)
     setTodayLoaded(true)
     if (ci && !co) setAttType('clock_out')
+    const hasCheckedIn = ci !== null
+    const hasCheckedOut = co !== null
+    const checkInTime = ci ? new Date(ci.scanned_at).toLocaleTimeString() : null
+    const checkOutTime = co ? new Date(co.scanned_at).toLocaleTimeString() : null
+    console.log('todayStatus:', { hasCheckedIn, hasCheckedOut, checkInTime, checkOutTime })
   }, [profile?.id])
 
   useEffect(() => { fetchRecentLogs(); fetchTodayStatus() }, [fetchRecentLogs, fetchTodayStatus])
@@ -438,10 +445,14 @@ export default function Attendance() {
     } catch { /* allow scan if shifts table unreachable */ }
 
     // Duplicate prevention — tab-aware
-    const logType: 'check_in' | 'check_out' = attType === 'clock_in' ? 'check_in' : 'check_out'
+    // Read from ref to avoid stale closure: tick() has [] deps so it captures the
+    // initial handleQRResult; ref always holds the current attType value.
+    const currentAttType = attTypeRef.current
+    const logType: 'check_in' | 'check_out' = currentAttType === 'clock_in' ? 'check_in' : 'check_out'
     const { start: dupStart, end: dupEnd } = todayRangeUTC()
+    console.log('handleQRResult - attType:', currentAttType, 'log_type will be:', logType)
 
-    if (attType === 'clock_in') {
+    if (currentAttType === 'clock_in') {
       const { data: existingIn } = await supabase
         .from('attendance_logs')
         .select('id, scanned_at')
@@ -451,6 +462,7 @@ export default function Attendance() {
         .gte('scanned_at', dupStart)
         .lte('scanned_at', dupEnd)
         .maybeSingle()
+      console.log('duplicate check (clock_in) - existingIn:', existingIn)
       if (existingIn) {
         const time = new Date((existingIn as TodayRecord).scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
         setScanning(false)
@@ -468,6 +480,7 @@ export default function Attendance() {
         .gte('scanned_at', dupStart)
         .lte('scanned_at', dupEnd)
         .maybeSingle()
+      console.log('duplicate check (clock_out) - existingOut:', existingOut)
       if (existingOut) {
         const time = new Date((existingOut as TodayRecord).scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
         setScanning(false)
@@ -484,6 +497,7 @@ export default function Attendance() {
         .gte('scanned_at', dupStart)
         .lte('scanned_at', dupEnd)
         .maybeSingle()
+      console.log('duplicate check (clock_out) - existingIn:', existingIn)
       if (!existingIn) {
         setScanning(false)
         setScanResult('warn')
@@ -496,13 +510,13 @@ export default function Attendance() {
       id: localId(), user_id: profile!.id, facility_id: FACILITY_ID, qr_code_id: qrCodeId,
       scanned_at: new Date().toISOString(), latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null, within_geofence: insideGeofence,
-      attendance_type: attType,
+      attendance_type: currentAttType,
       log_type: logType,
       notes: null,
     }
 
     // Early clock-out check
-    if (attType === 'clock_out' && shiftEndsAt && new Date() < new Date(shiftEndsAt)) {
+    if (currentAttType === 'clock_out' && shiftEndsAt && new Date() < new Date(shiftEndsAt)) {
       setEarlyClockOutModal({ shiftEndsAt, pendingLog: { ...log, status: 'flagged' } })
       setScanning(false)
       return
