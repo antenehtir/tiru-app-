@@ -87,6 +87,42 @@ function saveQueue(q: QueuedLog[]) {
   localStorage.setItem(OFFLINE_KEY, JSON.stringify(q))
 }
 
+function todayRangeUTC() {
+  const eatMs = Date.now() + 3 * 60 * 60 * 1000
+  const dateStr = new Date(eatMs).toISOString().slice(0, 10)
+  return {
+    start: new Date(dateStr + 'T00:00:00+03:00').toISOString(),
+    end:   new Date(dateStr + 'T23:59:59+03:00').toISOString(),
+  }
+}
+
+type TodayRecord = { id: string; scanned_at: string }
+
+type DeptDayRow = {
+  key: string
+  user_id: string
+  staff_name: string
+  date: string
+  checkIn: DeptLogRow | null
+  checkOut: DeptLogRow | null
+}
+
+function pairDeptLogs(logs: DeptLogRow[]): DeptDayRow[] {
+  const map = new Map<string, DeptDayRow>()
+  for (const log of logs) {
+    const dateStr = new Date(log.scanned_at).toLocaleDateString('en-CA')
+    const key = log.user_id + '_' + dateStr
+    if (!map.has(key)) {
+      map.set(key, { key, user_id: log.user_id, staff_name: log.staff_name, date: dateStr, checkIn: null, checkOut: null })
+    }
+    const row = map.get(key)!
+    const t = normalizeLogType(log)
+    if (t === 'in' && !row.checkIn) row.checkIn = log
+    if (t === 'out' && !row.checkOut) row.checkOut = log
+  }
+  return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date))
+}
+
 export default function Attendance() {
   const { profile } = useAuth()
   const videoRef  = useRef<HTMLVideoElement>(null)
@@ -95,11 +131,14 @@ export default function Attendance() {
   const streamRef = useRef<MediaStream | null>(null)
 
   const [scannerActive, setScannerActive] = useState(false)
-  const [scanResult,    setScanResult]    = useState<'success'|'error'|'geofence_warn'|null>(null)
+  const [scanResult,    setScanResult]    = useState<'success'|'error'|'geofence_warn'|'warn'|null>(null)
   const [scanMessage,   setScanMessage]   = useState('')
   const [cameraError,   setCameraError]   = useState<string | null>(null)
   const [scanning,      setScanning]      = useState(false)
   const [attType,       setAttType]       = useState<AttendanceType>('clock_in')
+  const [todayCheckIn,  setTodayCheckIn]  = useState<TodayRecord | null>(null)
+  const [todayCheckOut, setTodayCheckOut] = useState<TodayRecord | null>(null)
+  const [todayLoaded,   setTodayLoaded]   = useState(false)
   const [gpsStatus,     setGpsStatus]     = useState<'idle'|'fetching'|'ok'|'denied'>('idle')
   const [coords,        setCoords]        = useState<{lat:number;lng:number}|null>(null)
   const [insideGeofence,setInsideGeofence]= useState<boolean|null>(null)
@@ -166,7 +205,27 @@ export default function Attendance() {
     setLogsLoading(false)
   }, [profile?.id])
 
-  useEffect(() => { fetchRecentLogs() }, [fetchRecentLogs])
+  const fetchTodayStatus = useCallback(async () => {
+    if (!profile?.id) return
+    const { start, end } = todayRangeUTC()
+    const { data } = await supabase
+      .from('attendance_logs')
+      .select('id, scanned_at, log_type')
+      .eq('user_id', profile.id)
+      .eq('facility_id', FACILITY_ID)
+      .gte('scanned_at', start)
+      .lte('scanned_at', end)
+      .order('scanned_at', { ascending: true })
+    const records = (data as any[]) ?? []
+    const ci: TodayRecord | null = records.find(r => r.log_type === 'check_in') ?? null
+    const co: TodayRecord | null = records.find(r => r.log_type === 'check_out') ?? null
+    setTodayCheckIn(ci)
+    setTodayCheckOut(co)
+    setTodayLoaded(true)
+    if (ci && !co) setAttType('clock_out')
+  }, [profile?.id])
+
+  useEffect(() => { fetchRecentLogs(); fetchTodayStatus() }, [fetchRecentLogs, fetchTodayStatus])
 
   const fetchDeptAttendance = useCallback(async () => {
     if (!isDeptHead || !profile?.department_id) return
@@ -350,12 +409,55 @@ export default function Attendance() {
       }
       qrCodeId = qrRow.id
     }
+    // No-shift check
+    try {
+      const { start: sStart, end: sEnd } = todayRangeUTC()
+      const { data: shiftRows } = await supabase
+        .from('shifts')
+        .select('id')
+        .eq('user_id', profile!.id)
+        .eq('facility_id', FACILITY_ID)
+        .gte('starts_at', sStart)
+        .lte('starts_at', sEnd)
+        .limit(1)
+      if ((shiftRows ?? []).length === 0) {
+        setScanning(false)
+        setScanResult('geofence_warn')
+        setScanMessage('No shift scheduled for you today. Contact your department head if this is an error.')
+        return
+      }
+    } catch { /* allow scan if shift table unreachable */ }
+
+    // Duplicate prevention
+    const logType: 'check_in' | 'check_out' = attType === 'clock_in' ? 'check_in' : 'check_out'
+    const { start: dupStart, end: dupEnd } = todayRangeUTC()
+    const { data: existing } = await supabase
+      .from('attendance_logs')
+      .select('id, scanned_at')
+      .eq('user_id', profile!.id)
+      .eq('facility_id', FACILITY_ID)
+      .eq('log_type', logType)
+      .gte('scanned_at', dupStart)
+      .lte('scanned_at', dupEnd)
+      .maybeSingle()
+    if (existing) {
+      const time = new Date((existing as TodayRecord).scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      setScanning(false)
+      setScanResult('warn')
+      setScanMessage(
+        logType === 'check_in'
+          ? `You have already clocked in today at ${time}. Use Clock Out to end your shift.`
+          : `You have already clocked out today at ${time}.`
+      )
+      return
+    }
+
     const log: QueuedLog = {
       id: localId(), user_id: profile!.id, facility_id: FACILITY_ID, qr_code_id: qrCodeId,
       scanned_at: new Date().toISOString(), latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null, within_geofence: insideGeofence,
       attendance_type: attType,
-      log_type: attType === 'clock_in' ? 'check_in' : 'check_out',
+      log_type: logType,
       notes: null,
     }
     await persistLog(log); setScanning(false)
@@ -367,9 +469,10 @@ export default function Attendance() {
     const { error } = await supabase.from('attendance_logs').insert(insertPayload)
     if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save â€” queued for retry. ' + error.message) }
     else {
-      if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded âœ“ â€” GPS shows you may be outside the facility.') }
+      if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded ✓ — GPS shows you may be outside the facility.') }
       else { setScanResult('success'); setScanMessage(attType === 'clock_in' ? 'Clocked in successfully!' : 'Clocked out successfully!') }
       fetchRecentLogs()
+      fetchTodayStatus()
     }
   }
 
@@ -423,13 +526,43 @@ export default function Attendance() {
         </div>
       )}
 
-      <div className="flex gap-2">
-        {(['clock_in','clock_out'] as AttendanceType[]).map(t => (
-          <button key={t} onClick={() => setAttType(t)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${attType === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {t === 'clock_in' ? '🟢 Clock In' : '🔴 Clock Out'}
-          </button>
-        ))}
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          {(['clock_in','clock_out'] as AttendanceType[]).map(t => {
+            const isClockIn  = t === 'clock_in'
+            const isDisabled = todayLoaded && (
+              isClockIn
+                ? !!todayCheckIn
+                : !!(todayCheckIn && todayCheckOut)
+            )
+            const isActive = attType === t
+            return (
+              <button key={t}
+                onClick={() => !isDisabled && setAttType(t)}
+                disabled={isDisabled}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors
+                  ${isDisabled
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                    : isActive
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>
+                {isClockIn ? '🟢 Clock In' : '🔴 Clock Out'}
+              </button>
+            )
+          })}
+        </div>
+        {todayLoaded && todayCheckIn && todayCheckOut && (
+          <div className="flex items-center justify-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg py-2 px-3">
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
+            Shift complete for today ✓
+          </div>
+        )}
+        {todayLoaded && todayCheckIn && !todayCheckOut && (
+          <div className="text-xs text-gray-400 text-center">
+            Clocked in at {new Date(todayCheckIn.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        )}
       </div>
 
       <div className="relative rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50">
@@ -482,10 +615,12 @@ export default function Attendance() {
         <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm
           ${scanResult === 'success'       ? 'bg-green-50 border border-green-200 text-green-800' : ''}
           ${scanResult === 'geofence_warn' ? 'bg-amber-50 border border-amber-200 text-amber-800' : ''}
+          ${scanResult === 'warn'          ? 'bg-amber-50 border border-amber-200 text-amber-800' : ''}
           ${scanResult === 'error'         ? 'bg-red-50 border border-red-200 text-red-700' : ''}
         `}>
           {scanResult === 'success'       && <CheckCircle2  className="w-5 h-5 flex-shrink-0 mt-0.5" />}
           {scanResult === 'geofence_warn' && <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          {scanResult === 'warn'          && <Clock         className="w-5 h-5 flex-shrink-0 mt-0.5" />}
           {scanResult === 'error'         && <XCircle       className="w-5 h-5 flex-shrink-0 mt-0.5" />}
           <span>{scanMessage}</span>
         </div>
@@ -552,37 +687,41 @@ export default function Attendance() {
             <p className="text-sm text-gray-400 py-4">No department attendance records yet.</p>
           ) : (
             <div className="space-y-2">
-              {deptLogs.map(log => {
-                const type = normalizeLogType(log)
-                return (
-                  <div key={log.id} className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3 gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">{log.staff_name}</div>
-                        <div className="text-xs text-gray-400">{new Date(log.scanned_at).toLocaleString()}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        type === 'in' ? 'bg-green-100 text-green-700' : type === 'out' ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        {type === 'in' ? 'In' : type === 'out' ? 'Out' : '—'}
-                      </span>
-                      {log.within_geofence === true  && <span className="text-green-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />On-site</span>}
-                      {log.within_geofence === false && <span className="text-amber-500 text-xs flex items-center gap-0.5"><MapPin className="w-3 h-3" />Off-site</span>}
-                      <button onClick={() => openEditModal(log)} title="Edit"
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-teal-600 transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => openRemoveModal(log)} title="Remove"
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+              {pairDeptLogs(deptLogs).map(row => (
+                <div key={row.key} className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-800">{row.staff_name}</span>
+                    <span className="text-xs text-gray-400">{new Date(row.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                   </div>
-                )
-              })}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {row.checkIn ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                          In {new Date(row.checkIn.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <button onClick={() => openEditModal(row.checkIn!)} title="Edit" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-teal-600"><Pencil className="w-3 h-3" /></button>
+                        <button onClick={() => openRemoveModal(row.checkIn!)} title="Remove" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Not clocked in</span>
+                    )}
+                    <span className="text-gray-300 text-xs">|</span>
+                    {row.checkOut ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                          Out {new Date(row.checkOut.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <button onClick={() => openEditModal(row.checkOut!)} title="Edit" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-teal-600"><Pencil className="w-3 h-3" /></button>
+                        <button onClick={() => openRemoveModal(row.checkOut!)} title="Remove" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-600 italic">Not yet clocked out</span>
+                    )}
+                    {row.checkIn?.within_geofence === true && <span className="text-green-500 text-xs flex items-center gap-0.5 ml-auto"><MapPin className="w-3 h-3" />On-site</span>}
+                    {row.checkIn?.within_geofence === false && <span className="text-amber-500 text-xs flex items-center gap-0.5 ml-auto"><MapPin className="w-3 h-3" />Off-site</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
