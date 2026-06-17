@@ -227,7 +227,7 @@ export default function Dashboard() {
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full overflow-y-auto p-4 md:p-6">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
           {greeting}, {greetingName(profile?.full_name)}
@@ -467,7 +467,7 @@ export default function Dashboard() {
           />
         </div>
       ) : null}
-      <div style={{height: '160px'}} />
+      <div className="h-24" />
     </div>
   )
 }

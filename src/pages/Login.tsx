@@ -7,17 +7,15 @@ type Mode = 'login' | 'forgot' | 'feedback'
 export default function Login() {
   const [mode, setMode] = useState<Mode>('login')
 
-  // Login form
-  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('phone')
-  const [email,    setEmail]    = useState('')
+  // Login form (phone only)
   const [phone,    setPhone]    = useState('')
   const [password, setPassword] = useState('')
   const [showPw,   setShowPw]   = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
   const [loginErr,  setLoginErr]  = useState<string | null>(null)
 
-  // Forgot password
-  const [forgotEmail,   setForgotEmail]   = useState('')
+  // Forgot password (resolves email from phone)
+  const [forgotPhone,   setForgotPhone]   = useState('')
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotMsg,     setForgotMsg]     = useState<string | null>(null)
   const [forgotErr,     setForgotErr]     = useState<string | null>(null)
@@ -41,42 +39,49 @@ export default function Login() {
     return p
   }
 
-  // ── Login ────────────────────────────────────────────────────────────────
+  // ── Login (phone → resolve email → sign in) ───────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginErr(null)
     setLoggingIn(true)
 
-    let loginEmail = email
-
-    // Phone mode: resolve the phone number to an account email first
-    if (loginMethod === 'phone') {
-      const normalized = normalizePhone(phone)
-      const { data, error: lookupErr } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('phone', normalized)
-        .maybeSingle()
-      if (lookupErr || !data?.email) {
-        setLoginErr('No account found with this phone number')
-        setLoggingIn(false)
-        return
-      }
-      loginEmail = data.email
+    const normalized = normalizePhone(phone)
+    const { data, error: lookupErr } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('phone', normalized)
+      .maybeSingle()
+    if (lookupErr || !data?.email) {
+      setLoginErr('No account found with this phone number')
+      setLoggingIn(false)
+      return
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password })
+    const { error } = await supabase.auth.signInWithPassword({ email: data.email, password })
     if (error) setLoginErr(error.message)
     setLoggingIn(false)
   }
 
-  // ── Forgot password ──────────────────────────────────────────────────────
+  // ── Forgot password (look up email by phone, then send reset) ──────────────
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault()
     setForgotErr(null); setForgotMsg(null)
-    if (!forgotEmail.trim()) return setForgotErr('Please enter your email address.')
+    if (!forgotPhone.trim()) return setForgotErr('Please enter your phone number.')
     setForgotLoading(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+
+    const normalized = normalizePhone(forgotPhone)
+    const { data, error: lookupErr } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('phone', normalized)
+      .maybeSingle()
+    if (lookupErr || !data?.email) {
+      setForgotLoading(false)
+      setForgotErr('No account found with this phone number.')
+      return
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
       redirectTo: `${window.location.origin}/reset-password`,
     })
     setForgotLoading(false)
@@ -134,27 +139,6 @@ export default function Login() {
           <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4">
             <h2 className="text-lg font-semibold text-gray-800">Sign in to your account</h2>
 
-            {/* Sign-in method toggle */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-400">Sign in with</span>
-              <div className="flex bg-gray-100 rounded-full p-0.5">
-                <button type="button"
-                  onClick={() => { setLoginMethod('email'); setLoginErr(null) }}
-                  className={`px-4 py-1 rounded-full text-xs font-semibold transition-colors ${
-                    loginMethod === 'email' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  Email
-                </button>
-                <button type="button"
-                  onClick={() => { setLoginMethod('phone'); setLoginErr(null) }}
-                  className={`px-4 py-1 rounded-full text-xs font-semibold transition-colors ${
-                    loginMethod === 'phone' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  Phone
-                </button>
-              </div>
-            </div>
-
             {loginErr && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />{loginErr}
@@ -162,21 +146,12 @@ export default function Login() {
             )}
 
             <form onSubmit={handleLogin} className="space-y-3">
-              {loginMethod === 'email' ? (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</label>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder="your@email.com" required autoComplete="email"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                    placeholder="09XXXXXXXX or +2519XXXXXXXX" required autoComplete="tel"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                  placeholder="Phone number (09XXXXXXXX or +2519XXXXXXXX)" required autoComplete="tel"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Password</label>
                 <div className="relative">
@@ -198,7 +173,7 @@ export default function Login() {
 
             {/* Forgot password + Feedback links */}
             <div className="flex items-center justify-between pt-1">
-              <button onClick={() => { setMode('forgot'); setForgotEmail(''); setForgotMsg(null); setForgotErr(null) }}
+              <button onClick={() => { setMode('forgot'); setForgotPhone(''); setForgotMsg(null); setForgotErr(null) }}
                 className="text-xs text-teal-600 hover:text-teal-700 hover:underline transition-colors">
                 Forgot password?
               </button>
@@ -219,7 +194,7 @@ export default function Login() {
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <p className="text-sm text-gray-500">Enter your email and we'll send you a reset link.</p>
+            <p className="text-sm text-gray-500">Enter your phone number and we'll send a reset link to the email on your account.</p>
 
             {forgotErr && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
@@ -235,9 +210,9 @@ export default function Login() {
             {!forgotMsg && (
               <form onSubmit={handleForgot} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</label>
-                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
-                    placeholder="your@email.com" required
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone Number</label>
+                  <input type="tel" value={forgotPhone} onChange={e => setForgotPhone(e.target.value)}
+                    placeholder="09XXXXXXXX or +2519XXXXXXXX" required
                     className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
                 </div>
                 <button type="submit" disabled={forgotLoading}

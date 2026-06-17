@@ -656,6 +656,16 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
   useEffect(() => { fetchPendingRequests() }, [fetchPendingRequests])
 
+  // Normalize Ethiopian phone numbers to +2519XXXXXXXX format
+  const normalizePhone = (raw: string): string => {
+    const p = raw.trim().replace(/\s+/g, '')
+    if (p.startsWith('+251')) return p
+    if (p.startsWith('251'))  return `+${p}`
+    if (p.startsWith('09'))   return `+251${p.slice(1)}`
+    if (p.startsWith('9') && p.length === 9) return `+251${p}`
+    return p
+  }
+
   const openInviteModal = async () => {
     setFormErr(null)
     setSuccessMsg(null)
@@ -690,6 +700,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const sendInvite = async () => {
     setFormErr(null)
     if (!inviteForm.full_name.trim()) return setFormErr('Full name is required.')
+    if (!inviteForm.phone.trim())     return setFormErr('Phone number is required')
 
     setSaving(true)
 
@@ -727,7 +738,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       await supabase.from('profiles').update({
         full_name:     inviteForm.full_name.trim(),
         role:          inviteForm.role,
-        phone:         inviteForm.phone.trim() || null,
+        phone:         normalizePhone(inviteForm.phone),
         department_id: deptId,
         employee_id:   inviteForm.employee_id.trim() || null,
         facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
@@ -805,13 +816,14 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     if (!editProfileTarget) return
     setEditProfileErr(null)
     if (!editProfileForm.full_name.trim()) return setEditProfileErr('Full name is required.')
+    if (!editProfileForm.phone.trim())     return setEditProfileErr('Phone number is required')
     setEditProfileSaving(true)
     const { error: err } = await supabase
       .from('profiles')
       .update({
         full_name:     editProfileForm.full_name.trim(),
         email:         editProfileForm.email.trim() || null,
-        phone:         editProfileForm.phone.trim() || null,
+        phone:         normalizePhone(editProfileForm.phone),
         employee_id:   editProfileForm.employee_id.trim() || null,
         role:          editProfileForm.role,
         department_id: editProfileForm.department_id === 'gp' || !editProfileForm.department_id ? null : editProfileForm.department_id,
@@ -966,7 +978,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               )}
               {[
                 { label:'Full Name *',    key:'full_name',   type:'text',  placeholder:'Dr. Abebe Girma' },
-                { label:'Phone',          key:'phone',       type:'tel',   placeholder:'+251...' },
+                { label:'Phone *',        key:'phone',       type:'tel',   placeholder:'09XXXXXXXX or +2519XXXXXXXX' },
                 { label:'Employee ID',    key:'employee_id', type:'text',  placeholder:'TMC-002' },
               ].map(f => (
                 <div key={f.key}>
@@ -979,7 +991,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               ))}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Email <span className="normal-case font-normal text-gray-400">(optional for kiosk-only staff)</span>
+                  Email <span className="normal-case font-normal text-gray-400">(optional)</span>
                 </label>
                 <input type="text" placeholder="abebe@tmc1.et (optional)"
                   value={inviteForm.email}
@@ -1083,10 +1095,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 </div>
               )}
               {([
-                { label: 'Full Name',   key: 'full_name',   type: 'text'  },
-                { label: 'Email',       key: 'email',       type: 'email' },
-                { label: 'Phone',       key: 'phone',       type: 'tel'   },
-                { label: 'Employee ID', key: 'employee_id', type: 'text'  },
+                { label: 'Full Name',         key: 'full_name',   type: 'text'  },
+                { label: 'Email (optional)',  key: 'email',       type: 'email' },
+                { label: 'Phone *',           key: 'phone',       type: 'tel'   },
+                { label: 'Employee ID',       key: 'employee_id', type: 'text'  },
               ] as { label: string; key: keyof typeof editProfileForm; type: string }[]).map(f => (
                 <div key={f.key}>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
