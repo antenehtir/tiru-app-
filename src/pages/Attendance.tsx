@@ -401,17 +401,20 @@ export default function Attendance() {
   const handleQRResult = async (qrData: string) => {
     console.log('scanned value:', qrData)
     setScanning(true); setScanResult(null)
-    let qrCodeId: string | null = null
-    if (qrData.match(/^[0-9a-f-]{36}$/i)) {
-      const { data: qrRow } = await supabase
-        .from('entrance_qr_codes').select('id, qr_payload, is_active').eq('qr_payload', qrData).single()
-      console.log('expected payload:', qrRow?.qr_payload)
-      if (!qrRow || !qrRow.is_active) {
-        setScanning(false); setScanResult('error')
-        setScanMessage('QR code not recognised or has been deactivated.'); return
-      }
-      qrCodeId = qrRow.id
+
+    // Always validate against DB — reject any QR not registered as an active entrance code
+    const { data: qrRows } = await supabase
+      .from('entrance_qr_codes')
+      .select('id, qr_payload, is_active')
+      .eq('qr_payload', qrData)
+      .eq('is_active', true)
+      .limit(1)
+    if (!qrRows || qrRows.length === 0) {
+      setScanning(false); setScanResult('error')
+      setScanMessage('Invalid QR code. Please scan the official facility entrance QR.')
+      return
     }
+    const qrCodeId: string = (qrRows[0] as any).id
     // Shift check — fetch ends_at for early clock-out detection
     let shiftEndsAt: string | null = null
     try {
@@ -485,7 +488,7 @@ export default function Attendance() {
     if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save â€” queued for retry. ' + error.message) }
     else {
       if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded ✓ — GPS shows you may be outside the facility.') }
-      else { setScanResult('success'); setScanMessage(attType === 'clock_in' ? 'Clocked in successfully!' : 'Clocked out successfully!') }
+      else { setScanResult('success'); setScanMessage(log.log_type === 'check_in' ? 'Clocked in successfully! ✓' : 'Clocked out successfully! ✓') }
       fetchRecentLogs()
       fetchTodayStatus()
     }

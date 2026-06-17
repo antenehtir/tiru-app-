@@ -223,9 +223,6 @@ export default function AppShell() {
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 rounded-t-2xl shadow-lg overflow-visible"
         style={{background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%)'}}>
 
-        {/* Notch background behind FAB */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-[55%] w-[68px] h-[68px] rounded-full bg-gray-50 pointer-events-none" />
-
         <div className="flex items-end">
           {/* Left: Dashboard, Shifts */}
           {[
@@ -248,13 +245,18 @@ export default function AppShell() {
 
           {/* Center: Attendance FAB */}
           <NavLink to="/attendance" className="flex-1 flex flex-col items-center justify-end pb-1 gap-0.5">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-[3px] border-gray-50 -mt-8 transition-colors ${
-              location.pathname === '/attendance' ? 'bg-teal-400' : 'bg-teal-600'
-            }`}>
-              <QrCode size={26} className="text-white" />
+            <div className="relative -mt-8">
+              {/* White backing circle — creates gap between FAB and nav bar */}
+              <div className="absolute -inset-1 rounded-full bg-white" />
+              {/* Teal FAB */}
+              <div className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-teal-900/30 transition-colors ${
+                location.pathname === '/attendance' ? 'bg-teal-700' : 'bg-teal-600'
+              }`}>
+                <QrCode size={28} className="text-white" />
+              </div>
             </div>
             <span className={`text-[10px] font-semibold tracking-wide ${
-              location.pathname === '/attendance' ? 'text-white' : 'text-teal-100/70'
+              location.pathname === '/attendance' ? 'text-white' : 'text-teal-100'
             }`}>Attendance</span>
           </NavLink>
 
