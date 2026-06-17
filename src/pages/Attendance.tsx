@@ -153,7 +153,7 @@ export default function Attendance() {
   const [logsLoading,   setLogsLoading]   = useState(false)
   const [facilityCoords, setFacilityCoords] = useState({ lat: 9.0054, lng: 38.7636, radius: 150 })
   const [demoMode, setDemoMode] = useState(false)
-  const [geofenceBlockMsg, setGeofenceBlockMsg] = useState('')
+  const [checkingLocation, setCheckingLocation] = useState(false)
 
   useEffect(() => {
     supabase
@@ -379,20 +379,21 @@ export default function Attendance() {
     else rafRef.current = requestAnimationFrame(tick)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const checkGeofencePreScan = (): Promise<boolean> => {
+  type GeofenceResult = { ok: boolean; msg: string }
+
+  const checkGeofencePreScan = (): Promise<GeofenceResult> => {
     return new Promise((resolve) => {
       // If demo mode is on, allow scanning
       if (demoMode) {
         console.log('demoMode:', demoMode)
-        resolve(true)
+        resolve({ ok: true, msg: '' })
         return
       }
 
       // If no geolocation, cannot check — block
       if (!navigator.geolocation) {
         console.log('No geolocation available')
-        setGeofenceBlockMsg('Geolocation not available. Cannot verify you are within the facility.')
-        resolve(false)
+        resolve({ ok: false, msg: 'Geolocation not available. Cannot verify you are within the facility.' })
         return
       }
 
@@ -405,41 +406,37 @@ export default function Attendance() {
           console.log('distance:', distance)
           console.log('demoMode:', demoMode)
 
-          // Strict check: only allow if demoMode is true OR distance is within radius
-          if (demoMode) {
-            resolve(true)
-            return
-          }
-
           if (distance > facilityCoords.radius) {
-            setGeofenceBlockMsg(`You must be within ${facilityCoords.radius}m of the facility to clock in. You are currently ${Math.round(distance)}m away.`)
             console.log('Geofence blocked: outside facility radius')
-            resolve(false)
+            resolve({ ok: false, msg: `You must be within ${facilityCoords.radius}m of the facility to clock in. You are currently ${Math.round(distance)}m away.` })
             return
           }
 
           // Inside geofence, allow
-          resolve(true)
+          resolve({ ok: true, msg: '' })
         },
         () => {
           console.log('Geolocation denied')
-          setGeofenceBlockMsg('GPS permission denied. Cannot verify you are within the facility.')
-          resolve(false)
+          resolve({ ok: false, msg: 'GPS permission denied. Cannot verify you are within the facility.' })
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        // Faster response: cached position up to 30s old, normal accuracy, 6s timeout
+        { enableHighAccuracy: false, timeout: 6000, maximumAge: 30000 }
       )
     })
   }
 
   const startCamera = async () => {
     setScanResult(null); setScanMessage(''); setScanning(false); setCameraError(null)
-    setGeofenceBlockMsg('')
+
+    // Instant feedback while GPS resolves
+    setCheckingLocation(true)
 
     // Check geofence BEFORE opening camera
-    const canScan = await checkGeofencePreScan()
-    if (!canScan) {
+    const { ok, msg } = await checkGeofencePreScan()
+    setCheckingLocation(false)
+    if (!ok) {
       setScanResult('warn')
-      setScanMessage(geofenceBlockMsg)
+      setScanMessage(msg)
       return // STOP — do not open camera
     }
 
@@ -706,17 +703,34 @@ export default function Attendance() {
             <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
               <XCircle className="w-12 h-12 text-red-400" />
               <p className="text-sm text-red-600 font-medium">{cameraError}</p>
-              <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
-                Retry Camera
+              <button
+                onClick={startCamera}
+                disabled={checkingLocation}
+                className="bg-teal-600 hover:bg-teal-700 disabled:opacity-70 disabled:cursor-wait text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2">
+                {checkingLocation ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Checking location…</>
+                ) : (
+                  'Retry Camera'
+                )}
               </button>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <QrCode className="w-16 h-16 text-gray-300" />
               <p className="text-sm text-gray-400">Camera is off</p>
-              <button onClick={startCamera} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors">
-                Start Scanner
+              <button
+                onClick={startCamera}
+                disabled={checkingLocation}
+                className="bg-teal-600 hover:bg-teal-700 disabled:opacity-70 disabled:cursor-wait text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2">
+                {checkingLocation ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Checking location…</>
+                ) : (
+                  'Start Scanner'
+                )}
               </button>
+              {checkingLocation && (
+                <p className="text-xs text-teal-600 animate-pulse">Checking your location…</p>
+              )}
             </div>
           )
         )}
