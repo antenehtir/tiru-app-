@@ -417,7 +417,7 @@ export default function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
           <Outlet />
         </main>
       </div>
@@ -448,8 +448,8 @@ export default function AppShell() {
 
           {/* Center: Attendance FAB */}
           <NavLink to="/attendance" className="flex-1 flex flex-col items-center justify-end pb-1 gap-0.5">
-            <div className="relative -mt-8">
-              <div className="absolute -inset-1 rounded-full bg-white" />
+            <div className="relative -mt-5">
+              <div className="absolute -inset-0.5 rounded-full bg-white" />
               <div className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-teal-900/30 transition-colors ${
                 location.pathname === '/attendance' ? 'bg-teal-700' : 'bg-teal-600'
               }`}>
