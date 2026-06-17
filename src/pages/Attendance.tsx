@@ -153,6 +153,7 @@ export default function Attendance() {
   const [logsLoading,   setLogsLoading]   = useState(false)
   const [facilityCoords, setFacilityCoords] = useState({ lat: 9.0054, lng: 38.7636, radius: 150 })
   const [demoMode, setDemoMode] = useState(false)
+  const [geofenceBlockMsg, setGeofenceBlockMsg] = useState('')
 
   useEffect(() => {
     supabase
@@ -176,6 +177,7 @@ export default function Attendance() {
       .then(({ data, error }) => {
         if (error || !data) return
         setDemoMode(!!data.demo_mode)
+        console.log('demoMode value:', !!data.demo_mode)
       })
   }, [])
 
@@ -377,8 +379,70 @@ export default function Attendance() {
     else rafRef.current = requestAnimationFrame(tick)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const checkGeofencePreScan = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      // If demo mode is on, allow scanning
+      if (demoMode) {
+        console.log('demoMode:', demoMode)
+        resolve(true)
+        return
+      }
+
+      // If no geolocation, cannot check — block
+      if (!navigator.geolocation) {
+        console.log('No geolocation available')
+        setGeofenceBlockMsg('Geolocation not available. Cannot verify you are within the facility.')
+        resolve(false)
+        return
+      }
+
+      // Get GPS and check geofence distance
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude; const lng = pos.coords.longitude
+          const distance = haversineM(lat, lng, facilityCoords.lat, facilityCoords.lng)
+          console.log('facilityCoords:', facilityCoords)
+          console.log('distance:', distance)
+          console.log('demoMode:', demoMode)
+
+          // Strict check: only allow if demoMode is true OR distance is within radius
+          if (demoMode) {
+            resolve(true)
+            return
+          }
+
+          if (distance > facilityCoords.radius) {
+            setGeofenceBlockMsg(`You must be within ${facilityCoords.radius}m of the facility to clock in. You are currently ${Math.round(distance)}m away.`)
+            console.log('Geofence blocked: outside facility radius')
+            resolve(false)
+            return
+          }
+
+          // Inside geofence, allow
+          resolve(true)
+        },
+        () => {
+          console.log('Geolocation denied')
+          setGeofenceBlockMsg('GPS permission denied. Cannot verify you are within the facility.')
+          resolve(false)
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      )
+    })
+  }
+
   const startCamera = async () => {
     setScanResult(null); setScanMessage(''); setScanning(false); setCameraError(null)
+    setGeofenceBlockMsg('')
+
+    // Check geofence BEFORE opening camera
+    const canScan = await checkGeofencePreScan()
+    if (!canScan) {
+      setScanResult('warn')
+      setScanMessage(geofenceBlockMsg)
+      return // STOP — do not open camera
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       streamRef.current = stream
