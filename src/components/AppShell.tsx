@@ -417,7 +417,7 @@ export default function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-36 md:pb-0">
+        <main className="flex-1 overflow-y-auto md:pb-0" style={{ overflowY: 'auto' }}>
           <Outlet />
         </main>
       </div>
