@@ -73,7 +73,7 @@ export default function Leave() {
     setLoading(true); setError(null)
     let query = supabase
       .from('leave_requests')
-      .select(`*, approver_note, approved_by, approver:profiles!leave_requests_approved_by_fkey(full_name), requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
+      .select(`*, approver_note, approved_by, approver:profiles!approved_by(full_name), requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
       .order('created_at', { ascending: false })
     if (tab === 'mine')    query = query.eq('user_id', profile!.id)
     if (tab === 'pending') query = query.eq('status', 'pending')
