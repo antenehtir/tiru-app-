@@ -85,6 +85,14 @@ export default function Leave() {
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
+  // Approvers + HR land on the Pending tab once their profile loads (async)
+  useEffect(() => {
+    if (!profile) return
+    if (['medical_director','hr','super_admin','ceo','general_manager'].includes(profile.role ?? '')) {
+      setTab('pending')
+    }
+  }, [profile?.role]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const submitRequest = async () => {
     setFormErr(null)
     if (!form.start_date || !form.end_date) return setFormErr('Please set start and end dates.')
@@ -144,6 +152,21 @@ export default function Leave() {
           created_at: new Date().toISOString(),
         })
         if (auditErr) console.error('Audit log insert failed:', auditErr)
+
+        // Notify HR when a non-HR approver actions leave, so they can record it
+        if (profile?.role !== 'hr') {
+          const newStatus = approved ? 'approved' : 'rejected'
+          const requesterName = req.requester?.full_name ?? 'Staff Member'
+          const { error: hrNoticeErr } = await supabase.from('notices').insert({
+            author_id: profile?.id,
+            title: `Leave ${approved ? 'Approved' : 'Rejected'}: ${requesterName}`,
+            body: `${req.leave_type} leave from ${req.start_date} to ${req.end_date} has been ${newStatus} by ${profile?.full_name}. Please record this in your HR system.`,
+            priority: 'normal',
+            audience: 'administrative',
+            pinned: false,
+          })
+          if (hrNoticeErr) console.error('HR notice error:', hrNoticeErr)
+        }
       }
     }
 
@@ -156,7 +179,7 @@ export default function Leave() {
 
   const tabs: { key: TabKey; label: string; show: boolean }[] = [
     { key: 'mine',    label: 'My Requests',     show: true },
-    { key: 'pending', label: 'Pending Approval', show: canApprove },
+    { key: 'pending', label: 'Pending Approval', show: canApprove || isHR },
     { key: 'all',     label: 'All Requests',     show: canSeeAll },
   ]
 
