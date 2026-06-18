@@ -361,15 +361,17 @@ export default function AppShell() {
             <span className="text-lg font-bold text-teal-700 md:hidden">Tiru</span>
           </div>
 
-          {/* CENTER zone — facility name, truncated, never wraps */}
-          <div className="flex-1 min-w-0 overflow-hidden px-2">
+          {/* CENTER zone — facility name in a pill, truncated, never wraps */}
+          <div className="flex-1 min-w-0 flex items-center justify-center">
             {facilityName && (
-              <p
-                className="truncate text-center text-[14px] md:text-[15px]"
-                style={{ fontWeight: 700, color: '#1E293B' }}
-              >
-                {facilityName}
-              </p>
+              <div className="flex items-center justify-center w-full min-w-0 overflow-hidden px-2">
+                <span
+                  className="truncate text-[13px] md:text-[14px] font-bold text-center border border-slate-300 rounded-full px-3 py-0.5 max-w-full"
+                  style={{ color: '#1E293B', letterSpacing: '0.01em' }}
+                >
+                  {facilityName}
+                </span>
+              </div>
             )}
           </div>
 
