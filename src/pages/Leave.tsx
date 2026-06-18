@@ -294,8 +294,18 @@ export default function Leave() {
                   <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
                     {req.reason && <p className="text-sm text-gray-600"><span className="font-semibold">Reason:</span> {req.reason}</p>}
                     {req.approved_by && (req.status === 'approved' || req.status === 'rejected') && (
-                      <p className={`text-sm font-semibold ${req.status === 'approved' ? 'text-green-700' : 'text-red-700'}`}>
-                        {req.status === 'approved' ? 'Approved by:' : 'Rejected by:'} {approverMap[req.approved_by ?? ''] ?? 'Unknown'}
+                      <p className="mt-1 text-sm">
+                        {req.status === 'approved' ? (
+                          <>
+                            <span className="font-semibold text-emerald-600">Approved by: </span>
+                            <span className="text-emerald-600">{approverMap[req.approved_by ?? ''] ?? 'Unknown'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-red-600">Rejected by: </span>
+                            <span className="text-red-600">{approverMap[req.approved_by ?? ''] ?? 'Unknown'}</span>
+                          </>
+                        )}
                       </p>
                     )}
                     {req.approver_note && <p className="text-sm text-gray-600"><span className="font-semibold">Reviewer note:</span> {req.approver_note}</p>}
