@@ -23,6 +23,7 @@ type LeaveRequest = {
   hr_note: string | null
   created_at: string
   requester: { full_name: string; role: string } | null
+  approver: { full_name: string } | null
 }
 
 const LEADERSHIP = ['ceo','general_manager','super_admin']
@@ -72,7 +73,7 @@ export default function Leave() {
     setLoading(true); setError(null)
     let query = supabase
       .from('leave_requests')
-      .select(`*, approver_note, approved_by, requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
+      .select(`*, approver_note, approved_by, approver:profiles!leave_requests_approved_by_fkey(full_name), requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
       .order('created_at', { ascending: false })
     if (tab === 'mine')    query = query.eq('user_id', profile!.id)
     if (tab === 'pending') query = query.eq('status', 'pending')
@@ -130,6 +131,19 @@ export default function Leave() {
           pinned: false,
         })
         if (noticeErr) console.error('Notice error:', noticeErr)
+
+        // Audit log — record the approver's identity (non-blocking)
+        const { error: auditErr } = await supabase.from('audit_log').insert({
+          facility_id: 'd917b86c-682c-4f11-b285-0a1cada2b54b',
+          actor_id: profile?.id,
+          actor_name: profile?.full_name,
+          action: approved ? 'Leave Approved' : 'Leave Rejected',
+          target_user_id: req.user_id,
+          target_name: req.requester?.full_name ?? 'Staff Member',
+          details: `${req.leave_type} leave · ${req.start_date} to ${req.end_date}${note ? ' · Note: ' + note : ''}`,
+          created_at: new Date().toISOString(),
+        })
+        if (auditErr) console.error('Audit log insert failed:', auditErr)
       }
     }
 
@@ -213,6 +227,11 @@ export default function Leave() {
                 {isOpen && (
                   <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
                     {req.reason && <p className="text-sm text-gray-600"><span className="font-semibold">Reason:</span> {req.reason}</p>}
+                    {req.approver?.full_name && (req.status === 'approved' || req.status === 'rejected') && (
+                      <p className={`text-sm font-semibold ${req.status === 'approved' ? 'text-green-700' : 'text-red-700'}`}>
+                        {req.status === 'approved' ? 'Approved by:' : 'Rejected by:'} {req.approver.full_name}
+                      </p>
+                    )}
                     {req.approver_note && <p className="text-sm text-gray-600"><span className="font-semibold">Reviewer note:</span> {req.approver_note}</p>}
                     {req.hr_note && <p className="text-sm text-gray-600"><span className="font-semibold">HR note:</span> {req.hr_note}</p>}
                     <p className="text-xs text-gray-400">Submitted: {new Date(req.created_at).toLocaleString()}</p>
