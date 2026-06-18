@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { roleLabel } from '../lib/roles'
 import { useAuthStore } from '../store/authStore'
 import { MapPin, Activity, ChevronRight, ChevronDown, ChevronUp, AlertTriangle, ShieldAlert, CalendarOff } from 'lucide-react'
 import NewIncidentModal from '../components/NewIncidentModal'
@@ -235,7 +236,7 @@ export default function Dashboard() {
           {greeting}, {greetingName(profile?.full_name)}
         </h1>
         <span className="inline-block mt-2 px-3 py-1 rounded-full text-sm font-medium bg-teal-50 text-teal-700 border border-teal-200 capitalize">
-          {profile?.role?.replace(/_/g, ' ')}
+          {roleLabel(profile?.role)}
         </span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2 md:gap-4 mb-3 md:mb-8">

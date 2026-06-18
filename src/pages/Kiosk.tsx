@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { roleLabel } from '../lib/roles'
 import {
   LogIn, LogOut, AlertTriangle, Bell, ArrowLeft,
   CheckCircle2, XCircle, Loader2, Shield, CalendarDays
@@ -688,7 +689,7 @@ export default function Kiosk() {
             {staff?.full_name.split(' ')[1] ?? staff?.full_name}!
           </h1>
           <p className="text-teal-200 text-sm capitalize mt-0.5">
-            {staff?.role?.replace(/_/g,' ')} · {(staff?.department as any)?.name ?? 'No department'}
+            {roleLabel(staff?.role)} · {(staff?.department as any)?.name ?? 'No department'}
           </p>
         </div>
         <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white">
@@ -913,7 +914,7 @@ export default function Kiosk() {
             {initials(staff?.full_name ?? '')}
           </div>
           <h2 className="text-2xl font-bold text-gray-900">{staff?.full_name}</h2>
-          <p className="text-gray-500 text-sm">{staff?.role?.replace(/_/g, ' ')} · {staff?.employee_id}</p>
+          <p className="text-gray-500 text-sm">{roleLabel(staff?.role)} · {staff?.employee_id}</p>
         </div>
         <p className="text-center text-gray-600 font-medium mb-4">Enter your 4-digit PIN</p>
         <div className="flex justify-center gap-4 mb-8">

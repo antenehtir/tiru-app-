@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Phone, Search, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { roleLabel } from '../lib/roles'
 
 interface StaffMember {
   id: string
@@ -129,7 +130,7 @@ export default function Staff() {
                 {/* Role badge */}
                 {member.role && (
                   <span className="self-start px-2 py-0.5 bg-teal-50 text-teal-700 border border-teal-100 rounded-full text-xs font-medium capitalize">
-                    {member.role.replace(/_/g, ' ')}
+                    {roleLabel(member.role)}
                   </span>
                 )}
 

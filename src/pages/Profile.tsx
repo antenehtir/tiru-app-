@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { roleLabel } from '../lib/roles'
 import { useAuthStore } from '../store/authStore'
 import { User, Lock, CheckCircle2, AlertCircle, Loader2, Info, FileEdit, Shield } from 'lucide-react'
 
@@ -180,7 +181,7 @@ export default function Profile() {
           {profile?.role && (
             <span className={`inline-block mt-1 px-3 py-0.5 rounded-full text-xs font-semibold capitalize
                               ${ROLE_COLOR[profile.role] ?? 'bg-gray-100 text-gray-600'}`}>
-              {profile.role.replace(/_/g, ' ')}
+              {roleLabel(profile.role)}
             </span>
           )}
         </div>
@@ -198,7 +199,7 @@ export default function Profile() {
           <Field label="Email"        value={profile?.email       ?? ''} />
           <Field label="Employee ID"  value={profile?.employee_id ?? ''} />
           <Field label="Department"   value={deptName} />
-          <Field label="Role"         value={profile?.role?.replace(/_/g, ' ') ?? ''} />
+          <Field label="Role"         value={roleLabel(profile?.role)} />
           <Field label="Phone Number" value={profile?.phone ?? ''} />
         </div>
 

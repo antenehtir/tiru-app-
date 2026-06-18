@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { roleLabel } from '../lib/roles'
 import { useAuth } from '../hooks/useAuth'
 import {
   Bell, Plus, X, Loader2, AlertCircle,
@@ -474,7 +475,7 @@ export default function Notices() {
                             <p className={`font-medium truncate ${selectedStaff.includes(s.id) ? 'text-teal-700' : 'text-gray-700'}`}>
                               {s.full_name}
                             </p>
-                            <p className="text-xs text-gray-400 truncate">{s.role.replace(/_/g, ' ')} · {s.department}</p>
+                            <p className="text-xs text-gray-400 truncate">{roleLabel(s.role)} · {s.department}</p>
                           </div>
                         </label>
                       ))}

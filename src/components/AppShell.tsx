@@ -6,6 +6,7 @@ import {
   User, ClipboardList, Activity, CheckCheck, Loader2, Plus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { roleLabel } from '../lib/roles'
 import { useAuthStore } from '../store/authStore'
 
 const NAV_ITEMS = [
@@ -332,7 +333,7 @@ export default function AppShell() {
                 {profile?.full_name ?? '—'}
               </p>
               <p className="text-xs text-gray-500 capitalize truncate">
-                {profile?.role?.replace(/_/g, ' ') ?? ''}
+                {roleLabel(profile?.role)}
               </p>
             </div>
           </button>
@@ -587,7 +588,7 @@ export default function AppShell() {
                     {profile?.full_name ?? 'My Profile'}
                   </p>
                   <p className="text-xs text-gray-400 capitalize truncate">
-                    {profile?.role?.replace(/_/g, ' ') ?? ''}
+                    {roleLabel(profile?.role)}
                   </p>
                 </div>
               </button>

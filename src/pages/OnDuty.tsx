@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { roleLabel } from '../lib/roles'
 import { Activity, RefreshCw, Phone, Clock, Building2, ChevronDown } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -301,7 +302,7 @@ export default function OnDuty() {
                                   <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />{meta.label}
                                 </span>
                               </div>
-                              <p className="text-xs text-gray-400 capitalize">{shift.user?.role?.replace(/_/g, ' ')}{shift.specialty ? ` · ${shift.specialty}` : ''}</p>
+                              <p className="text-xs text-gray-400 capitalize">{roleLabel(shift.user?.role)}{shift.specialty ? ` · ${shift.specialty}` : ''}</p>
                               <p className="text-xs text-gray-500">{startT} – {endT}</p>
                               {latestLog?.attendance_type === 'clock_in' && (
                                 <p className="text-xs text-teal-600">

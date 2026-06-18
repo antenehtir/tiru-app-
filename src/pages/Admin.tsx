@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { roleLabel } from '../lib/roles'
 import { useAuth } from '../hooks/useAuth'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -954,7 +955,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm text-gray-900">{u.full_name}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${ROLE_COLOR[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {u.role.replace('_',' ')}
+                        {roleLabel(u.role)}
                       </span>
                       {!u.is_active && (
                         <span className="text-xs rounded-full px-2 py-0.5 bg-red-100 text-red-600">Inactive</span>
@@ -1349,7 +1350,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                         </span>
                         {req.profile?.role && (
                           <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${ROLE_COLOR[req.profile.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {req.profile.role.replace('_', ' ')}
+                            {roleLabel(req.profile.role)}
                           </span>
                         )}
                       </div>
