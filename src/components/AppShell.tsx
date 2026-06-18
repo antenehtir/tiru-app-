@@ -140,6 +140,31 @@ export default function AppShell() {
     return () => clearInterval(interval)
   }, [fetchCounts])
 
+  // ── GPS pre-warm ────────────────────────────────────────────────────────────
+  // Once authenticated, request location permission immediately and keep a fresh
+  // cached position so the geofence check on Clock In is instant.
+  useEffect(() => {
+    if (!profile?.id || !navigator.geolocation) return
+
+    const setPos = useAuthStore.getState().setLastKnownPosition
+
+    // Warm up GPS + trigger the permission prompt right after login
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setPos(pos),
+      () => {}, // silent fail
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+    )
+
+    // Keep the cached position fresh in the background
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setPos(pos),
+      (error) => { console.log('GPS watch error:', error) },
+      { enableHighAccuracy: false, maximumAge: 30000, timeout: 10000 }
+    )
+
+    return () => navigator.geolocation.clearWatch(watchId)
+  }, [profile?.id])
+
   const badgeCount  = unreadNotices + openIncidents
   const badgeLabel  = badgeCount > 9 ? '9+' : String(badgeCount)
 

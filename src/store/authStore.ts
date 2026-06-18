@@ -19,10 +19,12 @@ interface AuthStore {
   session: Session | null
   loading: boolean
   profileReady: boolean
+  lastKnownPosition: GeolocationPosition | null
   setProfile: (profile: Profile | null) => void
   setSession: (session: Session | null) => void
   setLoading: (loading: boolean) => void
   setProfileReady: (ready: boolean) => void
+  setLastKnownPosition: (pos: GeolocationPosition) => void
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -30,8 +32,10 @@ export const useAuthStore = create<AuthStore>((set) => ({
   session: null,
   loading: true,
   profileReady: false,
+  lastKnownPosition: null,
   setProfile: (profile) => set({ profile }),
   setSession: (session) => set({ session }),
   setLoading: (loading) => set({ loading }),
   setProfileReady: (ready) => set({ profileReady: ready }),
+  setLastKnownPosition: (pos) => set({ lastKnownPosition: pos }),
 }))

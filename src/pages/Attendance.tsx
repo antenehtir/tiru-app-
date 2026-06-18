@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../hooks/useAuth'
+import { useAuthStore } from '../store/authStore'
 import jsQR from 'jsqr'
 import {
   QrCode, MapPin, CheckCircle2, XCircle, Clock,
@@ -127,6 +128,7 @@ function pairDeptLogs(logs: DeptLogRow[]): DeptDayRow[] {
 
 export default function Attendance() {
   const { profile } = useAuth()
+  const lastKnownPosition = useAuthStore((s) => s.lastKnownPosition)
   const videoRef  = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef    = useRef<number>(0)
@@ -386,6 +388,24 @@ export default function Attendance() {
       // If demo mode is on, allow scanning
       if (demoMode) {
         console.log('demoMode:', demoMode)
+        resolve({ ok: true, msg: '' })
+        return
+      }
+
+      // Use a fresh cached position from the background GPS watch if we have one —
+      // skips the getCurrentPosition wait entirely for an instant check.
+      const cachedPos = useAuthStore.getState().lastKnownPosition
+      const cacheAge  = cachedPos ? Date.now() - cachedPos.timestamp : Infinity
+      if (cachedPos && cacheAge < 60000) {
+        const distance = haversineM(
+          cachedPos.coords.latitude, cachedPos.coords.longitude,
+          facilityCoords.lat, facilityCoords.lng,
+        )
+        console.log('Using cached position — distance:', distance, 'age(ms):', cacheAge)
+        if (distance > facilityCoords.radius) {
+          resolve({ ok: false, msg: `You must be within ${facilityCoords.radius}m of the facility to clock in. You are currently ${Math.round(distance)}m away.` })
+          return
+        }
         resolve({ ok: true, msg: '' })
         return
       }
@@ -688,6 +708,30 @@ export default function Attendance() {
           </div>
         )}
       </div>
+
+      {/* ── Live location indicator (uses pre-warmed cached GPS) ── */}
+      {!demoMode && (() => {
+        if (!lastKnownPosition) {
+          return (
+            <div className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 bg-gray-100 text-gray-400">
+              <MapPin className="w-3.5 h-3.5" />Acquiring location…
+            </div>
+          )
+        }
+        const dist = Math.round(haversineM(
+          lastKnownPosition.coords.latitude, lastKnownPosition.coords.longitude,
+          facilityCoords.lat, facilityCoords.lng,
+        ))
+        const inside = dist <= facilityCoords.radius
+        return (
+          <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+            inside ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            <MapPin className="w-3.5 h-3.5" />
+            {inside ? `Inside facility (${dist}m)` : `${dist}m from facility`}
+          </div>
+        )
+      })()}
 
       <div className="relative rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden bg-gray-50 h-[320px]">
         <video
