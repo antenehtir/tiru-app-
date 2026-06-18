@@ -6,6 +6,32 @@ import {
   CheckCircle2, XCircle, Clock, FileText, ChevronDown, ChevronUp,
 } from 'lucide-react'
 
+// Hardened wrapper for all leave-related notices. The audience is locked to
+// 'individual' inside here and is NOT a parameter — so it is structurally
+// impossible to accidentally broadcast a leave notice ('all'/'administrative').
+const insertLeaveNotice = async (
+  client: typeof supabase,
+  payload: {
+    author_id: string | undefined
+    title: string
+    body: string
+    target_user_id: string
+    priority?: string
+    pinned?: boolean
+  }
+) => {
+  const { error } = await client.from('notices').insert({
+    author_id: payload.author_id,
+    title: payload.title,
+    body: payload.body,
+    priority: payload.priority ?? 'info',
+    audience: 'individual',          // ← locked, cannot be overridden
+    target_user_id: payload.target_user_id,
+    pinned: payload.pinned ?? false,
+  })
+  if (error) console.error('Leave notice insert failed:', error)
+}
+
 type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'recorded'
 type LeaveType   = 'annual' | 'sick' | 'emergency' | 'maternity' | 'paternity' | 'study' | 'compassionate' | 'other'
 
@@ -152,16 +178,12 @@ export default function Leave() {
     if (approverErr) console.error('Approver fetch failed:', approverErr)
     for (const approver of approverProfiles ?? []) {
       if (approver.id === profile?.id) continue // don't self-notify
-      const { error: noticeErr } = await supabase.from('notices').insert({
+      await insertLeaveNotice(supabase, {
         author_id: profile?.id,
         title: `New Leave Request: ${profile?.full_name}`,
         body: `${form.leave_type} leave requested from ${form.start_date} to ${form.end_date}. Reason: ${form.reason || 'None'}. Please review in the Leave Requests section.`,
-        priority: 'info',
-        audience: 'individual',
         target_user_id: approver.id,
-        pinned: false,
       })
-      if (noticeErr) console.error('New leave request notice error:', noticeErr)
     }
 
     setModalOpen(false)
@@ -184,20 +206,14 @@ export default function Leave() {
         const approved = actionMode.action === 'approve'
         const note = actionNote.trim()
         const { data: { user } } = await supabase.auth.getUser()
-        const { error: noticeErr } = await supabase.from('notices').insert({
-          author_id: user?.id ?? null,
+        await insertLeaveNotice(supabase, {
+          author_id: user?.id,
           title: approved ? 'Leave Request Approved ✓' : 'Leave Request Not Approved',
           body: approved
             ? `Your leave request from ${req.start_date} to ${req.end_date} has been approved.`
             : `Your leave request from ${req.start_date} to ${req.end_date} was not approved.${note ? ` Reason: ${note}` : ''}`,
-          priority: 'info',
-          audience: 'individual',
           target_user_id: req.user_id,
-          department_id: null,
-          department_ids: null,
-          pinned: false,
         })
-        if (noticeErr) console.error('Notice error:', noticeErr)
 
         // Audit log — record the approver's identity (non-blocking)
         const { error: auditErr } = await supabase.from('audit_log').insert({
@@ -222,16 +238,12 @@ export default function Leave() {
             .select('id')
             .eq('role', 'hr')
           for (const hrUser of (hrUsers ?? []).filter(u => u.id !== req.user_id)) {
-            const { error: hrNoticeErr } = await supabase.from('notices').insert({
+            await insertLeaveNotice(supabase, {
               author_id: profile?.id,
               title: `Leave ${approved ? 'Approved' : 'Rejected'}: ${requesterName}`,
               body: `${req.leave_type} leave from ${req.start_date} to ${req.end_date} has been ${newStatus} by ${profile?.full_name}. Please record this in your HR system.`,
-              priority: 'info',
-              audience: 'individual',
               target_user_id: hrUser.id,
-              pinned: false,
             })
-            if (hrNoticeErr) console.error('HR notice error:', hrNoticeErr)
           }
         }
       }
