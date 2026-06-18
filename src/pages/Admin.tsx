@@ -596,9 +596,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
   // Edit role modal
   type EditMode = { id: string; role: string } | null
-  const [editMode,  setEditMode]  = useState<EditMode>(null)
-  const [newRole,   setNewRole]   = useState('')
-  const [updating,  setUpdating]  = useState(false)
+  const [editMode,   setEditMode]   = useState<EditMode>(null)
+  const [newRole,    setNewRole]    = useState('')
+  const [newDeptId,  setNewDeptId]  = useState('')
+  const [roleDepts,  setRoleDepts]  = useState<DeptOption[]>([])
+  const [roleErr,    setRoleErr]    = useState<string | null>(null)
+  const [updating,   setUpdating]   = useState(false)
 
   // Edit profile modal (super_admin only)
   type EditProfileTarget = Profile | null
@@ -641,6 +644,16 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     supabase.from('sites').select('id, name').eq('is_active', true).order('name')
       .then(({ data }) => setSites((data as SiteOption[]) ?? []))
   }, [])
+
+  // Load departments for the Change Role modal once it opens (facility-scoped)
+  useEffect(() => {
+    if (!editMode) return
+    supabase.from('departments')
+      .select('id, name')
+      .eq('facility_id', FACILITY_ID)
+      .order('name')
+      .then(({ data }) => setRoleDepts((data as DeptOption[]) ?? []))
+  }, [editMode])
 
   const fetchPendingRequests = useCallback(async () => {
     setPendingLoading(true)
@@ -772,11 +785,33 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
   const updateRole = async () => {
     if (!editMode) return
+    setRoleErr(null)
+
+    // Department Head must have a department selected
+    if (newRole === 'department_head' && !newDeptId) {
+      setRoleErr('Please select a department for the Department Head.')
+      return
+    }
+
     setUpdating(true)
+    // Only touch department_id when assigning Department Head; otherwise leave it unchanged
+    const payload = newRole === 'department_head'
+      ? { role: newRole, department_id: newDeptId }
+      : { role: newRole }
     const { error: err } = await supabase
-      .from('profiles').update({ role: newRole }).eq('id', editMode.id)
+      .from('profiles').update(payload).eq('id', editMode.id)
     setUpdating(false)
-    if (!err) { setEditMode(null); fetchUsers() }
+
+    if (err) { setRoleErr(err.message); return }
+
+    if (newRole === 'department_head') {
+      const deptName = roleDepts.find(d => d.id === newDeptId)?.name ?? ''
+      setSuccessMsg(`Role updated to Department Head — ${deptName}`)
+    } else {
+      setSuccessMsg(`Role updated to ${newRole.replace(/_/g, ' ')}`)
+    }
+    setEditMode(null)
+    fetchUsers()
   }
 
   const toggleActive = async (id: string, current: boolean) => {
@@ -940,7 +975,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
                 {isOpen && (
                   <div className="px-4 pb-4 border-t border-gray-100 pt-3 flex gap-2 flex-wrap">
-                    <button onClick={() => { setEditMode({ id: u.id, role: u.role }); setNewRole(u.role) }}
+                    <button onClick={() => { setEditMode({ id: u.id, role: u.role }); setNewRole(u.role); setNewDeptId(u.department_id ?? ''); setRoleErr(null); setSuccessMsg(null) }}
                       className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg transition-colors">
                       Change Role
                     </button>
@@ -1033,17 +1068,34 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               <h2 className="text-lg font-semibold">Change Role</h2>
               <button onClick={() => setEditMode(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
-            <div className="px-6 py-5">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Role</label>
-              <select value={newRole} onChange={e => setNewRole(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
-                {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
-              </select>
+            <div className="px-6 py-5 space-y-4">
+              {roleErr && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-lg px-3 py-2 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{roleErr}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Role</label>
+                <select value={newRole} onChange={e => setNewRole(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                  {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
+                </select>
+              </div>
+              {newRole === 'department_head' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department</label>
+                  <select value={newDeptId} onChange={e => setNewDeptId(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
+                    <option value="">Select department</option>
+                    {roleDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setEditMode(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
-              <button onClick={updateRole} disabled={updating}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-lg transition-colors">
+              <button onClick={updateRole} disabled={updating || (newRole === 'department_head' && !newDeptId)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-colors">
                 {updating && <Loader2 className="w-4 h-4 animate-spin" />}Update
               </button>
             </div>
