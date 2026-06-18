@@ -23,7 +23,6 @@ type LeaveRequest = {
   hr_note: string | null
   created_at: string
   requester: { full_name: string; role: string } | null
-  approver: { full_name: string } | null
 }
 
 const LEADERSHIP = ['ceo','general_manager','super_admin']
@@ -52,6 +51,7 @@ export default function Leave() {
   const [tab, setTab] = useState<TabKey>(defaultTab)
 
   const [requests, setRequests] = useState<LeaveRequest[]>([])
+  const [approverMap, setApproverMap] = useState<Record<string, string>>({})
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -73,13 +73,27 @@ export default function Leave() {
     setLoading(true); setError(null)
     let query = supabase
       .from('leave_requests')
-      .select(`*, approver_note, approved_by, approver:profiles!approved_by(full_name), requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
+      .select(`*, approver_note, approved_by, requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
       .order('created_at', { ascending: false })
     if (tab === 'mine')    query = query.eq('user_id', profile!.id)
     if (tab === 'pending') query = query.eq('status', 'pending')
     const { data, error: err } = await query
-    if (err) setError(err.message)
-    else setRequests((data as LeaveRequest[]) ?? [])
+    if (err) { setError(err.message); setLoading(false); return }
+    const rows = (data as LeaveRequest[]) ?? []
+    setRequests(rows)
+
+    // approved_by references auth.users, so PostgREST can't join profiles —
+    // resolve the approver names with a separate lookup keyed by id.
+    const approverIds = rows.map(r => r.approved_by).filter(Boolean) as string[]
+    if (approverIds.length > 0) {
+      const { data: approverProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', approverIds)
+      setApproverMap(
+        Object.fromEntries((approverProfiles ?? []).map(p => [p.id, p.full_name]))
+      )
+    }
     setLoading(false)
   }, [tab, profile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -105,6 +119,18 @@ export default function Leave() {
     })
     setSaving(false)
     if (err) { setFormErr(err.message); return }
+
+    // Notify all approvers that a new leave request needs review (non-blocking)
+    const { error: noticeErr } = await supabase.from('notices').insert({
+      author_id: profile?.id,
+      title: `New Leave Request: ${profile?.full_name}`,
+      body: `${form.leave_type} leave requested from ${form.start_date} to ${form.end_date}. Reason: ${form.reason || 'None'}. Please review in the Leave Requests section.`,
+      priority: 'info',
+      audience: 'all',
+      pinned: false,
+    })
+    if (noticeErr) console.error('New leave request notice error:', noticeErr)
+
     setModalOpen(false)
     setTab('mine')
     fetchRequests()
@@ -250,9 +276,9 @@ export default function Leave() {
                 {isOpen && (
                   <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
                     {req.reason && <p className="text-sm text-gray-600"><span className="font-semibold">Reason:</span> {req.reason}</p>}
-                    {req.approver?.full_name && (req.status === 'approved' || req.status === 'rejected') && (
+                    {req.approved_by && (req.status === 'approved' || req.status === 'rejected') && (
                       <p className={`text-sm font-semibold ${req.status === 'approved' ? 'text-green-700' : 'text-red-700'}`}>
-                        {req.status === 'approved' ? 'Approved by:' : 'Rejected by:'} {req.approver.full_name}
+                        {req.status === 'approved' ? 'Approved by:' : 'Rejected by:'} {approverMap[req.approved_by ?? ''] ?? 'Unknown'}
                       </p>
                     )}
                     {req.approver_note && <p className="text-sm text-gray-600"><span className="font-semibold">Reviewer note:</span> {req.approver_note}</p>}
