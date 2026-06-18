@@ -356,7 +356,8 @@ export default function AppShell() {
         >
           <div className="flex items-center h-14 px-4">
           {/* LEFT zone — Tiru wordmark (mobile only; desktop shows it in the sidebar) */}
-          <div className="flex-shrink-0 flex items-center">
+          {/* Fixed width matches the RIGHT bell zone so CENTER stays truly centered */}
+          <div className="w-10 flex-shrink-0 flex items-center">
             <span className="text-lg font-bold text-teal-700 md:hidden">Tiru</span>
           </div>
 
@@ -373,7 +374,7 @@ export default function AppShell() {
           </div>
 
           {/* RIGHT zone — Bell button + dropdown */}
-          <div className="relative flex-shrink-0" ref={bellRef}>
+          <div className="relative w-10 flex-shrink-0 flex items-center justify-end" ref={bellRef}>
             <button
               onClick={toggleBell}
               className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
