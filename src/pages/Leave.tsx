@@ -120,16 +120,25 @@ export default function Leave() {
     setSaving(false)
     if (err) { setFormErr(err.message); return }
 
-    // Notify all approvers that a new leave request needs review (non-blocking)
-    const { error: noticeErr } = await supabase.from('notices').insert({
-      author_id: profile?.id,
-      title: `New Leave Request: ${profile?.full_name}`,
-      body: `${form.leave_type} leave requested from ${form.start_date} to ${form.end_date}. Reason: ${form.reason || 'None'}. Please review in the Leave Requests section.`,
-      priority: 'info',
-      audience: 'all',
-      pinned: false,
-    })
-    if (noticeErr) console.error('New leave request notice error:', noticeErr)
+    // Notify approvers (HR + Medical Director + CEO + GM + Super Admin) individually
+    // that a new leave request needs review — not all staff (non-blocking)
+    const { data: approverProfiles } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .in('role', ['hr', 'medical_director', 'ceo', 'general_manager', 'super_admin'])
+    for (const approver of approverProfiles ?? []) {
+      if (approver.id === profile?.id) continue // don't self-notify
+      const { error: noticeErr } = await supabase.from('notices').insert({
+        author_id: profile?.id,
+        title: `New Leave Request: ${profile?.full_name}`,
+        body: `${form.leave_type} leave requested from ${form.start_date} to ${form.end_date}. Reason: ${form.reason || 'None'}. Please review in the Leave Requests section.`,
+        priority: 'info',
+        audience: 'individual',
+        target_user_id: approver.id,
+        pinned: false,
+      })
+      if (noticeErr) console.error('New leave request notice error:', noticeErr)
+    }
 
     setModalOpen(false)
     setTab('mine')
@@ -179,19 +188,27 @@ export default function Leave() {
         })
         if (auditErr) console.error('Audit log insert failed:', auditErr)
 
-        // Notify HR when a non-HR approver actions leave, so they can record it
+        // Notify HR when a non-HR approver actions leave, so they can record it.
+        // Send individual notices to each HR user (not the requester themselves).
         if (profile?.role !== 'hr') {
           const newStatus = approved ? 'approved' : 'rejected'
           const requesterName = req.requester?.full_name ?? 'Staff Member'
-          const { error: hrNoticeErr } = await supabase.from('notices').insert({
-            author_id: profile?.id,
-            title: `Leave ${approved ? 'Approved' : 'Rejected'}: ${requesterName}`,
-            body: `${req.leave_type} leave from ${req.start_date} to ${req.end_date} has been ${newStatus} by ${profile?.full_name}. Please record this in your HR system.`,
-            priority: 'info',
-            audience: 'administrative',
-            pinned: false,
-          })
-          if (hrNoticeErr) console.error('HR notice error:', hrNoticeErr)
+          const { data: hrUsers } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'hr')
+          for (const hrUser of (hrUsers ?? []).filter(u => u.id !== req.user_id)) {
+            const { error: hrNoticeErr } = await supabase.from('notices').insert({
+              author_id: profile?.id,
+              title: `Leave ${approved ? 'Approved' : 'Rejected'}: ${requesterName}`,
+              body: `${req.leave_type} leave from ${req.start_date} to ${req.end_date} has been ${newStatus} by ${profile?.full_name}. Please record this in your HR system.`,
+              priority: 'info',
+              audience: 'individual',
+              target_user_id: hrUser.id,
+              pinned: false,
+            })
+            if (hrNoticeErr) console.error('HR notice error:', hrNoticeErr)
+          }
         }
       }
     }
