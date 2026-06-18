@@ -99,6 +99,7 @@ const LEAVE_ACTION_COLOR: Record<string, string> = {
   'Leave Requested': 'bg-amber-100 text-amber-700',
   'Leave Approved':  'bg-green-100 text-green-700',
   'Leave Rejected':  'bg-red-100   text-red-600',
+  'Leave Recorded':  'bg-blue-100  text-blue-700',
 }
 
 function LeaveActionBadge({ action }: { action: string }) {
@@ -120,7 +121,7 @@ function LeaveActivityTab() {
       .from('audit_log')
       .select('*')
       .eq('facility_id', FACILITY_ID)
-      .in('action', ['Leave Requested', 'Leave Approved', 'Leave Rejected'])
+      .in('action', ['Leave Requested', 'Leave Approved', 'Leave Rejected', 'Leave Recorded'])
       .order('created_at', { ascending: false })
       .limit(50)
       .then(({ data }) => { setRows((data as Row[]) ?? []); setLoading(false) })

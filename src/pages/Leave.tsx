@@ -227,6 +227,25 @@ export default function Leave() {
       }
     }
 
+    if (!err && actionMode.action === 'record') {
+      const req = requests.find(r => r.id === actionMode.id)
+      if (req) {
+        const note = actionNote.trim()
+        // Audit log — record HR's recording of the leave (non-blocking)
+        const { error: auditErr } = await supabase.from('audit_log').insert({
+          facility_id: 'd917b86c-682c-4f11-b285-0a1cada2b54b',
+          actor_id: profile?.id,
+          actor_name: profile?.full_name,
+          action: 'Leave Recorded',
+          target_user_id: req.user_id,
+          target_name: req.requester?.full_name ?? 'Staff Member',
+          details: `${req.leave_type} leave · ${req.start_date} to ${req.end_date}${note ? ' · Note: ' + note : ''}`,
+          created_at: new Date().toISOString(),
+        })
+        if (auditErr) console.error('Audit log insert failed:', auditErr)
+      }
+    }
+
     setActioning(false)
     if (!err) { setActionMode(null); setActionNote(''); fetchRequests() }
   }
