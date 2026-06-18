@@ -321,7 +321,7 @@ export default function Leave() {
                       <span className="font-medium text-sm text-gray-900">
                         {req.requester?.full_name ?? (isOwn ? profile?.full_name : '—')}
                       </span>
-                      <span className="text-xs text-gray-400 capitalize">{req.leave_type}</span>
+                      <span className="text-xs text-gray-400">{LEAVE_TYPE_LABELS[req.leave_type] ?? req.leave_type}</span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${STATUS_COLOR[req.status]}`}>{req.status}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
