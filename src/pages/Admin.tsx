@@ -7,7 +7,7 @@ import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
   ChevronDown, ChevronUp, Shield, MapPin, Pencil, Bell, XCircle, MessageSquare,
-  Camera, PenLine, Download, Printer, FlaskConical,
+  Camera, PenLine, Download, Printer, FlaskConical, Search,
 } from 'lucide-react'
 
 // â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -571,6 +571,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [staffSearch, setStaffSearch] = useState('')
   const [depts,    setDepts]    = useState<DeptOption[]>([])
   const [sites,    setSites]    = useState<SiteOption[]>([])
 
@@ -625,6 +626,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true); setError(null)
+    setStaffSearch('')
     const { data, error: err } = await supabase
       .from('profiles')
       .select(`*, department:departments!profiles_department_id_fkey(name)`)
@@ -907,6 +909,18 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     setUploadingSig(false)
   }
 
+  // Real-time, in-memory filter of the already-fetched staff list
+  const q = staffSearch.trim().toLowerCase()
+  const filteredUsers = q
+    ? users.filter(u =>
+        (u.full_name ?? '').toLowerCase().includes(q) ||
+        roleLabel(u.role).toLowerCase().includes(q) ||
+        (u.role ?? '').toLowerCase().includes(q) ||
+        (u.department?.name ?? '').toLowerCase().includes(q) ||
+        (u.employee_id ?? '').toLowerCase().includes(q)
+      )
+    : users
+
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -927,6 +941,32 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         </button>
       </div>
 
+      {/* Staff search — filters the in-memory list in real time */}
+      <div className="relative mb-3">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={staffSearch}
+          onChange={e => setStaffSearch(e.target.value)}
+          placeholder="Search by name, role, department, or employee ID..."
+          className="w-full border border-slate-200 rounded-lg pl-9 pr-24 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+        />
+        {staffSearch && (
+          <>
+            <span className="absolute right-10 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+              {filteredUsers.length} of {users.length}
+            </span>
+            <button
+              onClick={() => setStaffSearch('')}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+
       {error && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-3">
           <AlertCircle className="w-4 h-4" />{error}
@@ -943,9 +983,11 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         <div className="flex items-center gap-2 text-gray-400 py-8 justify-center">
           <Loader2 className="w-5 h-5 animate-spin" />Loading...
         </div>
+      ) : filteredUsers.length === 0 ? (
+        <p className="text-center text-gray-400 text-sm py-8">No staff match your search.</p>
       ) : (
         <div className="space-y-2">
-          {users.map(u => {
+          {filteredUsers.map(u => {
             const isOpen = expanded.has(u.id)
             return (
               <div key={u.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">

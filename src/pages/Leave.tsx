@@ -24,7 +24,7 @@ type LeaveRequest = {
 }
 
 const LEADERSHIP = ['ceo','general_manager','super_admin']
-const CAN_APPROVE = ['medical_director']
+const CAN_APPROVE = ['medical_director','super_admin','ceo','general_manager']
 const CAN_RECORD  = ['hr']
 
 const STATUS_COLOR: Record<LeaveStatus, string> = {
@@ -40,12 +40,12 @@ export default function Leave() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
   const isLeadership = LEADERSHIP.includes(role)
-  const isMedDir     = CAN_APPROVE.includes(role)
+  const canApprove     = CAN_APPROVE.includes(role)
   const isHR         = CAN_RECORD.includes(role)
-  const canSeeAll    = isLeadership || isMedDir || isHR
+  const canSeeAll    = isLeadership || canApprove || isHR
 
   type TabKey = 'mine' | 'pending' | 'all'
-  const defaultTab: TabKey = isMedDir ? 'pending' : (canSeeAll ? 'all' : 'mine')
+  const defaultTab: TabKey = canApprove ? 'pending' : (canSeeAll ? 'all' : 'mine')
   const [tab, setTab] = useState<TabKey>(defaultTab)
 
   const [requests, setRequests] = useState<LeaveRequest[]>([])
@@ -140,7 +140,7 @@ export default function Leave() {
 
   const tabs: { key: TabKey; label: string; show: boolean }[] = [
     { key: 'mine',    label: 'My Requests',     show: true },
-    { key: 'pending', label: 'Pending Approval', show: isMedDir },
+    { key: 'pending', label: 'Pending Approval', show: canApprove },
     { key: 'all',     label: 'All Requests',     show: canSeeAll },
   ]
 
@@ -215,7 +215,7 @@ export default function Leave() {
                     {req.hr_note && <p className="text-sm text-gray-600"><span className="font-semibold">HR note:</span> {req.hr_note}</p>}
                     <p className="text-xs text-gray-400">Submitted: {new Date(req.created_at).toLocaleString()}</p>
                     <div className="flex gap-2 flex-wrap">
-                      {isMedDir && req.status === 'pending' && (
+                      {canApprove && req.status === 'pending' && (
                         <>
                           <button onClick={() => setActionMode({ id: req.id, action: 'approve' })}
                             className="flex items-center gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors">
