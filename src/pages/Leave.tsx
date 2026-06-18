@@ -122,10 +122,11 @@ export default function Leave() {
 
     // Notify approvers (HR + Medical Director + CEO + GM + Super Admin) individually
     // that a new leave request needs review — not all staff (non-blocking)
-    const { data: approverProfiles } = await supabase
+    const { data: approverProfiles, error: approverErr } = await supabase
       .from('profiles')
       .select('id, role')
       .in('role', ['hr', 'medical_director', 'ceo', 'general_manager', 'super_admin'])
+    if (approverErr) console.error('Approver fetch failed:', approverErr)
     for (const approver of approverProfiles ?? []) {
       if (approver.id === profile?.id) continue // don't self-notify
       const { error: noticeErr } = await supabase.from('notices').insert({
