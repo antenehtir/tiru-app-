@@ -18,6 +18,8 @@ type LeaveRequest = {
   reason: string | null
   status: LeaveStatus
   medical_director_note: string | null
+  approver_note: string | null
+  approved_by: string | null
   hr_note: string | null
   created_at: string
   requester: { full_name: string; role: string } | null
@@ -70,7 +72,7 @@ export default function Leave() {
     setLoading(true); setError(null)
     let query = supabase
       .from('leave_requests')
-      .select(`*, requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
+      .select(`*, approver_note, approved_by, requester:profiles!leave_requests_user_id_fkey(full_name, role)`)
       .order('created_at', { ascending: false })
     if (tab === 'mine')    query = query.eq('user_id', profile!.id)
     if (tab === 'pending') query = query.eq('status', 'pending')
@@ -103,8 +105,8 @@ export default function Leave() {
     if (!actionMode) return
     setActioning(true)
     const updates: Record<string, unknown> = {}
-    if (actionMode.action === 'approve') { updates.status = 'approved'; updates.medical_director_note = actionNote || null }
-    else if (actionMode.action === 'reject') { updates.status = 'rejected'; updates.medical_director_note = actionNote || null }
+    if (actionMode.action === 'approve') { updates.status = 'approved'; updates.approver_note = actionNote || null; updates.approved_by = profile?.id ?? null }
+    else if (actionMode.action === 'reject') { updates.status = 'rejected'; updates.approver_note = actionNote || null; updates.approved_by = profile?.id ?? null }
     else if (actionMode.action === 'record') { updates.status = 'recorded'; updates.hr_note = actionNote || null }
     const { error: err } = await supabase.from('leave_requests').update(updates).eq('id', actionMode.id)
 
@@ -211,7 +213,7 @@ export default function Leave() {
                 {isOpen && (
                   <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
                     {req.reason && <p className="text-sm text-gray-600"><span className="font-semibold">Reason:</span> {req.reason}</p>}
-                    {req.medical_director_note && <p className="text-sm text-gray-600"><span className="font-semibold">Medical Director note:</span> {req.medical_director_note}</p>}
+                    {req.approver_note && <p className="text-sm text-gray-600"><span className="font-semibold">Reviewer note:</span> {req.approver_note}</p>}
                     {req.hr_note && <p className="text-sm text-gray-600"><span className="font-semibold">HR note:</span> {req.hr_note}</p>}
                     <p className="text-xs text-gray-400">Submitted: {new Date(req.created_at).toLocaleString()}</p>
                     <div className="flex gap-2 flex-wrap">
