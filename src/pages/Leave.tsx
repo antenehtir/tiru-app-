@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 
 type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'recorded'
-type LeaveType   = 'annual' | 'sick' | 'emergency' | 'maternity' | 'paternity' | 'unpaid' | 'other'
+type LeaveType   = 'annual' | 'sick' | 'emergency' | 'maternity' | 'paternity' | 'study' | 'compassionate' | 'other'
 
 type LeaveRequest = {
   id: string
@@ -36,7 +36,17 @@ const STATUS_COLOR: Record<LeaveStatus, string> = {
   recorded: 'bg-blue-100 text-blue-700',
 }
 
-const LEAVE_TYPES: LeaveType[] = ['annual','sick','emergency','maternity','paternity','unpaid','other']
+const LEAVE_TYPES: LeaveType[] = ['annual','sick','emergency','maternity','paternity','study','compassionate','other']
+const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
+  annual:        'Annual Leave',
+  sick:          'Sick Leave',
+  emergency:     'Emergency Leave',
+  maternity:     'Maternity Leave',
+  paternity:     'Paternity Leave',
+  study:         'Study Leave',
+  compassionate: 'Compassionate Leave',
+  other:         'Other',
+}
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -389,7 +399,7 @@ export default function Leave() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Leave Type</label>
                 <select value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value as LeaveType }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
-                  {LEAVE_TYPES.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
+                  {LEAVE_TYPES.map(t => <option key={t} value={t}>{LEAVE_TYPE_LABELS[t]}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
