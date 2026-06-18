@@ -84,7 +84,21 @@ export default function AppShell() {
   const [bellOpen,       setBellOpen]       = useState(false)
   const [panelNotices,   setPanelNotices]   = useState<PanelNotice[]>([])
   const [panelLoading,   setPanelLoading]   = useState(false)
+  const [facilityName,   setFacilityName]   = useState('')
   const bellRef = useRef<HTMLDivElement>(null)
+
+  // ── Fetch facility name (centered in the top bar) ───────────────────────────
+  useEffect(() => {
+    supabase
+      .from('facilities')
+      .select('name')
+      .eq('id', 'd917b86c-682c-4f11-b285-0a1cada2b54b')
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data?.name) return // empty center zone on failure/null
+        setFacilityName(data.name)
+      })
+  }, [])
 
   // ── Fetch badge counts ────────────────────────────────────────────────────
   const fetchCounts = useCallback(async () => {
@@ -336,14 +350,30 @@ export default function AppShell() {
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
 
         {/* ── Top header bar ── */}
-        <header className="relative shrink-0 z-20 bg-white border-b border-gray-100 flex items-center h-14 px-4">
-          {/* Tiru branding — mobile only */}
-          <span className="text-lg font-bold text-teal-700 md:hidden mr-auto">Tiru</span>
-          {/* Spacer on desktop */}
-          <span className="hidden md:block flex-1" />
+        <header
+          className="relative shrink-0 z-20 bg-white border-b border-gray-100"
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        >
+          <div className="flex items-center h-14 px-4">
+          {/* LEFT zone — Tiru wordmark (mobile only; desktop shows it in the sidebar) */}
+          <div className="flex-shrink-0 flex items-center">
+            <span className="text-lg font-bold text-teal-700 md:hidden">Tiru</span>
+          </div>
 
-          {/* Bell button + dropdown */}
-          <div className="relative" ref={bellRef}>
+          {/* CENTER zone — facility name, truncated, never wraps */}
+          <div className="flex-1 min-w-0 overflow-hidden px-2">
+            {facilityName && (
+              <p
+                className="truncate text-center text-[14px] md:text-[15px]"
+                style={{ fontWeight: 700, color: '#1E293B' }}
+              >
+                {facilityName}
+              </p>
+            )}
+          </div>
+
+          {/* RIGHT zone — Bell button + dropdown */}
+          <div className="relative flex-shrink-0" ref={bellRef}>
             <button
               onClick={toggleBell}
               className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
@@ -439,6 +469,7 @@ export default function AppShell() {
                 </div>
               </div>
             )}
+          </div>
           </div>
         </header>
 
