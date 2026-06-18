@@ -266,6 +266,81 @@ export default function Dashboard() {
         })}
       </div>
 
+      {/* ── Active Incidents (moved above live strips so it's never cut off) ── */}
+      {showAdminOverview ? (
+        <button
+          onClick={() => navigate('/incidents')}
+          className="w-full mb-3 md:mb-8 text-left bg-white border border-gray-200 rounded-lg p-4 hover:border-teal-300 hover:shadow-sm transition-all">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">Active Incidents</h2>
+          <p className="text-3xl font-bold text-orange-600">{activeIncidentCount}</p>
+          <p className="text-sm text-gray-400 mt-1">Submitted or under review — click to manage</p>
+        </button>
+      ) : showIncidentsCard ? (
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-3 md:mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldAlert className="w-4 h-4 text-teal-600" />
+            <h2 className="font-bold text-gray-900">Incidents</h2>
+          </div>
+
+          <button
+            onClick={() => setIncidentModalOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-3 rounded-lg transition-colors">
+            <AlertTriangle className="w-4 h-4" />
+            Report an Incident
+          </button>
+
+          <div className="border-t border-gray-100 mt-4 pt-3">
+            <button
+              onClick={() => setReportsExpanded(e => !e)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"
+            >
+              <span>My Recent Reports ({myIncidents.length})</span>
+              {reportsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${reportsExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+              {myIncidents.length > 0 ? (
+                <ul className="space-y-1">
+                  {myIncidents.map((inc) => {
+                    const stat = statusConfig[inc.status] ?? { label: inc.status, color: 'bg-gray-100 text-gray-600' }
+                    return (
+                      <li key={inc.id}
+                        onClick={() => navigate('/incidents')}
+                        className="flex items-start justify-between gap-3 py-2 px-1 -mx-1 rounded-lg border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 truncate">{inc.title}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{formatDate(inc.created_at)}</p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {inc.severity}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stat.color}`}>
+                            {stat.label}
+                          </span>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-4">No reports submitted yet</p>
+              )}
+              <button onClick={() => navigate('/incidents')}
+                className="text-xs text-teal-600 hover:text-teal-700 font-medium mt-2">
+                View all reports →
+              </button>
+            </div>
+          </div>
+
+          <NewIncidentModal
+            open={incidentModalOpen}
+            onClose={() => setIncidentModalOpen(false)}
+            reporterId={profile!.id}
+            onSubmitted={fetchMyIncidents}
+          />
+        </div>
+      ) : null}
+
       {/* ── Live Now Strip ── */}
       {liveStats !== null && (
         <button
@@ -396,79 +471,6 @@ export default function Dashboard() {
         </button>
       )}
 
-      {showAdminOverview ? (
-        <button
-          onClick={() => navigate('/incidents')}
-          className="w-full text-left bg-white border border-gray-200 rounded-lg p-4 hover:border-teal-300 hover:shadow-sm transition-all">
-          <h2 className="text-lg font-semibold text-gray-800 mb-1">Active Incidents</h2>
-          <p className="text-3xl font-bold text-orange-600">{activeIncidentCount}</p>
-          <p className="text-sm text-gray-400 mt-1">Submitted or under review — click to manage</p>
-        </button>
-      ) : showIncidentsCard ? (
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <ShieldAlert className="w-4 h-4 text-teal-600" />
-            <h2 className="font-bold text-gray-900">Incidents</h2>
-          </div>
-
-          <button
-            onClick={() => setIncidentModalOpen(true)}
-            className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-3 rounded-lg transition-colors">
-            <AlertTriangle className="w-4 h-4" />
-            Report an Incident
-          </button>
-
-          <div className="border-t border-gray-100 mt-4 pt-3">
-            <button
-              onClick={() => setReportsExpanded(e => !e)}
-              className="w-full flex items-center justify-between text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"
-            >
-              <span>My Recent Reports ({myIncidents.length})</span>
-              {reportsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 ${reportsExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-              {myIncidents.length > 0 ? (
-                <ul className="space-y-1">
-                  {myIncidents.map((inc) => {
-                    const stat = statusConfig[inc.status] ?? { label: inc.status, color: 'bg-gray-100 text-gray-600' }
-                    return (
-                      <li key={inc.id}
-                        onClick={() => navigate('/incidents')}
-                        className="flex items-start justify-between gap-3 py-2 px-1 -mx-1 rounded-lg border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-700 truncate">{inc.title}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{formatDate(inc.created_at)}</p>
-                        </div>
-                        <div className="flex gap-1.5 flex-shrink-0">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${severityColors[inc.severity] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {inc.severity}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stat.color}`}>
-                            {stat.label}
-                          </span>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-4">No reports submitted yet</p>
-              )}
-              <button onClick={() => navigate('/incidents')}
-                className="text-xs text-teal-600 hover:text-teal-700 font-medium mt-2">
-                View all reports →
-              </button>
-            </div>
-          </div>
-
-          <NewIncidentModal
-            open={incidentModalOpen}
-            onClose={() => setIncidentModalOpen(false)}
-            reporterId={profile!.id}
-            onSubmitted={fetchMyIncidents}
-          />
-        </div>
-      ) : null}
       <div className="h-24" />
     </div>
   )
