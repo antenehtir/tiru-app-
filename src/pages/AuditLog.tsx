@@ -95,15 +95,32 @@ function ProfileChangesTab() {
   )
 }
 
+const LEAVE_ACTION_COLOR: Record<string, string> = {
+  'Leave Requested': 'bg-amber-100 text-amber-700',
+  'Leave Approved':  'bg-green-100 text-green-700',
+  'Leave Rejected':  'bg-red-100   text-red-600',
+}
+
+function LeaveActionBadge({ action }: { action: string }) {
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEAVE_ACTION_COLOR[action] ?? 'bg-gray-100 text-gray-600'}`}>
+      {action}
+    </span>
+  )
+}
+
 function LeaveActivityTab() {
   const [rows, setRows]     = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Sourced from audit_log so "Done By" (actor_name) is available for both
+  // requests (actor = requester) and approvals/rejections (actor = approver).
   useEffect(() => {
     supabase
-      .from('leave_requests')
-      .select('*, requester:profiles!leave_requests_user_id_fkey(full_name)')
-      .in('status', ['approved', 'rejected', 'recorded'])
+      .from('audit_log')
+      .select('*')
+      .eq('facility_id', FACILITY_ID)
+      .in('action', ['Leave Requested', 'Leave Approved', 'Leave Rejected'])
       .order('created_at', { ascending: false })
       .limit(50)
       .then(({ data }) => { setRows((data as Row[]) ?? []); setLoading(false) })
@@ -123,10 +140,10 @@ function LeaveActivityTab() {
         {rows.map((r, i) => (
           <tr key={r.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
             <Td>{fmtDate(r.created_at)}</Td>
-            <Td><StatusBadge value={r.status} /></Td>
-            <Td>{r.requester?.full_name ?? '—'}</Td>
-            <Td>{r.leave_type ?? r.type ?? '—'}{r.start_date ? ` · ${r.start_date}` : ''}{r.end_date ? ` – ${r.end_date}` : ''}</Td>
-            <Td>—</Td>
+            <Td><LeaveActionBadge action={r.action} /></Td>
+            <Td>{r.target_name ?? '—'}</Td>
+            <Td className="max-w-xs truncate">{r.details ?? '—'}</Td>
+            <Td>{r.actor_name ?? '—'}</Td>
           </tr>
         ))}
       </tbody>

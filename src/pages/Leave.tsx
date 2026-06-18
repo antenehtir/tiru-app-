@@ -120,6 +120,19 @@ export default function Leave() {
     setSaving(false)
     if (err) { setFormErr(err.message); return }
 
+    // Audit log — record the leave request submission (requester is actor + target)
+    const { error: auditErr } = await supabase.from('audit_log').insert({
+      facility_id: 'd917b86c-682c-4f11-b285-0a1cada2b54b',
+      actor_id: profile?.id,
+      actor_name: profile?.full_name,
+      action: 'Leave Requested',
+      target_user_id: profile?.id,
+      target_name: profile?.full_name,
+      details: `${form.leave_type} leave · ${form.start_date} to ${form.end_date} · Reason: ${form.reason || 'None'}`,
+      created_at: new Date().toISOString(),
+    })
+    if (auditErr) console.error('Leave request audit log failed:', auditErr)
+
     // Notify approvers (HR + Medical Director + CEO + GM + Super Admin) individually
     // that a new leave request needs review — not all staff (non-blocking)
     const { data: approverProfiles, error: approverErr } = await supabase
