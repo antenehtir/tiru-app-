@@ -156,6 +156,8 @@ export default function Attendance() {
   const [facilityCoords, setFacilityCoords] = useState({ lat: 9.0054, lng: 38.7636, radius: 150 })
   const [demoMode, setDemoMode] = useState(false)
   const [checkingLocation, setCheckingLocation] = useState(false)
+  const [qrDetected,      setQrDetected]      = useState(false)
+  const [detectedCorners, setDetectedCorners] = useState<any>(null)
 
   useEffect(() => {
     supabase
@@ -377,8 +379,16 @@ export default function Attendance() {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const code = jsQR(imageData.data, imageData.width, imageData.height)
     console.log('jsQR result:', code)
-    if (code) { stopCamera(); handleQRResult(code.data) }
-    else rafRef.current = requestAnimationFrame(tick)
+    if (code) {
+      // Visual lock-on: highlight the detected QR, hold steady, then validate.
+      setQrDetected(true)
+      setDetectedCorners(code.location)
+      setTimeout(() => { stopCamera(); handleQRResult(code.data) }, 500)
+      return // halt the scan loop while we lock on
+    }
+    setQrDetected(false)
+    setDetectedCorners(null)
+    rafRef.current = requestAnimationFrame(tick)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   type GeofenceResult = { ok: boolean; msg: string }
@@ -447,6 +457,7 @@ export default function Attendance() {
 
   const startCamera = async () => {
     setScanResult(null); setScanMessage(''); setScanning(false); setCameraError(null)
+    setQrDetected(false); setDetectedCorners(null)
 
     // Instant feedback while GPS resolves
     setCheckingLocation(true)
@@ -482,6 +493,7 @@ export default function Attendance() {
     cancelAnimationFrame(rafRef.current)
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null; setScannerActive(false)
+    setQrDetected(false); setDetectedCorners(null)
   }
 
   useEffect(() => () => stopCamera(), [])
@@ -781,9 +793,47 @@ export default function Attendance() {
 
         {scannerActive && (
           <>
+            {/* Real-time lock-on highlight over the actual detected QR */}
+            {detectedCorners && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox={`0 0 ${canvasRef.current?.width || 1} ${canvasRef.current?.height || 1}`}
+                preserveAspectRatio="xMidYMid slice"
+              >
+                <polygon
+                  points={`${detectedCorners.topLeftCorner.x},${detectedCorners.topLeftCorner.y} ${detectedCorners.topRightCorner.x},${detectedCorners.topRightCorner.y} ${detectedCorners.bottomRightCorner.x},${detectedCorners.bottomRightCorner.y} ${detectedCorners.bottomLeftCorner.x},${detectedCorners.bottomLeftCorner.y}`}
+                  fill="rgba(34,197,94,0.15)"
+                  stroke="#22c55e"
+                  strokeWidth={6}
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+
+            {/* Targeting brackets — teal while searching, green when locked on */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-64 h-64 border-4 border-teal-400 rounded-2xl opacity-80" />
+              <div className="relative w-48 h-48">
+                <div className={`absolute top-0 left-0 w-5 h-5 border-t-4 border-l-4 rounded-tl-sm transition-colors ${qrDetected ? 'border-green-400' : 'border-teal-400'}`} />
+                <div className={`absolute top-0 right-0 w-5 h-5 border-t-4 border-r-4 rounded-tr-sm transition-colors ${qrDetected ? 'border-green-400' : 'border-teal-400'}`} />
+                <div className={`absolute bottom-0 left-0 w-5 h-5 border-b-4 border-l-4 rounded-bl-sm transition-colors ${qrDetected ? 'border-green-400' : 'border-teal-400'}`} />
+                <div className={`absolute bottom-0 right-0 w-5 h-5 border-b-4 border-r-4 rounded-br-sm transition-colors ${qrDetected ? 'border-green-400' : 'border-teal-400'}`} />
+
+                {/* Moving scan line (hidden once locked on) */}
+                {!qrDetected && (
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div className="w-full h-0.5 bg-teal-400 opacity-70 animate-[scan_2s_linear_infinite]" />
+                  </div>
+                )}
+
+                {/* Detection status */}
+                {qrDetected && (
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-green-500 text-xs font-medium whitespace-nowrap animate-pulse">
+                    QR detected — hold steady
+                  </div>
+                )}
+              </div>
             </div>
+
             {scanning && (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                 <Loader2 className="w-10 h-10 text-white animate-spin" />

@@ -149,7 +149,8 @@ export default function Dashboard() {
     if (!profile?.id) return
 
     async function fetchData() {
-      const fid = profile!.facility_id
+      // Pin the day boundary to Addis Ababa time (UTC+3) so Ethiopian shifts
+      // aren't missed by the browser/UTC date rollover.
       const today = isoDate(new Date())
       const dayStart = `${today}T00:00:00+03:00`
       const dayEnd   = `${today}T23:59:59+03:00`
@@ -160,7 +161,8 @@ export default function Dashboard() {
             .eq('is_active', true).neq('role', 'kiosk'),
           supabase.from('departments').select('*', { count: 'exact', head: true }),
           supabase.from('shifts').select('*', { count: 'exact', head: true })
-            .eq('facility_id', fid).gte('starts_at', dayStart).lte('starts_at', dayEnd),
+            .eq('facility_id', 'd917b86c-682c-4f11-b285-0a1cada2b54b')
+            .gte('starts_at', dayStart).lte('starts_at', dayEnd),
           supabase.from('leave_requests').select('*', { count: 'exact', head: true })
             .in('status', ['pending', 'approved']),
           supabase.from('sites').select('*', { count: 'exact', head: true })
