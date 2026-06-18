@@ -161,7 +161,7 @@ export default function Leave() {
             author_id: profile?.id,
             title: `Leave ${approved ? 'Approved' : 'Rejected'}: ${requesterName}`,
             body: `${req.leave_type} leave from ${req.start_date} to ${req.end_date} has been ${newStatus} by ${profile?.full_name}. Please record this in your HR system.`,
-            priority: 'normal',
+            priority: 'info',
             audience: 'administrative',
             pinned: false,
           })
