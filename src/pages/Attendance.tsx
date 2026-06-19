@@ -142,6 +142,9 @@ export default function Attendance() {
   const [attType,       setAttType]       = useState<AttendanceType>('clock_in')
   const attTypeRef = useRef<AttendanceType>('clock_in')
   useEffect(() => { attTypeRef.current = attType }, [attType])
+  // Holds the attendance_qr_tokens row id when a dynamic token was scanned;
+  // null for static entrance_qr_codes fallback. Marked used after a successful save.
+  const dynamicTokenIdRef = useRef<string | null>(null)
   const [todayCheckIn,  setTodayCheckIn]  = useState<TodayRecord | null>(null)
   const [todayCheckOut, setTodayCheckOut] = useState<TodayRecord | null>(null)
   const [todayLoaded,   setTodayLoaded]   = useState(false)
@@ -502,19 +505,48 @@ export default function Attendance() {
     console.log('scanned value:', qrData)
     setScanning(true); setScanResult(null)
 
-    // Always validate against DB — reject any QR not registered as an active entrance code
-    const { data: qrRows } = await supabase
-      .from('entrance_qr_codes')
-      .select('id, qr_payload, is_active')
-      .eq('qr_payload', qrData)
-      .eq('is_active', true)
-      .limit(1)
-    if (!qrRows || qrRows.length === 0) {
-      setScanning(false); setScanResult('error')
-      setScanMessage('Invalid QR code. Please scan the official facility entrance QR.')
-      return
+    // ── Dynamic token path: a live kiosk QR is a rotating single-use token ──
+    // Look the scanned value up in attendance_qr_tokens first. If it matches a
+    // token, apply rotation rules (expiry / single-use). If it is NOT a token,
+    // fall through to the legacy static entrance_qr_codes check below so small
+    // sites without a live screen keep working unchanged.
+    let qrCodeId: string
+    dynamicTokenIdRef.current = null
+    const { data: tokenRow } = await supabase
+      .from('attendance_qr_tokens')
+      .select('id, entrance_id, expires_at, used_at')
+      .eq('token', qrData)
+      .maybeSingle()
+
+    if (tokenRow) {
+      const t = tokenRow as { id: string; entrance_id: string; expires_at: string; used_at: string | null }
+      if (t.used_at) {
+        setScanning(false); setScanResult('error')
+        setScanMessage('This code has already been used. Please scan the current code on screen.')
+        return
+      }
+      if (new Date(t.expires_at).getTime() < Date.now()) {
+        setScanning(false); setScanResult('error')
+        setScanMessage('This code has expired. Please scan the current code on screen.')
+        return
+      }
+      dynamicTokenIdRef.current = t.id
+      qrCodeId = t.entrance_id
+    } else {
+      // Fallback: validate against the static entrance QR (legacy behavior)
+      const { data: qrRows } = await supabase
+        .from('entrance_qr_codes')
+        .select('id, qr_payload, is_active')
+        .eq('qr_payload', qrData)
+        .eq('is_active', true)
+        .limit(1)
+      if (!qrRows || qrRows.length === 0) {
+        setScanning(false); setScanResult('error')
+        setScanMessage('Invalid QR code. Please rescan the current code on screen.')
+        return
+      }
+      qrCodeId = (qrRows[0] as any).id
     }
-    const qrCodeId: string = (qrRows[0] as any).id
     // Shift check — fetch ends_at for early clock-out detection
     let shiftEndsAt: string | null = null
     try {
@@ -625,6 +657,13 @@ export default function Attendance() {
     const { error } = await supabase.from('attendance_logs').insert(insertPayload)
     if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save — queued for retry. ' + error.message) }
     else {
+      // Mark the dynamic token consumed (single-use). Best-effort; static QR has no token.
+      if (dynamicTokenIdRef.current) {
+        await supabase.from('attendance_qr_tokens')
+          .update({ used_at: new Date().toISOString(), used_by: profile!.id })
+          .eq('id', dynamicTokenIdRef.current)
+        dynamicTokenIdRef.current = null
+      }
       if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded ✓ — GPS shows you may be outside the facility.') }
       else { setScanResult('success'); setScanMessage(log.log_type === 'check_in' ? 'Clocked in successfully! ✓' : 'Clocked out successfully! ✓') }
       fetchRecentLogs()

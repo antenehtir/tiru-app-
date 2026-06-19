@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { QRCodeSVG } from 'qrcode.react'
 import { roleLabel } from '../lib/roles'
 import {
   LogIn, LogOut, AlertTriangle, Bell, ArrowLeft,
@@ -27,6 +28,71 @@ type ScheduleShift = {
 }
 
 const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
+
+const QR_ROTATE_MS  = 45 * 1000      // rotate every 45 seconds
+const QR_LIFETIME_S = 45             // token valid for 45 seconds
+
+// Rotating, single-use attendance QR shown on the kiosk idle screen.
+// Generates a fresh token client-side every 45s and persists it to
+// attendance_qr_tokens so the Attendance scanner can validate it.
+function AttendanceQRDisplay() {
+  const [token, setToken]   = useState<string | null>(null)
+  const entranceIdRef       = useRef<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const rotate = async () => {
+      // Resolve the entrance this kiosk belongs to once (first active entrance for the facility)
+      if (!entranceIdRef.current) {
+        const { data: entrance } = await supabase
+          .from('entrance_qr_codes')
+          .select('id')
+          .eq('facility_id', FACILITY_ID)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (!entrance) { console.error('No active entrance_qr_codes row for facility'); return }
+        entranceIdRef.current = (entrance as { id: string }).id
+      }
+      const entranceId = entranceIdRef.current
+
+      // Step 4 cleanup — drop expired, unused tokens older than 1 hour for this entrance
+      await supabase
+        .from('attendance_qr_tokens')
+        .delete()
+        .eq('entrance_id', entranceId)
+        .is('used_at', null)
+        .lt('expires_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+
+      // Generate and persist a fresh single-use token
+      const newToken  = crypto.randomUUID()
+      const expiresAt = new Date(Date.now() + QR_LIFETIME_S * 1000).toISOString()
+      const { error } = await supabase
+        .from('attendance_qr_tokens')
+        .insert({ entrance_id: entranceId, token: newToken, expires_at: expiresAt })
+      if (error) { console.error('QR token insert failed:', error.message); return }
+      if (!cancelled) setToken(newToken)
+    }
+
+    rotate()
+    const interval = setInterval(rotate, QR_ROTATE_MS)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  if (!token) return null
+
+  return (
+    <div className="mt-10 flex flex-col items-center">
+      <div className="bg-white rounded-3xl p-5 shadow-2xl">
+        <QRCodeSVG value={token} size={180} level="M" />
+      </div>
+      <p className="text-white font-semibold text-base mt-4">Scan to Clock In / Out</p>
+      <p className="text-teal-300/70 text-xs mt-1">Code refreshes every 45 seconds</p>
+    </div>
+  )
+}
 
 export default function Kiosk() {
   const [screen, setScreen]         = useState<KioskScreen>('idle')
@@ -522,6 +588,8 @@ export default function Kiosk() {
           </div>
         </button>
       </div>
+
+      <AttendanceQRDisplay />
 
       <p className="text-teal-300/60 text-xs mt-12">
         {kioskReady ? `Kiosk Terminal · ${FACILITY_ID.slice(0,8)}…` : 'Initializing terminal…'}
