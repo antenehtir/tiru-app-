@@ -29,14 +29,15 @@ type ScheduleShift = {
 
 const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
-const QR_ROTATE_MS  = 45 * 1000      // rotate every 45 seconds
-const QR_LIFETIME_S = 45             // token valid for 45 seconds
+const QR_ROTATE_MS  = 15 * 1000      // rotate every 15 seconds
+const QR_LIFETIME_S = 15             // token valid for 15 seconds
 
 // Rotating, single-use attendance QR shown on the kiosk idle screen.
-// Generates a fresh token client-side every 45s and persists it to
+// Generates a fresh token client-side every 15s and persists it to
 // attendance_qr_tokens so the Attendance scanner can validate it.
 function AttendanceQRDisplay() {
   const [token, setToken]   = useState<string | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState(QR_LIFETIME_S)
   const entranceIdRef       = useRef<string | null>(null)
 
   useEffect(() => {
@@ -73,7 +74,7 @@ function AttendanceQRDisplay() {
         .from('attendance_qr_tokens')
         .insert({ entrance_id: entranceId, token: newToken, expires_at: expiresAt })
       if (error) { console.error('QR token insert failed:', error.message); return }
-      if (!cancelled) setToken(newToken)
+      if (!cancelled) { setToken(newToken); setSecondsLeft(QR_LIFETIME_S) }
     }
 
     rotate()
@@ -81,7 +82,17 @@ function AttendanceQRDisplay() {
     return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
+  // Per-second countdown tick; resets to QR_LIFETIME_S each time a new token loads.
+  useEffect(() => {
+    const tick = setInterval(() => setSecondsLeft(s => (s <= 1 ? 0 : s - 1)), 1000)
+    return () => clearInterval(tick)
+  }, [])
+
   if (!token) return null
+
+  const RING_R = 15
+  const RING_C = 2 * Math.PI * RING_R
+  const ringOffset = RING_C * (1 - secondsLeft / QR_LIFETIME_S)
 
   return (
     <div className="mt-10 flex flex-col items-center">
@@ -89,7 +100,15 @@ function AttendanceQRDisplay() {
         <QRCodeSVG value={token} size={180} level="M" />
       </div>
       <p className="text-white font-semibold text-base mt-4">Scan to Clock In / Out</p>
-      <p className="text-teal-300/70 text-xs mt-1">Code refreshes every 45 seconds</p>
+      <div className="flex items-center gap-2 mt-2">
+        <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90">
+          <circle cx="18" cy="18" r={RING_R} fill="none" stroke="rgba(94,234,212,0.25)" strokeWidth="3" />
+          <circle cx="18" cy="18" r={RING_R} fill="none" stroke="#5eead4" strokeWidth="3"
+            strokeLinecap="round" strokeDasharray={RING_C} strokeDashoffset={ringOffset}
+            style={{ transition: 'stroke-dashoffset 1s linear' }} />
+        </svg>
+        <span className="text-teal-300/80 text-xs">Refreshes in {secondsLeft}s</span>
+      </div>
     </div>
   )
 }
