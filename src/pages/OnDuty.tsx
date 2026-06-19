@@ -170,7 +170,7 @@ export default function OnDuty() {
                 <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
               </span>
             </span>
-            Who's On Duty Now
+            Who's In Shift Now
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">{dateStr2}</p>
         </div>

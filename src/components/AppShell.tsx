@@ -12,7 +12,7 @@ import { useAuthStore } from '../store/authStore'
 const NAV_ITEMS = [
   { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard, pulse: false },
   { to: '/shifts',     label: 'Shifts',     icon: CalendarDays,    pulse: false },
-  { to: '/onduty',     label: 'On Duty',    icon: Activity,        pulse: true  },
+  { to: '/onduty',     label: 'On Shift',   icon: Activity,        pulse: true  },
   { to: '/attendance', label: 'Attendance', icon: QrCode,          pulse: false },
   { to: '/leave',      label: 'Leave',      icon: CalendarOff,     pulse: false },
   { to: '/staff',      label: 'Staff',      icon: Users,           pulse: false },
@@ -616,7 +616,7 @@ export default function AppShell() {
                     <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
                   </span>
                 </span>
-                <span className="flex-1 text-sm font-medium text-gray-800">On Duty</span>
+                <span className="flex-1 text-sm font-medium text-gray-800">On Shift</span>
               </button>
 
               {/* Staff */}
