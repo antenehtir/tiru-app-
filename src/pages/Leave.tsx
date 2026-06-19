@@ -193,6 +193,7 @@ export default function Leave() {
 
   const applyAction = async () => {
     if (!actionMode) return
+    if (actioning) return // guard: ignore double-submit
     setActioning(true)
     const updates: Record<string, unknown> = {}
     if (actionMode.action === 'approve') { updates.status = 'approved'; updates.approver_note = actionNote || null; updates.approved_by = profile?.id ?? null }
@@ -208,7 +209,7 @@ export default function Leave() {
         const { data: { user } } = await supabase.auth.getUser()
         await insertLeaveNotice(supabase, {
           author_id: user?.id,
-          title: approved ? 'Leave Request Approved ✓' : 'Leave Request Not Approved',
+          title: approved ? 'Leave Request Approved' : 'Leave Request Not Approved',
           body: approved
             ? `Your leave request from ${req.start_date} to ${req.end_date} has been approved.`
             : `Your leave request from ${req.start_date} to ${req.end_date} was not approved.${note ? ` Reason: ${note}` : ''}`,

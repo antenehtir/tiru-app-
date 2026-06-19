@@ -572,6 +572,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   const [deactivateTarget, setDeactivateTarget] = useState<Profile | null>(null)
   const [deactivateReason, setDeactivateReason] = useState('')
   const [deactivating,     setDeactivating]     = useState(false)
+  const [processingReq,    setProcessingReq]    = useState(false)
   const [users,    setUsers]    = useState<Profile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
@@ -719,6 +720,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   }
 
   const sendInvite = async () => {
+    if (saving) return // guard: ignore double-submit
     setFormErr(null)
     if (!inviteForm.full_name.trim()) return setFormErr('Full name is required.')
     if (!inviteForm.phone.trim())     return setFormErr('Phone number is required')
@@ -903,6 +905,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
 
   const confirmDeactivate = async () => {
     if (!deactivateTarget || !deactivateReason.trim()) return
+    if (deactivating) return // guard: ignore double-submit
     setDeactivating(true)
     await supabase.from('profiles').update({ is_active: false }).eq('id', deactivateTarget.id)
     const { error: auditErr } = await supabase.from('audit_log').insert({
@@ -1538,8 +1541,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       </div>
                       <p className="text-xs text-gray-600">
                         <span className="font-semibold">{fieldLabel}:</span>{' '}
-                        <span className="line-through text-gray-400">{req.current_value || '—'}</span>
-                        <span className="mx-1 text-gray-400">â†'</span>
+                        <span className="line-through text-gray-400">{req.current_value || '-'}</span>
+                        <span className="mx-1 text-gray-400">&rarr;</span>
                         <span className="text-teal-700 font-medium">{req.requested_value}</span>
                       </p>
                       {req.reason && (
@@ -1552,38 +1555,46 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                     {/* Action buttons */}
                     <div className="flex gap-2 flex-shrink-0 sm:mt-0.5">
                       <button
+                        disabled={processingReq}
                         onClick={async () => {
-                          const { data: { user } } = await supabase.auth.getUser()
-                          const currentUserId = user?.id ?? null
-                          const staffName = req.profile?.full_name ?? 'Staff member'
-                          const { error: noticeError } = await supabase.from('notices').insert({
-                            author_id: currentUserId,
-                            title: 'âœ" Your Profile Update was Approved',
-                            body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
-                            priority: 'info',
-                            audience: 'individual',
-                            target_user_id: req.user_id,
-                            pinned: false,
-                          })
-                          if (noticeError) console.error('Notice error:', noticeError)
-                          await supabase.from('profiles')
-                            .update({ [req.field_name]: req.field_name === 'phone' ? normalizePhone(req.requested_value) : req.requested_value })
-                            .eq('id', req.user_id)
-                          await supabase.from('profile_change_requests')
-                            .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
-                            .eq('id', req.id)
-                          setDismissedIds(prev => new Set([...prev, req.id]))
-                          setTimeout(() => { fetchPendingRequests(); fetchUsers() }, 350)
+                          if (processingReq) return // guard: ignore double-submit
+                          setProcessingReq(true)
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser()
+                            const currentUserId = user?.id ?? null
+                            const staffName = req.profile?.full_name ?? 'Staff member'
+                            const { error: noticeError } = await supabase.from('notices').insert({
+                              author_id: currentUserId,
+                              title: 'Your Profile Update was Approved',
+                              body: `Hi ${staffName}, your request to update your ${fieldLabel} has been approved and applied to your profile. The change is now reflected in your account.`,
+                              priority: 'info',
+                              audience: 'individual',
+                              target_user_id: req.user_id,
+                              pinned: false,
+                            })
+                            if (noticeError) console.error('Notice error:', noticeError)
+                            await supabase.from('profiles')
+                              .update({ [req.field_name]: req.field_name === 'phone' ? normalizePhone(req.requested_value) : req.requested_value })
+                              .eq('id', req.user_id)
+                            await supabase.from('profile_change_requests')
+                              .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+                              .eq('id', req.id)
+                            setDismissedIds(prev => new Set([...prev, req.id]))
+                            setTimeout(() => { fetchPendingRequests(); fetchUsers() }, 350)
+                          } finally {
+                            setProcessingReq(false)
+                          }
                         }}
-                        className="flex items-center gap-1.5 text-xs bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                        className="flex items-center gap-1.5 text-xs bg-green-100 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed text-green-700 px-3 py-1.5 rounded-lg transition-colors font-medium">
                         <CheckCircle2 className="w-3.5 h-3.5" />Approve
                       </button>
                       <button
+                        disabled={processingReq}
                         onClick={() => {
                           setRejectReason('')
                           setRejectModal({ requestId: req.id, userId: req.user_id, fieldName: req.field_name, staffName: req.profile?.full_name ?? 'Staff member' })
                         }}
-                        className="flex items-center gap-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                        className="flex items-center gap-1.5 text-xs bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed text-red-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
                         <XCircle className="w-3.5 h-3.5" />Reject
                       </button>
                     </div>
@@ -1618,34 +1629,41 @@ function UsersSection({ currentRole }: { currentRole: string }) {
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setRejectModal(null)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
               <button
+                disabled={processingReq}
                 onClick={async () => {
-                  const { requestId, fieldName, staffName } = rejectModal
-                  const FIELD_LABEL: Record<string, string> = {
-                    full_name: 'Full Name', phone: 'Phone Number', email: 'Email Address',
+                  if (processingReq) return // guard: ignore double-submit
+                  setProcessingReq(true)
+                  try {
+                    const { requestId, fieldName, staffName } = rejectModal
+                    const FIELD_LABEL: Record<string, string> = {
+                      full_name: 'Full Name', phone: 'Phone Number', email: 'Email Address',
+                    }
+                    const fLabel = FIELD_LABEL[fieldName] ?? fieldName.charAt(0).toUpperCase() + fieldName.slice(1)
+                    const { data: { user } } = await supabase.auth.getUser()
+                    const currentUserId = user?.id ?? null
+                    await supabase.from('profile_change_requests')
+                      .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+                      .eq('id', requestId)
+                    const body = rejectReason.trim()
+                      ? `Hi ${staffName}, your request to update your ${fLabel} was not approved. Reason: ${rejectReason.trim()}. Please contact HR for more information.`
+                      : `Hi ${staffName}, your request to update your ${fLabel} was not approved. Please contact HR or your administrator for more information.`
+                    await supabase.from('notices').insert({
+                      author_id: currentUserId,
+                      title: `Your Profile Update Request - ${fLabel}`,
+                      body,
+                      priority: 'important',
+                      audience: 'individual',
+                      target_user_id: rejectModal.userId,
+                      pinned: false,
+                    })
+                    setRejectModal(null)
+                    setDismissedIds(prev => new Set([...prev, requestId]))
+                    setTimeout(() => { fetchPendingRequests() }, 350)
+                  } finally {
+                    setProcessingReq(false)
                   }
-                  const fLabel = FIELD_LABEL[fieldName] ?? fieldName.charAt(0).toUpperCase() + fieldName.slice(1)
-                  const { data: { user } } = await supabase.auth.getUser()
-                  const currentUserId = user?.id ?? null
-                  await supabase.from('profile_change_requests')
-                    .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
-                    .eq('id', requestId)
-                  const body = rejectReason.trim()
-                    ? `Hi ${staffName}, your request to update your ${fLabel} was not approved. Reason: ${rejectReason.trim()}. Please contact HR for more information.`
-                    : `Hi ${staffName}, your request to update your ${fLabel} was not approved. Please contact HR or your administrator for more information.`
-                  await supabase.from('notices').insert({
-                    author_id: currentUserId,
-                    title: `Your Profile Update Request — ${fLabel}`,
-                    body,
-                    priority: 'important',
-                    audience: 'individual',
-                    target_user_id: rejectModal.userId,
-                    pinned: false,
-                  })
-                  setRejectModal(null)
-                  setDismissedIds(prev => new Set([...prev, requestId]))
-                  setTimeout(() => { fetchPendingRequests() }, 350)
                 }}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors">
                 <XCircle className="w-4 h-4" />Confirm Reject
               </button>
             </div>

@@ -122,17 +122,17 @@ export default function Incidents() {
     const { data: { user } } = await supabase.auth.getUser()
     const statusMessages: Record<string, { title: string; body: string; priority: string }> = {
       under_review: {
-        title: 'Incident Report — Under Review',
+        title: 'Incident Report - Under Review',
         body: `Your incident report "${inc?.title}" is currently under review by leadership. You will be notified when a resolution is reached.`,
         priority: 'info',
       },
       resolved: {
-        title: '✓ Incident Report — Resolved',
+        title: 'Incident Report - Resolved',
         body: `Your incident report "${inc?.title}" has been reviewed and marked as resolved. Thank you for helping maintain facility safety standards.`,
         priority: 'info',
       },
       dismissed: {
-        title: 'Incident Report — Closed',
+        title: 'Incident Report - Closed',
         body: `Your incident report "${inc?.title}" has been reviewed and closed. Please contact your department head or HR if you have questions.`,
         priority: 'important',
       },
