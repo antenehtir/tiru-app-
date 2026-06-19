@@ -411,6 +411,27 @@ function RequestChangeSection() {
       setMsg({ ok: true, text: 'Change request submitted. HR or Admin will review it shortly.' })
       setRequestedValue('')
       setReason('')
+
+      // Notify HR so they can review the pending request (non-blocking)
+      const fieldLabel = field === 'full_name' ? 'full name'
+        : field === 'phone' ? 'phone number'
+        : field === 'email' ? 'email'
+        : field
+      const { data: hrUsers, error: hrErr } = await supabase
+        .from('profiles').select('id').eq('role', 'hr')
+      if (hrErr) console.error('HR fetch failed:', hrErr)
+      for (const hr of hrUsers ?? []) {
+        const { error: hrNoticeErr } = await supabase.from('notices').insert({
+          author_id:      profile?.id,
+          title:          `Profile Change Request: ${profile?.full_name}`,
+          body:           `${profile?.full_name} has requested a change to their ${fieldLabel}. Please review in Admin Panel > Pending Profile Change Requests.`,
+          priority:       'info',
+          audience:       'individual',
+          target_user_id: hr.id,
+          pinned:         false,
+        })
+        if (hrNoticeErr) console.error('HR notice failed:', hrNoticeErr)
+      }
     }
   }
 

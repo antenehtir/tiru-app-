@@ -1567,7 +1567,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                           })
                           if (noticeError) console.error('Notice error:', noticeError)
                           await supabase.from('profiles')
-                            .update({ [req.field_name]: req.requested_value })
+                            .update({ [req.field_name]: req.field_name === 'phone' ? normalizePhone(req.requested_value) : req.requested_value })
                             .eq('id', req.user_id)
                           await supabase.from('profile_change_requests')
                             .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
