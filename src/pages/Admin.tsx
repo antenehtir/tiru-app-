@@ -1573,9 +1573,23 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                               pinned: false,
                             })
                             if (noticeError) console.error('Notice error:', noticeError)
-                            await supabase.from('profiles')
-                              .update({ [req.field_name]: req.field_name === 'phone' ? normalizePhone(req.requested_value) : req.requested_value })
+                            // Compute the value to write, normalizing any phone-type field.
+                            // Inlined (not relying on an outer normalizePhone) to be scope-safe.
+                            let valueToWrite = req.requested_value
+                            if (/phone/i.test(req.field_name)) {
+                              const p = req.requested_value.trim().replace(/\s+/g, '')
+                              if (p.startsWith('+251')) valueToWrite = p
+                              else if (p.startsWith('251')) valueToWrite = '+' + p
+                              else if (p.startsWith('09')) valueToWrite = '+251' + p.slice(1)
+                              else if (p.startsWith('9') && p.length === 9) valueToWrite = '+251' + p
+                              else valueToWrite = p
+                            }
+                            console.log('Phone approval - field:', req.field_name, 'raw:', req.requested_value, 'writing:', valueToWrite)
+                            const updatePayload = { [req.field_name]: valueToWrite }
+                            const { error: profileUpdateErr } = await supabase.from('profiles')
+                              .update(updatePayload)
                               .eq('id', req.user_id)
+                            if (profileUpdateErr) console.error('Profile update failed:', profileUpdateErr)
                             await supabase.from('profile_change_requests')
                               .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
                               .eq('id', req.id)
