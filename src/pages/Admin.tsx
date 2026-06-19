@@ -730,6 +730,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     }
 
     setSaving(true)
+    try {
 
     // Step 1: Create auth user via signUp — the DB trigger auto-creates the profile
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -745,7 +746,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     console.log('SignUp result:', JSON.stringify(signUpData), 'Error:', signUpError?.message)
 
     if (signUpError) {
-      setSaving(false)
       const msg = signUpError.message.toLowerCase()
       setFormErr(
         msg.includes('rate limit') || msg.includes('email rate')
@@ -830,7 +830,6 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       })
     }
 
-    setSaving(false)
     const name = inviteForm.full_name.trim()
     const email = inviteForm.email.trim()
     setInviteOpen(false)
@@ -845,6 +844,9 @@ function UsersSection({ currentRole }: { currentRole: string }) {
       .single()
     if (newUser) {
       setTimeout(() => openEditProfile(newUser as Profile), 500)
+    }
+    } finally {
+      setSaving(false)
     }
   }
 
