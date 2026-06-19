@@ -33,7 +33,7 @@ type ShiftRow = {
 
 type ShiftAction   = 'edit' | 'reassign' | 'delete'
 type ProfileOption = { id: string; full_name: string }
-type DeptOption    = { id: string; name: string }
+type DeptOption    = { id: string; name: string; is_active: boolean }
 type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception' | 'Other Staff'
 type ScheduleType  = 'regular' | 'duty'
 type ViewMode      = 'week' | 'month'
@@ -307,7 +307,7 @@ export default function Shifts() {
     if (navStep !== 'calendar') return
     Promise.all([
       supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('departments').select('id, name').order('name'),
+      supabase.from('departments').select('id, name, is_active').order('name'),
     ]).then(([{ data: pData }, { data: dData }]) => {
       setProfiles((pData as ProfileOption[]) ?? [])
       setDepartments((dData as DeptOption[]) ?? [])
@@ -1294,7 +1294,9 @@ export default function Shifts() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                     <option value="">— None —</option>
                     <option value="gp">General Practice (GP)</option>
-                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {departments
+                      .filter(d => d.is_active || d.id === form.department_id)
+                      .map(d => <option key={d.id} value={d.id}>{d.is_active ? d.name : `${d.name} (inactive)`}</option>)}
                   </select>
                 )}
               </div>

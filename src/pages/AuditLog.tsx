@@ -235,6 +235,8 @@ const ACTION_BADGE_COLOR: Record<string, string> = {
   shift_deletion:      'bg-red-100    text-red-600',
   shift_reassignment:  'bg-amber-100  text-amber-700',
   'Staff Onboarded':   'bg-green-100  text-green-700',
+  'Staff Deactivated': 'bg-red-100    text-red-600',
+  'Staff Reactivated': 'bg-green-100  text-green-700',
 }
 
 const ACTION_BADGE_LABEL: Record<string, string> = {

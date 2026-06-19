@@ -55,7 +55,7 @@ type QRCode = {
   created_at: string
 }
 
-type DeptOption  = { id: string; name: string }
+type DeptOption  = { id: string; name: string; is_active: boolean }
 type SiteOption  = { id: string; name: string }
 
 type ChangeRequest = {
@@ -569,6 +569,9 @@ function SiteGeofenceControl({ site, onSaved }: { site: Site; onSaved: () => voi
 
 function UsersSection({ currentRole }: { currentRole: string }) {
   const { profile: actor } = useAuth()
+  const [deactivateTarget, setDeactivateTarget] = useState<Profile | null>(null)
+  const [deactivateReason, setDeactivateReason] = useState('')
+  const [deactivating,     setDeactivating]     = useState(false)
   const [users,    setUsers]    = useState<Profile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
@@ -641,7 +644,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
   useEffect(() => {
-    supabase.from('departments').select('id, name').order('name')
+    supabase.from('departments').select('id, name, is_active').order('name')
       .then(({ data }) => setDepts((data as DeptOption[]) ?? []))
   }, [])
 
@@ -705,11 +708,11 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     // Fetch departments and prepend synthetic GP entry if not already present
     const { data: deptData } = await supabase
       .from('departments')
-      .select('id, name')
+      .select('id, name, is_active')
       .order('name')
     const fetched = (deptData as DeptOption[]) ?? []
     const hasGP = fetched.some(d => d.name.toLowerCase().includes('general practice'))
-    setDepts(hasGP ? fetched : [{ id: 'gp', name: 'General Practice (GP)' }, ...fetched])
+    setDepts(hasGP ? fetched : [{ id: 'gp', name: 'General Practice (GP)', is_active: true }, ...fetched])
 
     setInviteForm({ full_name: '', email: '', phone: '', role: 'staff', department_id: '', employee_id: nextId })
     setInviteOpen(true)
@@ -880,8 +883,41 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     fetchUsers()
   }
 
-  const toggleActive = async (id: string, current: boolean) => {
-    await supabase.from('profiles').update({ is_active: !current }).eq('id', id)
+  const openDeactivate = (u: Profile) => { setDeactivateTarget(u); setDeactivateReason('') }
+
+  const reactivateStaff = async (u: Profile) => {
+    await supabase.from('profiles').update({ is_active: true }).eq('id', u.id)
+    const { error: auditErr } = await supabase.from('audit_log').insert({
+      facility_id:    'd917b86c-682c-4f11-b285-0a1cada2b54b',
+      actor_id:       actor?.id,
+      actor_name:     actor?.full_name,
+      action:         'Staff Reactivated',
+      target_user_id: u.id,
+      target_name:    u.full_name,
+      details:        'Account reactivated',
+      created_at:     new Date().toISOString(),
+    })
+    if (auditErr) console.error('Reactivation audit failed:', auditErr)
+    fetchUsers()
+  }
+
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget || !deactivateReason.trim()) return
+    setDeactivating(true)
+    await supabase.from('profiles').update({ is_active: false }).eq('id', deactivateTarget.id)
+    const { error: auditErr } = await supabase.from('audit_log').insert({
+      facility_id:    'd917b86c-682c-4f11-b285-0a1cada2b54b',
+      actor_id:       actor?.id,
+      actor_name:     actor?.full_name,
+      action:         'Staff Deactivated',
+      target_user_id: deactivateTarget.id,
+      target_name:    deactivateTarget.full_name,
+      details:        `Deactivated · Reason: ${deactivateReason.trim()}`,
+      created_at:     new Date().toISOString(),
+    })
+    if (auditErr) console.error('Deactivation audit failed:', auditErr)
+    setDeactivating(false)
+    setDeactivateTarget(null); setDeactivateReason('')
     fetchUsers()
   }
 
@@ -1095,7 +1131,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg transition-colors">
                       Change Role
                     </button>
-                    <button onClick={() => toggleActive(u.id, u.is_active)}
+                    <button onClick={() => u.is_active ? openDeactivate(u) : reactivateStaff(u)}
                       className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${u.is_active ? 'bg-red-50 hover:bg-red-100 text-red-600' : 'bg-green-50 hover:bg-green-100 text-green-700'}`}>
                       {u.is_active ? 'Deactivate' : 'Reactivate'}
                     </button>
@@ -1110,6 +1146,36 @@ function UsersSection({ currentRole }: { currentRole: string }) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Deactivate Staff Modal */}
+      {deactivateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold">Deactivate Staff</h2>
+              <button onClick={() => { setDeactivateTarget(null); setDeactivateReason('') }} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                You are deactivating <span className="font-semibold text-gray-900">{deactivateTarget.full_name}</span>. They will lose access until reactivated.
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason for deactivation *</label>
+                <textarea rows={3} value={deactivateReason} onChange={e => setDeactivateReason(e.target.value)}
+                  placeholder="e.g. Resignation, End of contract, Transfer..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => { setDeactivateTarget(null); setDeactivateReason('') }} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
+              <button onClick={confirmDeactivate} disabled={deactivating || !deactivateReason.trim()}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors">
+                {deactivating && <Loader2 className="w-4 h-4 animate-spin" />}Deactivate
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1161,7 +1227,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <select value={inviteForm.department_id} onChange={e => setInviteForm(x => ({ ...x, department_id: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">— None —</option>
-                  {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {depts.filter(d => d.is_active).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
             </div>
@@ -1294,7 +1360,8 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
                   <option value="">— None —</option>
                   <option value="gp">General Practice (GP)</option>
-                  {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {depts.filter(d => d.is_active || d.id === editProfileForm.department_id)
+                    .map(d => <option key={d.id} value={d.id}>{d.is_active ? d.name : `${d.name} (inactive)`}</option>)}
                 </select>
               </div>
               <div>
@@ -1872,7 +1939,7 @@ function QRCodesSection() {
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <QrCode className="w-5 h-5 text-teal-500" />Entrance QR Codes
+          <QrCode className="w-5 h-5 text-teal-500" />Attendance QR Codes
           <span className="text-sm font-normal text-gray-400">({qrCodes.length})</span>
         </h2>
         {qrCodes.length > 0 && (

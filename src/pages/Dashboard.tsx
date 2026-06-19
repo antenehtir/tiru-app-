@@ -358,7 +358,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-900 group-hover:text-teal-700 transition-colors">
-                  Who's On Duty Now
+                  Who's In Shift Now
                 </p>
                 <p className="text-xs text-gray-400">Live · updates every 2 min</p>
               </div>
