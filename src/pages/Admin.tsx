@@ -170,12 +170,12 @@ export default function Admin() {
   const { profile: currentUser } = useAuth()
   const role = currentUser?.role ?? ''
 
-  if (!['super_admin','ceo','general_manager'].includes(role)) {
+  if (!['super_admin','ceo','general_manager','hr'].includes(role)) {
     return (
       <div className="p-6 flex flex-col items-center justify-center py-32 text-gray-400">
         <Shield className="w-12 h-12 mb-3 opacity-40" />
         <p className="text-lg font-medium">Access Restricted</p>
-        <p className="text-sm mt-1">Admin panel is for Super Admin, CEO and General Manager only.</p>
+        <p className="text-sm mt-1">Admin panel is for Super Admin, CEO, General Manager and HR only.</p>
       </div>
     )
   }
@@ -717,6 +717,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     setFormErr(null)
     if (!inviteForm.full_name.trim()) return setFormErr('Full name is required.')
     if (!inviteForm.phone.trim())     return setFormErr('Phone number is required')
+    // Privilege-escalation guard: HR cannot create Super Admin or CEO accounts
+    if (currentRole === 'hr' && (inviteForm.role === 'super_admin' || inviteForm.role === 'ceo')) {
+      return setFormErr('HR cannot assign Super Admin or CEO roles.')
+    }
 
     setSaving(true)
 
@@ -790,6 +794,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     if (!editMode) return
     setRoleErr(null)
 
+    // Privilege-escalation guard: HR cannot assign the two highest roles
+    if (currentRole === 'hr' && (newRole === 'super_admin' || newRole === 'ceo')) {
+      setRoleErr('HR cannot assign Super Admin or CEO roles.')
+      return
+    }
+
     // Department Head must have a department selected
     if (newRole === 'department_head' && !newDeptId) {
       setRoleErr('Please select a department for the Department Head.')
@@ -855,6 +865,10 @@ function UsersSection({ currentRole }: { currentRole: string }) {
     setEditProfileErr(null)
     if (!editProfileForm.full_name.trim()) return setEditProfileErr('Full name is required.')
     if (!editProfileForm.phone.trim())     return setEditProfileErr('Phone number is required')
+    // Privilege-escalation guard: HR cannot assign Super Admin or CEO roles
+    if (currentRole === 'hr' && (editProfileForm.role === 'super_admin' || editProfileForm.role === 'ceo')) {
+      return setEditProfileErr('HR cannot assign Super Admin or CEO roles.')
+    }
     setEditProfileSaving(true)
     const { error: err } = await supabase
       .from('profiles')
@@ -920,6 +934,12 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         (u.employee_id ?? '').toLowerCase().includes(q)
       )
     : users
+
+  // Privilege-escalation guard: HR may onboard staff but cannot assign the two
+  // highest roles. Filter them out of every role dropdown HR sees.
+  const availableRoles = currentRole === 'hr'
+    ? ROLES.filter(r => r !== 'super_admin' && r !== 'ceo')
+    : ROLES
 
   return (
     <section>
@@ -1026,7 +1046,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                       className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${u.is_active ? 'bg-red-50 hover:bg-red-100 text-red-600' : 'bg-green-50 hover:bg-green-100 text-green-700'}`}>
                       {u.is_active ? 'Deactivate' : 'Reactivate'}
                     </button>
-                    {currentRole === 'super_admin' && (
+                    {['super_admin','hr'].includes(currentRole) && (
                       <button onClick={() => openEditProfile(u)}
                         className="text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-3 py-1.5 rounded-lg transition-colors">
                         Edit Profile
@@ -1080,7 +1100,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
                 <select value={inviteForm.role} onChange={e => setInviteForm(x => ({ ...x, role: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
-                  {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
+                  {availableRoles.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
                 </select>
               </div>
               <div>
@@ -1121,7 +1141,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Role</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
-                  {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
+                  {availableRoles.map(r => <option key={r} value={r} className="capitalize">{r.replace('_',' ')}</option>)}
                 </select>
               </div>
               {newRole === 'department_head' && (
@@ -1211,7 +1231,7 @@ function UsersSection({ currentRole }: { currentRole: string }) {
                 <select value={editProfileForm.role}
                   onChange={e => setEditProfileForm(x => ({ ...x, role: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none capitalize">
-                  {ROLES.map(r => <option key={r} value={r} className="capitalize">{r.replace('_', ' ')}</option>)}
+                  {availableRoles.map(r => <option key={r} value={r} className="capitalize">{r.replace('_', ' ')}</option>)}
                 </select>
               </div>
               <div>

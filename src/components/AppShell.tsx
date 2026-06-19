@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 ]
 
 const LEADERSHIP    = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
-const CAN_ADMIN     = ['super_admin', 'ceo', 'general_manager']
+const CAN_ADMIN     = ['super_admin', 'ceo', 'general_manager', 'hr']
 const CAN_FLAGS     = ['super_admin', 'ceo', 'general_manager', 'medical_director']
 const CAN_AUDIT     = ['super_admin', 'ceo', 'hr', 'medical_director', 'general_manager']
 const CAN_BROADCAST = ['super_admin','ceo','general_manager','medical_director','hr','department_head','coordinator']
