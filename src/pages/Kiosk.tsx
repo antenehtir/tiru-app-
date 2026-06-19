@@ -29,15 +29,16 @@ type ScheduleShift = {
 
 const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
-const QR_ROTATE_MS  = 15 * 1000      // rotate every 15 seconds
-const QR_LIFETIME_S = 15             // token valid for 15 seconds
+const QR_ROTATE_MS   = 15 * 1000              // display a new QR every 15 seconds
+const QR_COUNTDOWN_S = QR_ROTATE_MS / 1000    // ring counts down from the display cadence (15s)
+const QR_LIFETIME_S  = 20                     // token stays valid 20s — 5s grace past rotation
 
 // Rotating, single-use attendance QR shown on the kiosk idle screen.
 // Generates a fresh token client-side every 15s and persists it to
 // attendance_qr_tokens so the Attendance scanner can validate it.
 function AttendanceQRDisplay() {
   const [token, setToken]   = useState<string | null>(null)
-  const [secondsLeft, setSecondsLeft] = useState(QR_LIFETIME_S)
+  const [secondsLeft, setSecondsLeft] = useState(QR_COUNTDOWN_S)
   const entranceIdRef       = useRef<string | null>(null)
 
   useEffect(() => {
@@ -74,7 +75,7 @@ function AttendanceQRDisplay() {
         .from('attendance_qr_tokens')
         .insert({ entrance_id: entranceId, token: newToken, expires_at: expiresAt })
       if (error) { console.error('QR token insert failed:', error.message); return }
-      if (!cancelled) { setToken(newToken); setSecondsLeft(QR_LIFETIME_S) }
+      if (!cancelled) { setToken(newToken); setSecondsLeft(QR_COUNTDOWN_S) }
     }
 
     rotate()
@@ -92,7 +93,7 @@ function AttendanceQRDisplay() {
 
   const RING_R = 15
   const RING_C = 2 * Math.PI * RING_R
-  const ringOffset = RING_C * (1 - secondsLeft / QR_LIFETIME_S)
+  const ringOffset = RING_C * (1 - secondsLeft / QR_COUNTDOWN_S)
 
   return (
     <div className="mt-10 flex flex-col items-center">
