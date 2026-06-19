@@ -125,9 +125,16 @@ export default function Notices() {
       return false
     })
 
-    setNotices(visible.map(n => ({ ...n, is_read: readSet.has(n.id) })))
+    // New hires must not see broadcasts published before they joined.
+    // Personal (individual) notices targeted to them always show.
+    const myJoinDate = new Date(profile?.created_at ?? 0)
+    const afterJoin = visible.filter(n =>
+      n.audience === 'individual' ? true : new Date(n.created_at) >= myJoinDate
+    )
+
+    setNotices(afterJoin.map(n => ({ ...n, is_read: readSet.has(n.id) })))
     setLoading(false)
-  }, [profile?.id, profile?.department_id, role])
+  }, [profile?.id, profile?.department_id, profile?.created_at, role])
 
   useEffect(() => { fetchNotices() }, [fetchNotices])
 

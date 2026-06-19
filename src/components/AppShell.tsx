@@ -20,7 +20,7 @@ const NAV_ITEMS = [
 
 const LEADERSHIP    = ['ceo', 'general_manager', 'medical_director', 'hr', 'super_admin']
 const CAN_ADMIN     = ['super_admin', 'ceo', 'general_manager', 'hr']
-const CAN_FLAGS     = ['super_admin', 'ceo', 'general_manager', 'medical_director']
+const CAN_FLAGS     = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
 const CAN_AUDIT     = ['super_admin', 'ceo', 'hr', 'medical_director', 'general_manager']
 const CAN_BROADCAST = ['super_admin','ceo','general_manager','medical_director','hr','department_head','coordinator']
 
@@ -107,7 +107,7 @@ export default function AppShell() {
 
     const { data: noticeData } = await supabase
       .from('notices')
-      .select('id, target_user_id, audience, department_ids, department_id')
+      .select('id, target_user_id, audience, department_ids, department_id, created_at')
 
     const { data: readData } = await supabase
       .from('notice_reads')
@@ -136,7 +136,13 @@ export default function AppShell() {
       return false
     })
 
-    setUnreadNotices(visibleNotices.filter(n => !readSet.has(n.id)).length)
+    // Hide broadcasts published before this user joined (personal always shown)
+    const myJoinDate = new Date(profile.created_at ?? 0)
+    const afterJoin = visibleNotices.filter((n: any) =>
+      n.audience === 'individual' ? true : new Date(n.created_at) >= myJoinDate
+    )
+
+    setUnreadNotices(afterJoin.filter((n: any) => !readSet.has(n.id)).length)
 
     if (isLeadership) {
       const { count } = await supabase
@@ -226,10 +232,16 @@ export default function AppShell() {
       return false
     })
 
-    const withRead: PanelNotice[] = visible.map((n: any) => ({ ...n, is_read: readSet.has(n.id) }))
+    // Hide broadcasts published before this user joined (personal always shown)
+    const myJoinDate = new Date(profile?.created_at ?? 0)
+    const afterJoin = visible.filter((n: any) =>
+      n.audience === 'individual' ? true : new Date(n.created_at) >= myJoinDate
+    )
+
+    const withRead: PanelNotice[] = afterJoin.map((n: any) => ({ ...n, is_read: readSet.has(n.id) }))
     setPanelNotices(withRead)
     setPanelLoading(false)
-  }, [profile?.id, profile?.department_id, profile?.role])
+  }, [profile?.id, profile?.department_id, profile?.role, profile?.created_at])
 
   const markAllRead = useCallback(async () => {
     const unread = panelNotices.filter(n => !n.is_read)

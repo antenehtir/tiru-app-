@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 
 // ─── Access control ───────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director']
+const ALLOWED_ROLES = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr']
 const CAN_EXPORT    = ['super_admin', 'hr', 'medical_director', 'ceo', 'general_manager', 'department_head']
 const FACILITY_ID   = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 

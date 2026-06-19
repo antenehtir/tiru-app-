@@ -567,6 +567,7 @@ function SiteGeofenceControl({ site, onSaved }: { site: Site; onSaved: () => voi
 // â"€â"€â"€ Users Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function UsersSection({ currentRole }: { currentRole: string }) {
+  const { profile: actor } = useAuth()
   const [users,    setUsers]    = useState<Profile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
@@ -763,6 +764,57 @@ function UsersSection({ currentRole }: { currentRole: string }) {
         employee_id:   inviteForm.employee_id.trim() || null,
         facility_id:   'd917b86c-682c-4f11-b285-0a1cada2b54b',
       }).eq('id', signUpData.user.id)
+
+      // ── Onboarding side-effects (all non-blocking) ──────────────────────────
+      const newId            = signUpData.user.id
+      const newStaffFullName = inviteForm.full_name.trim()
+      const assignedRole     = roleLabel(inviteForm.role)
+      const departmentName   = deptId ? (depts.find((d: DeptOption) => d.id === deptId)?.name ?? null) : null
+
+      // Audit log — staff onboarding
+      const { error: auditErr } = await supabase.from('audit_log').insert({
+        facility_id:    'd917b86c-682c-4f11-b285-0a1cada2b54b',
+        actor_id:       actor?.id,
+        actor_name:     actor?.full_name,
+        action:         'Staff Onboarded',
+        target_user_id: newId,
+        target_name:    newStaffFullName,
+        details:        `New account created · Role: ${assignedRole} · Department: ${departmentName || 'Unassigned'}`,
+        created_at:     new Date().toISOString(),
+      })
+      if (auditErr) console.error('Onboarding audit log failed:', auditErr)
+
+      // Notify the leadership tier (individual notices)
+      const { data: leaders, error: leadersErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['super_admin','ceo','general_manager','medical_director'])
+      if (leadersErr) console.error('Leadership fetch failed:', leadersErr)
+      for (const leader of leaders ?? []) {
+        if (leader.id === actor?.id) continue // skip self
+        const { error: leadNoticeErr } = await supabase.from('notices').insert({
+          author_id:      actor?.id,
+          title:          `New Staff Onboarded: ${newStaffFullName}`,
+          body:           `${newStaffFullName} has been added as ${assignedRole}${departmentName ? ' in ' + departmentName : ''} by ${actor?.full_name}.`,
+          priority:       'info',
+          audience:       'individual',
+          target_user_id: leader.id,
+          pinned:         false,
+        })
+        if (leadNoticeErr) console.error('Leadership notice failed:', leadNoticeErr)
+      }
+
+      // Welcome notice to the new hire (pinned to the top of their feed)
+      const { error: welcomeErr } = await supabase.from('notices').insert({
+        author_id:      actor?.id,
+        title:          `Welcome to Test Medical Center 1`,
+        body:           `Welcome aboard, ${newStaffFullName}! Your account has been created as ${assignedRole}. You can now view your shifts, clock in via Attendance, request leave, and receive facility notices here. If you have questions, contact your department head or HR.`,
+        priority:       'info',
+        audience:       'individual',
+        target_user_id: newId,
+        pinned:         true,
+      })
+      if (welcomeErr) console.error('Welcome notice failed:', welcomeErr)
     }
 
     // Step 3: Send password-setup email (only for real email addresses)
@@ -1545,6 +1597,8 @@ function DepartmentsSection() {
   const [saving,    setSaving]    = useState(false)
   const [formErr,   setFormErr]   = useState<string | null>(null)
   const [form, setForm] = useState({ name:'', description:'' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName,  setEditName]  = useState('')
 
   const fetchDepts = useCallback(async () => {
     setLoading(true)
@@ -1555,6 +1609,15 @@ function DepartmentsSection() {
     setDepts((data as Department[]) ?? [])
     setLoading(false)
   }, [])
+
+  const startRename  = (d: Department) => { setEditingId(d.id); setEditName(d.name) }
+  const cancelRename = () => { setEditingId(null); setEditName('') }
+  const saveRename   = async (id: string) => {
+    if (!editName.trim()) return
+    await supabase.from('departments').update({ name: editName.trim() }).eq('id', id)
+    setEditingId(null); setEditName('')
+    fetchDepts()
+  }
 
   useEffect(() => { fetchDepts() }, [fetchDepts])
 
@@ -1598,13 +1661,30 @@ function DepartmentsSection() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {depts.map(d => (
             <div key={d.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-start justify-between gap-2">
-              <div>
-                <div className="font-medium text-sm text-gray-900">{d.name}</div>
-                {d.description && <div className="text-xs text-gray-400 mt-0.5">{d.description}</div>}
-              </div>
-              <button onClick={() => deleteDept(d.id)} className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {editingId === d.id ? (
+                <div className="flex-1 flex items-center gap-2">
+                  <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') saveRename(d.id); if (e.key === 'Escape') cancelRename() }}
+                    className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-teal-500 outline-none" />
+                  <button onClick={() => saveRename(d.id)} className="text-xs font-medium text-teal-600 hover:text-teal-700 flex-shrink-0">Save</button>
+                  <button onClick={cancelRename} className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0">Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm text-gray-900">{d.name}</div>
+                    {d.description && <div className="text-xs text-gray-400 mt-0.5">{d.description}</div>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => startRename(d)} title="Rename" className="text-gray-300 hover:text-teal-500 transition-colors">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteDept(d.id)} title="Delete" className="text-gray-300 hover:text-red-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
