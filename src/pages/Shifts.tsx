@@ -890,7 +890,16 @@ export default function Shifts() {
   // ════════════════════════════════════════════════════════════════════════════
 
   const breadcrumbParts = [selectedGroup, selectedSub?.name, selectedSpecialty].filter(Boolean) as string[]
-  const showAddBtn = canAdd && (role !== 'department_head' || selectedGroup === deptHeadGroup)
+  // department_head may only Add Shifts on their OWN department's view. For most
+  // groups the group maps 1:1 to a department, but "Other Staff" fans out into
+  // several sub-departments — so there we additionally require the viewed
+  // sub-card's department to match the head's own department (by name, which is
+  // resolved from their department_id).
+  const showAddBtn = canAdd && (
+    role !== 'department_head' ||
+    (selectedGroup === deptHeadGroup &&
+      (selectedGroup !== 'Other Staff' || selectedSub?.deptName === userDeptName))
+  )
 
   return (
     <div className="p-4 md:p-6 space-y-4">
