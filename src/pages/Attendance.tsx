@@ -402,11 +402,11 @@ export default function Attendance() {
         return
       }
 
-      // Use a fresh cached position from the background GPS watch if we have one —
-      // skips the getCurrentPosition wait entirely for an instant check.
+      // Use the pre-warmed position from the background GPS watch if it is recent
+      // (< 30s) — skips the getCurrentPosition wait entirely for an instant check.
       const cachedPos = useAuthStore.getState().lastKnownPosition
       const cacheAge  = cachedPos ? Date.now() - cachedPos.timestamp : Infinity
-      if (cachedPos && cacheAge < 60000) {
+      if (cachedPos && cacheAge < 30000) {
         const distance = haversineM(
           cachedPos.coords.latitude, cachedPos.coords.longitude,
           facilityCoords.lat, facilityCoords.lng,
@@ -449,8 +449,9 @@ export default function Attendance() {
           console.log('Geolocation denied')
           resolve({ ok: false, msg: 'GPS permission denied. Cannot verify you are within the facility.' })
         },
-        // Faster response: cached position up to 30s old, normal accuracy, 6s timeout
-        { enableHighAccuracy: false, timeout: 6000, maximumAge: 30000 }
+        // Faster response: allow a recent OS-cached fix (up to 10s old) so the
+        // browser need not force a brand-new GPS lock; 7s timeout.
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 10000 }
       )
     })
   }

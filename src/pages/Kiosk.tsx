@@ -29,9 +29,9 @@ type ScheduleShift = {
 
 const FACILITY_ID = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
-const QR_ROTATE_MS   = 15 * 1000              // display a new QR every 15 seconds
-const QR_COUNTDOWN_S = QR_ROTATE_MS / 1000    // ring counts down from the display cadence (15s)
-const QR_LIFETIME_S  = 20                     // token stays valid 20s — 5s grace past rotation
+const QR_ROTATE_MS   = 20 * 1000              // display a new QR every 20 seconds
+const QR_COUNTDOWN_S = QR_ROTATE_MS / 1000    // ring counts down from the display cadence (20s)
+const QR_LIFETIME_S  = 25                     // token stays valid 25s — 5s grace past rotation
 
 // Rotating, single-use attendance QR shown on the kiosk idle screen.
 // Generates a fresh token client-side every 15s and persists it to
