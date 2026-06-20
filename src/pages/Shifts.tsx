@@ -11,6 +11,7 @@ import {
   Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
   Upload, Edit2, Trash2, UserCheck, CheckCircle2, RefreshCw,
   Phone, Activity, Users, Download,
+  Dumbbell, Syringe, Laptop, Sparkles, Banknote, UserCog, Briefcase, ShieldCheck, MoreHorizontal,
 } from 'lucide-react'
 import ShiftUpload from '../components/ShiftUpload'
 
@@ -34,10 +35,11 @@ type ShiftRow = {
 type ShiftAction   = 'edit' | 'reassign' | 'delete'
 type ProfileOption = { id: string; full_name: string }
 type DeptOption    = { id: string; name: string; is_active: boolean }
-type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception' | 'Other Staff'
+type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'Laboratory' | 'Reception' | 'Physiotherapy' | 'Anesthesia' | 'Other Staff'
 type ScheduleType  = 'regular' | 'duty'
 type ViewMode      = 'week' | 'month'
-type NavStep       = 'group' | 'specialty' | 'calendar'
+type NavStep       = 'group' | 'subgroup' | 'specialty' | 'calendar'
+type SubGroup      = { name: string; deptName: string | null } // deptName null = "Other" catch-all
 type RepeatPattern = 'daily' | 'weekdays' | 'weekly' | 'custom'
 
 // ─── Static config ────────────────────────────────────────────────────────────
@@ -51,8 +53,27 @@ const GROUPS: { name: GroupName; icon: LucideIcon; color: string; description: s
   { name: 'Pharmacy',        icon: Pill,        color: 'amber',  description: 'Pharmacists & technicians' },
   { name: 'Laboratory',      icon: Microscope,  color: 'teal',   description: 'Lab technicians' },
   { name: 'Reception',   icon: PhoneCall, color: 'pink', description: 'Reception & front desk' },
-  { name: 'Other Staff', icon: Users,     color: 'gray', description: 'IT, Janitorial & other departments' },
+  { name: 'Physiotherapy', icon: Dumbbell, color: 'green', description: 'Physiotherapy staff' },
+  { name: 'Anesthesia',  icon: Syringe,   color: 'cyan', description: 'Anesthesia staff' },
+  { name: 'Other Staff', icon: Users,     color: 'gray', description: 'Support & admin departments' },
 ]
+
+// Second-level cards shown when "Other Staff" is opened. IT & Janitorial are
+// EXISTING departments (re-tagged here, not recreated). "Other" (deptName null)
+// is the catch-all for anything not in a core or named department.
+const OTHER_SUBGROUPS: { name: string; deptName: string | null; icon: LucideIcon; color: string; description: string }[] = [
+  { name: 'IT',             deptName: 'IT',             icon: Laptop,         color: 'indigo',  description: 'Information technology' },
+  { name: 'Janitorial',     deptName: 'Janitorial',     icon: Sparkles,       color: 'lime',    description: 'Cleaning & sanitation' },
+  { name: 'Finance',        deptName: 'Finance',        icon: Banknote,       color: 'emerald', description: 'Finance & accounts' },
+  { name: 'HR',             deptName: 'HR',             icon: UserCog,        color: 'sky',     description: 'Human resources' },
+  { name: 'Administration', deptName: 'Administration', icon: Briefcase,      color: 'slate',   description: 'Administrative staff' },
+  { name: 'Security',       deptName: 'Security',       icon: ShieldCheck,    color: 'red',     description: 'Security & safety' },
+  { name: 'Other',          deptName: null,             icon: MoreHorizontal, color: 'gray',    description: 'Everyone else' },
+]
+
+// Named departments owning an Other-Staff sub-card; the "Other" catch-all sweeps
+// up anything NOT in these and NOT in the core clinical departments.
+const OTHER_NAMED_DEPTS = ['IT', 'Janitorial', 'Finance', 'HR', 'Administration', 'Security']
 
 const GROUP_CONFIG: Record<GroupName, {
   departmentName: string | null
@@ -65,6 +86,8 @@ const GROUP_CONFIG: Record<GroupName, {
   'Pharmacy':        { departmentName: 'Pharmacy',   specialties: [], skipLevel2: true },
   'Laboratory':      { departmentName: 'Laboratory', specialties: [], skipLevel2: true },
   'Reception':   { departmentName: 'Reception', specialties: [], skipLevel2: true },
+  'Physiotherapy': { departmentName: 'Physiotherapy', specialties: [], skipLevel2: true },
+  'Anesthesia':  { departmentName: 'Anesthesia', specialties: [], skipLevel2: true },
   'Other Staff': { departmentName: 'OTHER',     specialties: [], skipLevel2: true },
 }
 
@@ -76,6 +99,14 @@ const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
   teal:   { card: 'border-teal-200 bg-teal-50 hover:bg-teal-100',     icon: 'text-teal-500' },
   pink:   { card: 'border-pink-200 bg-pink-50 hover:bg-pink-100',     icon: 'text-pink-500' },
   gray:   { card: 'border-gray-200 bg-gray-50 hover:bg-gray-100',     icon: 'text-gray-500' },
+  green:  { card: 'border-green-200 bg-green-50 hover:bg-green-100',  icon: 'text-green-500' },
+  cyan:   { card: 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100',     icon: 'text-cyan-500' },
+  indigo: { card: 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100', icon: 'text-indigo-500' },
+  emerald:{ card: 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100', icon: 'text-emerald-500' },
+  sky:    { card: 'border-sky-200 bg-sky-50 hover:bg-sky-100',       icon: 'text-sky-500' },
+  slate:  { card: 'border-slate-200 bg-slate-50 hover:bg-slate-100', icon: 'text-slate-500' },
+  red:    { card: 'border-red-200 bg-red-50 hover:bg-red-100',       icon: 'text-red-500' },
+  lime:   { card: 'border-lime-200 bg-lime-50 hover:bg-lime-100',    icon: 'text-lime-500' },
 }
 
 const CAN_ADD_SHIFT    = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr', 'department_head', 'coordinator']
@@ -246,6 +277,7 @@ export default function Shifts() {
   const [navStep,          setNavStep]          = useState<NavStep>('group')
   const [selectedGroup,    setSelectedGroup]    = useState<GroupName | null>(null)
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null)
+  const [selectedSub,      setSelectedSub]      = useState<SubGroup | null>(null)
   const [scheduleType,     setScheduleType]     = useState<ScheduleType>('regular')
 
   // ── Calendar state ──
@@ -334,7 +366,10 @@ export default function Shifts() {
     'General Practice': 'Medical Doctors',
     'Nursing': 'Nurses', 'Midwifery': 'Midwives',
     'Pharmacy': 'Pharmacy', 'Laboratory': 'Laboratory', 'Reception': 'Reception',
+    'Physiotherapy': 'Physiotherapy', 'Anesthesia': 'Anesthesia',
     'IT': 'Other Staff', 'Janitorial': 'Other Staff', 'Quality': 'Other Staff',
+    'Finance': 'Other Staff', 'HR': 'Other Staff', 'Administration': 'Other Staff',
+    'Security': 'Other Staff', 'Other': 'Other Staff',
   }
   const deptHeadGroup: GroupName | null =
     role === 'department_head' && userDeptName ? (DEPT_TO_GROUP[userDeptName] ?? null) : null
@@ -386,17 +421,26 @@ export default function Shifts() {
     const config = GROUP_CONFIG[selectedGroup]
     if (selectedGroup === 'Other Staff') {
       const coreDepNames = ['Nursing','Midwifery','Pharmacy','Laboratory','Reception',
+        'Physiotherapy','Anesthesia',
         'General Practice','Internal Medicine','Emergency','Surgery',
         'Pediatrics','Gynecology & Obstetrics','Radiology']
-      result = result.filter(s =>
-        s.department?.name && !coreDepNames.includes(s.department.name)
-      )
+      if (selectedSub?.deptName) {
+        // A named Other-Staff sub-card (IT, Janitorial, Finance, HR, Admin, Security)
+        result = result.filter(s => s.department?.name === selectedSub.deptName)
+      } else {
+        // "Other" catch-all: anything not core and not a named Other-Staff dept
+        result = result.filter(s =>
+          s.department?.name &&
+          !coreDepNames.includes(s.department.name) &&
+          !OTHER_NAMED_DEPTS.includes(s.department.name)
+        )
+      }
     } else if (config.departmentName) {
       result = result.filter(s => s.department?.name === config.departmentName)
     }
     setShifts(result)
     setLoading(false)
-  }, [selectedGroup, selectedSpecialty, scheduleType, viewMode, weekBase, monthBase])
+  }, [selectedGroup, selectedSpecialty, selectedSub, scheduleType, viewMode, weekBase, monthBase])
 
   useEffect(() => {
     if (navStep === 'calendar') fetchShifts()
@@ -422,9 +466,16 @@ export default function Shifts() {
   // ── Navigation ──
   function handleSelectGroup(group: GroupName) {
     setSelectedGroup(group)
+    setSelectedSub(null)
+    // "Other Staff" drills into a second-level sub-card grid instead of a calendar
+    if (group === 'Other Staff') { setSelectedSpecialty(null); setNavStep('subgroup'); return }
     const config = GROUP_CONFIG[group]
     if (config.skipLevel2) { setSelectedSpecialty(null); setNavStep('calendar') }
     else setNavStep('specialty')
+  }
+
+  function handleSelectSubgroup(sub: SubGroup) {
+    setSelectedSub(sub); setSelectedSpecialty(null); setNavStep('calendar')
   }
 
   function handleSelectSpecialty(specialty: string) {
@@ -432,12 +483,17 @@ export default function Shifts() {
   }
 
   function resetToLevel1() {
-    setNavStep('group'); setSelectedGroup(null); setSelectedSpecialty(null)
+    setNavStep('group'); setSelectedGroup(null); setSelectedSpecialty(null); setSelectedSub(null)
     setScheduleType('regular'); setShifts([]); setError(null)
   }
 
   function goBack() {
     if (!selectedGroup) return resetToLevel1()
+    // Other Staff: calendar → back to the sub-card grid; sub-card grid → level 1
+    if (selectedGroup === 'Other Staff') {
+      if (navStep === 'calendar') { setSelectedSub(null); setNavStep('subgroup'); setShifts([]); setError(null); return }
+      return resetToLevel1()
+    }
     const config = GROUP_CONFIG[selectedGroup]
     if (!config.skipLevel2) { setSelectedSpecialty(null); setNavStep('specialty'); setShifts([]); setError(null) }
     else resetToLevel1()
@@ -766,6 +822,38 @@ export default function Shifts() {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
+  // LEVEL 1.5 — "Other Staff" sub-group selector (same card pattern as level 1)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (navStep === 'subgroup') {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <button onClick={resetToLevel1} className="flex items-center gap-1 text-sm text-teal-600 hover:text-teal-700 mb-5">
+          <ChevronLeft className="w-4 h-4" />Back to groups
+        </button>
+        <div className="mb-7">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Users className="w-6 h-6 text-gray-500" />Other Staff
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">Select a department to view their schedule</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+          {OTHER_SUBGROUPS.map(({ name, deptName, icon: Icon, color, description }) => {
+            const { card, icon } = GROUP_COLORS[color]
+            return (
+              <button key={name} onClick={() => handleSelectSubgroup({ name, deptName })}
+                className={`rounded-2xl border-2 p-4 md:p-6 min-h-[100px] text-left transition-all duration-150 ${card}`}>
+                <Icon className={`w-8 h-8 md:w-9 md:h-9 mb-2 md:mb-3 ${icon}`} />
+                <div className="font-semibold text-gray-900 text-sm md:text-[15px]">{name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{description}</div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // LEVEL 2 — Specialty selector
   // ════════════════════════════════════════════════════════════════════════════
   if (navStep === 'specialty' && selectedGroup) {
@@ -801,7 +889,7 @@ export default function Shifts() {
   // LEVEL 3 — Calendar
   // ════════════════════════════════════════════════════════════════════════════
 
-  const breadcrumbParts = [selectedGroup, selectedSpecialty].filter(Boolean) as string[]
+  const breadcrumbParts = [selectedGroup, selectedSub?.name, selectedSpecialty].filter(Boolean) as string[]
   const showAddBtn = canAdd && (role !== 'department_head' || selectedGroup === deptHeadGroup)
 
   return (
