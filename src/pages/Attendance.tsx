@@ -142,9 +142,6 @@ export default function Attendance() {
   const [attType,       setAttType]       = useState<AttendanceType>('clock_in')
   const attTypeRef = useRef<AttendanceType>('clock_in')
   useEffect(() => { attTypeRef.current = attType }, [attType])
-  // Holds the attendance_qr_tokens row id when a dynamic token was scanned;
-  // null for static entrance_qr_codes fallback. Marked used after a successful save.
-  const dynamicTokenIdRef = useRef<string | null>(null)
   const [todayCheckIn,  setTodayCheckIn]  = useState<TodayRecord | null>(null)
   const [todayCheckOut, setTodayCheckOut] = useState<TodayRecord | null>(null)
   const [todayLoaded,   setTodayLoaded]   = useState(false)
@@ -505,35 +502,35 @@ export default function Attendance() {
     console.log('scanned value:', qrData)
     setScanning(true); setScanResult(null)
 
-    // ── Dynamic token path: a live kiosk QR is a rotating single-use token ──
-    // Look the scanned value up in attendance_qr_tokens first. If it matches a
-    // token, apply rotation rules (expiry / single-use). If it is NOT a token,
-    // fall through to the legacy static entrance_qr_codes check below so small
-    // sites without a live screen keep working unchanged.
+    // ── Dynamic token path: validate + atomically claim via server-side RPC ──
+    // The RPC checks expiry against the server clock and marks the token used in a
+    // single atomic step, so there is no client-clock trust and no check-then-claim
+    // race. reason 'invalid' means it is not a live token — fall through to the
+    // legacy static entrance_qr_codes check so small sites without a live screen
+    // keep working unchanged.
     let qrCodeId: string
-    dynamicTokenIdRef.current = null
-    const { data: tokenRow } = await supabase
-      .from('attendance_qr_tokens')
-      .select('id, entrance_id, expires_at, used_at')
-      .eq('token', qrData)
-      .maybeSingle()
+    const { data: claim, error: claimErr } = await supabase.rpc('validate_and_claim_qr_token', {
+      p_token:   qrData,
+      p_user_id: profile!.id,
+    })
+    const claimRow = (Array.isArray(claim) ? claim[0] : claim) as
+      { success: boolean; reason: string | null; entrance_id: string | null } | null
 
-    if (tokenRow) {
-      const t = tokenRow as { id: string; entrance_id: string; expires_at: string; used_at: string | null }
-      if (t.used_at) {
-        setScanning(false); setScanResult('error')
-        setScanMessage('This code has already been used. Please scan the current code on screen.')
-        return
-      }
-      if (new Date(t.expires_at).getTime() < Date.now()) {
-        setScanning(false); setScanResult('error')
-        setScanMessage('This code has expired. Please scan the current code on screen.')
-        return
-      }
-      dynamicTokenIdRef.current = t.id
-      qrCodeId = t.entrance_id
+    if (!claimErr && claimRow?.success) {
+      // Token validated AND claimed server-side — proceed (no client used_at update).
+      qrCodeId = claimRow.entrance_id as string
+    } else if (claimRow?.reason === 'expired') {
+      setScanning(false); setScanResult('error')
+      setScanMessage('This code has expired. Please scan the current code on screen.')
+      return
+    } else if (claimRow?.reason === 'used') {
+      setScanning(false); setScanResult('error')
+      setScanMessage('This code has already been used. Please scan the current code on screen.')
+      return
     } else {
-      // Fallback: validate against the static entrance QR (legacy behavior)
+      // reason 'invalid' (not a live token) or RPC unavailable — try the static
+      // entrance QR fallback exactly as before.
+      if (claimErr) console.error('QR validate RPC error:', claimErr.message)
       const { data: qrRows } = await supabase
         .from('entrance_qr_codes')
         .select('id, qr_payload, is_active')
@@ -657,13 +654,8 @@ export default function Attendance() {
     const { error } = await supabase.from('attendance_logs').insert(insertPayload)
     if (error) { enqueue(log); setScanResult('error'); setScanMessage('Could not save — queued for retry. ' + error.message) }
     else {
-      // Mark the dynamic token consumed (single-use). Best-effort; static QR has no token.
-      if (dynamicTokenIdRef.current) {
-        await supabase.from('attendance_qr_tokens')
-          .update({ used_at: new Date().toISOString(), used_by: profile!.id })
-          .eq('id', dynamicTokenIdRef.current)
-        dynamicTokenIdRef.current = null
-      }
+      // Dynamic token already claimed atomically by validate_and_claim_qr_token RPC;
+      // no client-side used_at update needed here (static QR has no token).
       if (insideGeofence === false) { setScanResult('geofence_warn'); setScanMessage('Attendance recorded ✓ — GPS shows you may be outside the facility.') }
       else { setScanResult('success'); setScanMessage(log.log_type === 'check_in' ? 'Clocked in successfully! ✓' : 'Clocked out successfully! ✓') }
       fetchRecentLogs()
