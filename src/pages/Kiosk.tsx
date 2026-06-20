@@ -68,12 +68,15 @@ function AttendanceQRDisplay() {
         .is('used_at', null)
         .lt('expires_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
 
-      // Generate and persist a fresh single-use token
+      // Generate and persist a fresh single-use token.
+      // expires_at is computed by Postgres (now() + lifetime) via RPC so it never
+      // depends on the kiosk device's local clock, which may be wrong.
       const newToken  = crypto.randomUUID()
-      const expiresAt = new Date(Date.now() + QR_LIFETIME_S * 1000).toISOString()
-      const { error } = await supabase
-        .from('attendance_qr_tokens')
-        .insert({ entrance_id: entranceId, token: newToken, expires_at: expiresAt })
+      const { error } = await supabase.rpc('create_attendance_qr_token', {
+        p_entrance_id:     entranceId,
+        p_token:           newToken,
+        p_lifetime_seconds: QR_LIFETIME_S,
+      })
       if (error) { console.error('QR token insert failed:', error.message); return }
       if (!cancelled) { setToken(newToken); setSecondsLeft(QR_COUNTDOWN_S) }
     }
