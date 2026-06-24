@@ -11,7 +11,7 @@ import {
   Stethoscope, Heart, Baby, Pill, Microscope, PhoneCall,
   Upload, Edit2, Trash2, UserCheck, CheckCircle2, RefreshCw,
   Phone, Activity, Users, Download,
-  Dumbbell, Syringe, Laptop, Sparkles, Banknote, UserCog, Briefcase, ShieldCheck, MoreHorizontal,
+  Dumbbell, Syringe, Laptop, Sparkles, Banknote, UserCog, Briefcase, ShieldCheck, ClipboardCheck,
 } from 'lucide-react'
 import ShiftUpload from '../components/ShiftUpload'
 
@@ -39,7 +39,7 @@ type GroupName     = 'Medical Doctors' | 'Nurses' | 'Midwives' | 'Pharmacy' | 'L
 type ScheduleType  = 'regular' | 'duty'
 type ViewMode      = 'week' | 'month'
 type NavStep       = 'group' | 'subgroup' | 'specialty' | 'calendar'
-type SubGroup      = { name: string; deptName: string | null } // deptName null = "Other" catch-all
+type SubGroup      = { name: string; deptName: string } // every sub-card maps to one real department
 type RepeatPattern = 'daily' | 'weekdays' | 'weekly' | 'custom'
 
 // ─── Static config ────────────────────────────────────────────────────────────
@@ -58,22 +58,18 @@ const GROUPS: { name: GroupName; icon: LucideIcon; color: string; description: s
   { name: 'Other Staff', icon: Users,     color: 'gray', description: 'Support & admin departments' },
 ]
 
-// Second-level cards shown when "Other Staff" is opened. IT & Janitorial are
-// EXISTING departments (re-tagged here, not recreated). "Other" (deptName null)
-// is the catch-all for anything not in a core or named department.
-const OTHER_SUBGROUPS: { name: string; deptName: string | null; icon: LucideIcon; color: string; description: string }[] = [
-  { name: 'IT',             deptName: 'IT',             icon: Laptop,         color: 'indigo',  description: 'Information technology' },
-  { name: 'Janitorial',     deptName: 'Janitorial',     icon: Sparkles,       color: 'lime',    description: 'Cleaning & sanitation' },
-  { name: 'Finance',        deptName: 'Finance',        icon: Banknote,       color: 'emerald', description: 'Finance & accounts' },
-  { name: 'HR',             deptName: 'HR',             icon: UserCog,        color: 'sky',     description: 'Human resources' },
-  { name: 'Administration', deptName: 'Administration', icon: Briefcase,      color: 'slate',   description: 'Administrative staff' },
-  { name: 'Security',       deptName: 'Security',       icon: ShieldCheck,    color: 'red',     description: 'Security & safety' },
-  { name: 'Other',          deptName: null,             icon: MoreHorizontal, color: 'gray',    description: 'Everyone else' },
+// Second-level cards shown when "Other Staff" is opened. Every card maps to
+// exactly one real, named department (IT & Janitorial already existed and are
+// re-tagged here, not recreated). No generic catch-all — nobody gets stranded.
+const OTHER_SUBGROUPS: { name: string; deptName: string; icon: LucideIcon; color: string; description: string }[] = [
+  { name: 'IT',                deptName: 'IT',                icon: Laptop,         color: 'indigo',  description: 'Information technology' },
+  { name: 'Janitorial',        deptName: 'Janitorial',        icon: Sparkles,       color: 'lime',    description: 'Cleaning & sanitation' },
+  { name: 'Finance',           deptName: 'Finance',           icon: Banknote,       color: 'emerald', description: 'Finance & accounts' },
+  { name: 'HR',                deptName: 'HR',                icon: UserCog,        color: 'sky',     description: 'Human resources' },
+  { name: 'Administration',    deptName: 'Administration',    icon: Briefcase,      color: 'slate',   description: 'Administrative staff' },
+  { name: 'Security',          deptName: 'Security',          icon: ShieldCheck,    color: 'red',     description: 'Security & safety' },
+  { name: 'Quality Assurance', deptName: 'Quality Assurance', icon: ClipboardCheck, color: 'orange',  description: 'Quality & compliance' },
 ]
-
-// Named departments owning an Other-Staff sub-card; the "Other" catch-all sweeps
-// up anything NOT in these and NOT in the core clinical departments.
-const OTHER_NAMED_DEPTS = ['IT', 'Janitorial', 'Finance', 'HR', 'Administration', 'Security']
 
 const GROUP_CONFIG: Record<GroupName, {
   departmentName: string | null
@@ -107,6 +103,7 @@ const GROUP_COLORS: Record<string, { card: string; icon: string }> = {
   slate:  { card: 'border-slate-200 bg-slate-50 hover:bg-slate-100', icon: 'text-slate-500' },
   red:    { card: 'border-red-200 bg-red-50 hover:bg-red-100',       icon: 'text-red-500' },
   lime:   { card: 'border-lime-200 bg-lime-50 hover:bg-lime-100',    icon: 'text-lime-500' },
+  orange: { card: 'border-orange-200 bg-orange-50 hover:bg-orange-100', icon: 'text-orange-500' },
 }
 
 const CAN_ADD_SHIFT    = ['super_admin', 'ceo', 'general_manager', 'medical_director', 'hr', 'department_head', 'coordinator']
@@ -369,7 +366,7 @@ export default function Shifts() {
     'Physiotherapy': 'Physiotherapy', 'Anesthesia': 'Anesthesia',
     'IT': 'Other Staff', 'Janitorial': 'Other Staff', 'Quality': 'Other Staff',
     'Finance': 'Other Staff', 'HR': 'Other Staff', 'Administration': 'Other Staff',
-    'Security': 'Other Staff', 'Other': 'Other Staff',
+    'Security': 'Other Staff', 'Quality Assurance': 'Other Staff',
   }
   const deptHeadGroup: GroupName | null =
     role === 'department_head' && userDeptName ? (DEPT_TO_GROUP[userDeptName] ?? null) : null
@@ -420,21 +417,10 @@ export default function Shifts() {
     let result = (data as ShiftRow[]) ?? []
     const config = GROUP_CONFIG[selectedGroup]
     if (selectedGroup === 'Other Staff') {
-      const coreDepNames = ['Nursing','Midwifery','Pharmacy','Laboratory','Reception',
-        'Physiotherapy','Anesthesia',
-        'General Practice','Internal Medicine','Emergency','Surgery',
-        'Pediatrics','Gynecology & Obstetrics','Radiology']
-      if (selectedSub?.deptName) {
-        // A named Other-Staff sub-card (IT, Janitorial, Finance, HR, Admin, Security)
-        result = result.filter(s => s.department?.name === selectedSub.deptName)
-      } else {
-        // "Other" catch-all: anything not core and not a named Other-Staff dept
-        result = result.filter(s =>
-          s.department?.name &&
-          !coreDepNames.includes(s.department.name) &&
-          !OTHER_NAMED_DEPTS.includes(s.department.name)
-        )
-      }
+      // Every Other-Staff sub-card now maps to exactly one named department
+      result = selectedSub?.deptName
+        ? result.filter(s => s.department?.name === selectedSub.deptName)
+        : []
     } else if (config.departmentName) {
       result = result.filter(s => s.department?.name === config.departmentName)
     }

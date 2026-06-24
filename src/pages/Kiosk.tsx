@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { roleLabel } from '../lib/roles'
 import {
   LogIn, LogOut, AlertTriangle, Bell, ArrowLeft,
-  CheckCircle2, XCircle, Loader2, Shield, CalendarDays
+  CheckCircle2, XCircle, Loader2, Shield, CalendarDays, Lock
 } from 'lucide-react'
 
 type KioskScreen = 'idle' | 'identify' | 'pin' | 'dashboard' | 'signature' | 'camera' | 'success' | 'error' | 'incident' | 'notices'
@@ -149,6 +149,16 @@ export default function Kiosk() {
   const [selectedMonthDay, setSelectedMonthDay]   = useState<string | null>(null)
   const [expandedNoticeId, setExpandedNoticeId]   = useState<string | null>(null)
   const [readNoticeIds, setReadNoticeIds]         = useState<Set<string>>(new Set())
+
+  // Change PIN modal (self-service, dashboard only)
+  const [showChangePinModal, setShowChangePinModal] = useState(false)
+  const [currentPinInput, setCurrentPinInput]       = useState('')
+  const [newPinInput, setNewPinInput]               = useState('')
+  const [confirmPinInput, setConfirmPinInput]       = useState('')
+  const [changePinErr, setChangePinErr]             = useState('')
+  const [changePinSuccess, setChangePinSuccess]     = useState('')
+  const [changePinSaving, setChangePinSaving]       = useState(false)
+
   const activeField: 'id' | 'pin' = numInput.length >= 3 ? 'pin' : 'id'
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const videoRef     = useRef<HTMLVideoElement>(null)
@@ -230,6 +240,12 @@ export default function Kiosk() {
     setSelectedMonthDay(null)
     setExpandedNoticeId(null)
     setReadNoticeIds(new Set())
+    setShowChangePinModal(false)
+    setCurrentPinInput('')
+    setNewPinInput('')
+    setConfirmPinInput('')
+    setChangePinErr('')
+    setChangePinSuccess('')
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -412,6 +428,57 @@ export default function Kiosk() {
     }
     await fetchDashboardData(staff!)
     setScreen('dashboard')
+  }
+
+  // ── Self-service Change PIN (dashboard only, own account) ───────────────────
+  function closeChangePinModal() {
+    setShowChangePinModal(false)
+    setCurrentPinInput('')
+    setNewPinInput('')
+    setConfirmPinInput('')
+    setChangePinErr('')
+  }
+
+  async function changePin() {
+    setChangePinErr('')
+    if (currentPinInput.length !== 4 || newPinInput.length !== 4 || confirmPinInput.length !== 4) return
+    if (!/^\d{4}$/.test(newPinInput)) {
+      setChangePinErr('New PIN must be exactly 4 digits.')
+      return
+    }
+    if (newPinInput !== confirmPinInput) {
+      setChangePinErr('New PIN and confirmation do not match.')
+      return
+    }
+    if (currentPinInput !== staff?.pin) {
+      setChangePinErr('Incorrect current PIN')
+      setCurrentPinInput('')
+      return
+    }
+    if (newPinInput === currentPinInput) {
+      setChangePinErr('New PIN must be different from current PIN')
+      return
+    }
+
+    setChangePinSaving(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ pin: newPinInput })
+      .eq('id', staff!.id)
+    setChangePinSaving(false)
+
+    if (error) {
+      setChangePinErr('Failed to update PIN. Please try again.')
+      return
+    }
+
+    setStaff(s => s ? { ...s, pin: newPinInput } : s)
+    setShowChangePinModal(false)
+    setCurrentPinInput('')
+    setNewPinInput('')
+    setConfirmPinInput('')
+    setChangePinSuccess('PIN updated successfully')
+    setTimeout(() => setChangePinSuccess(''), 3000)
   }
 
   // ── Signature pad helpers ────────────────────────────────────────────────
@@ -843,6 +910,14 @@ export default function Kiosk() {
           </div>
           <span className="text-lg font-bold text-gray-800">Notices</span>
         </button>
+
+        <button onClick={() => setShowChangePinModal(true)}
+          className="col-span-2 flex items-center justify-center gap-3 bg-white rounded-3xl p-4 shadow-lg hover:bg-purple-50 active:scale-95 transition-all">
+          <div className="w-10 h-10 rounded-2xl bg-purple-100 flex items-center justify-center">
+            <Lock className="w-5 h-5 text-purple-600" />
+          </div>
+          <span className="text-base font-bold text-gray-800">Change PIN</span>
+        </button>
       </div>
 
       {/* My Schedule */}
@@ -990,6 +1065,80 @@ export default function Kiosk() {
         <LogOut className="w-4 h-4" />
         <span className="text-sm font-medium">Sign Out</span>
       </button>
+
+      {/* Change PIN success toast */}
+      {changePinSuccess && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />{changePinSuccess}
+        </div>
+      )}
+
+      {/* Change PIN modal */}
+      {showChangePinModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-6 z-50">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Change Your PIN</h2>
+            <p className="text-gray-500 text-sm text-center mb-6">Keep it secret — don't share your PIN.</p>
+
+            {changePinErr && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-3 py-2 mb-4 text-center">
+                {changePinErr}
+              </div>
+            )}
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 text-center">Current PIN</label>
+                <input
+                  type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                  value={currentPinInput}
+                  onChange={e => setCurrentPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-full text-center text-3xl font-mono font-bold tracking-[0.5em] border-2 border-gray-200 rounded-2xl py-3 focus:border-teal-400 focus:ring-2 focus:ring-teal-200 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 text-center">New PIN</label>
+                <input
+                  type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                  value={newPinInput}
+                  onChange={e => setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-full text-center text-3xl font-mono font-bold tracking-[0.5em] border-2 border-gray-200 rounded-2xl py-3 focus:border-teal-400 focus:ring-2 focus:ring-teal-200 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 text-center">Confirm New PIN</label>
+                <input
+                  type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                  value={confirmPinInput}
+                  onChange={e => setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-full text-center text-3xl font-mono font-bold tracking-[0.5em] border-2 border-gray-200 rounded-2xl py-3 focus:border-teal-400 focus:ring-2 focus:ring-teal-200 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={closeChangePinModal}
+                className="flex-1 border border-gray-200 hover:bg-gray-50 text-gray-600 font-medium py-3 rounded-2xl transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={changePin}
+                disabled={
+                  changePinSaving ||
+                  currentPinInput.length !== 4 ||
+                  newPinInput.length !== 4 ||
+                  confirmPinInput.length !== 4 ||
+                  newPinInput !== confirmPinInput
+                }
+                className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-bold py-3 rounded-2xl transition-colors flex items-center justify-center gap-2">
+                {changePinSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 
