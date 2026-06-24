@@ -47,17 +47,15 @@ export default function Login() {
 
     const normalized = normalizePhone(phone)
     const { data, error: lookupErr } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('phone', normalized)
-      .maybeSingle()
-    if (lookupErr || !data?.email) {
+      .rpc('get_email_by_phone', { phone_input: normalized })
+      .single()
+    if (lookupErr || !data) {
       setLoginErr('No account found with this phone number')
       setLoggingIn(false)
       return
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email: data.email, password })
+    const { error } = await supabase.auth.signInWithPassword({ email: data as string, password })
     if (error) setLoginErr(error.message)
     setLoggingIn(false)
   }
@@ -71,17 +69,15 @@ export default function Login() {
 
     const normalized = normalizePhone(forgotPhone)
     const { data, error: lookupErr } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('phone', normalized)
-      .maybeSingle()
-    if (lookupErr || !data?.email) {
+      .rpc('get_email_by_phone', { phone_input: normalized })
+      .single()
+    if (lookupErr || !data) {
       setForgotLoading(false)
       setForgotErr('No account found with this phone number.')
       return
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(data as string, {
       redirectTo: `${window.location.origin}/reset-password`,
     })
     setForgotLoading(false)
