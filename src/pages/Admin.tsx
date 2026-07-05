@@ -287,6 +287,8 @@ function SitesSection() {
   const [saving,    setSaving]    = useState(false)
   const [formErr,   setFormErr]   = useState<string | null>(null)
   const [form,      setForm]      = useState(EMPTY_SITE_FORM)
+  const [gettingLocation, setGettingLocation] = useState(false)
+  const [locError,        setLocError]        = useState<string | null>(null)
 
   const fetchSites = useCallback(async () => {
     setLoading(true)
@@ -301,6 +303,7 @@ function SitesSection() {
     setEditSite(null)
     setForm(EMPTY_SITE_FORM)
     setFormErr(null)
+    setLocError(null)
     setModalOpen(true)
   }
 
@@ -314,7 +317,24 @@ function SitesSection() {
       geofence_m:      s.geofence_m != null ? String(s.geofence_m) : '150',
     })
     setFormErr(null)
+    setLocError(null)
     setModalOpen(true)
+  }
+
+  const useMyLocation = () => {
+    setLocError(null)
+    setGettingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm(x => ({ ...x, latitude: String(pos.coords.latitude), longitude: String(pos.coords.longitude) }))
+        setGettingLocation(false)
+      },
+      () => {
+        setLocError('Could not get location. Enter manually.')
+        setGettingLocation(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
   }
 
   const saveSite = async () => {
@@ -421,6 +441,24 @@ function SitesSection() {
               {([
                 { label: 'Site Name *',  key: 'name',      type: 'text',   placeholder: 'e.g. Main Campus' },
                 { label: 'Address',      key: 'address',   type: 'text',   placeholder: 'e.g. 123 Hospital Rd' },
+              ] as { label: string; key: keyof typeof form; type: string; placeholder: string }[]).map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                  <input type={f.type} step="any" placeholder={f.placeholder}
+                    value={form[f.key]}
+                    onChange={e => setForm(x => ({ ...x, [f.key]: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
+                </div>
+              ))}
+              <div>
+                <button onClick={useMyLocation} disabled={gettingLocation}
+                  className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                  {gettingLocation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                  {gettingLocation ? 'Getting location...' : 'Use My Current Location'}
+                </button>
+                {locError && <p className="text-xs text-red-600 mt-1.5">{locError}</p>}
+              </div>
+              {([
                 { label: 'Latitude *',   key: 'latitude',  type: 'number', placeholder: 'e.g. 9.0054' },
                 { label: 'Longitude *',  key: 'longitude', type: 'number', placeholder: 'e.g. 38.7636' },
               ] as { label: string; key: keyof typeof form; type: string; placeholder: string }[]).map(f => (
@@ -439,9 +477,6 @@ function SitesSection() {
                   onChange={e => setForm(x => ({ ...x, geofence_m: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" />
               </div>
-              <p className="text-xs text-gray-400">
-                Tip: Right-click your location on Google Maps to copy coordinates.
-              </p>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
