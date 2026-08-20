@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield, Download, ChevronDown, X } from 'lucide-react'
+import {
+  AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield,
+  Download, ChevronDown, X, CalendarX, LogOut, Hourglass, Timer,
+} from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabaseClient'
+import { useFlagRules, RULE_META, SEVERITY_STYLES, type RuleType, type Severity } from '../lib/flagRules'
+import { detectFlags, type StaffLite, type ShiftLite, type AttendanceLite, type Flag } from '../lib/flagEngine'
 
 // ─── Access control ───────────────────────────────────────────────────────────
 
@@ -13,15 +18,25 @@ const FACILITY_ID   = 'd917b86c-682c-4f11-b285-0a1cada2b54b'
 
 type Period = 'Today' | 'This Week' | 'This Month'
 
-type FlaggedStaff = {
-  userId: string
-  name: string
-  employeeId: string
-  flagType: 'No Show' | 'Late Arrival' | 'Outside Geofence' | 'Low Attendance'
-  detail: string
-  severity: 'High' | 'Medium'
-  timestamp: string
+// ─── Rule-type presentation (icons only — everything else comes from the rules) ─
+
+const RULE_ICONS: Record<RuleType, React.ComponentType<{ className?: string }>> = {
+  late_arrival:            Clock,
+  no_show:                 UserX,
+  low_attendance:          TrendingDown,
+  geofence_breach:         MapPin,
+  unscheduled_clockin:     CalendarX,
+  missing_clockout:        LogOut,
+  early_departure:         Hourglass,
+  weekly_hours_shortfall:  Timer,
+  custom:                  AlertTriangle,
 }
+
+const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2, critical: 3 }
+
+// Matches the fixed trailing window flagEngine uses for weekly_hours_shortfall.
+const WEEKLY_HOURS_LOOKBACK_DAYS = 7
+const DEFAULT_LOW_ATTENDANCE_LOOKBACK_DAYS = 30
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,252 +61,9 @@ function getPeriodRange(period: Period): { start: Date; end: Date } {
   return { start, end }
 }
 
-function localDateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-}
-
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
-
-async function fetchProfilesMap(userIds: string[]): Promise<Map<string, { full_name: string; employee_id: string }>> {
-  const map = new Map<string, { full_name: string; employee_id: string }>()
-  if (userIds.length === 0) return map
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, employee_id')
-    .in('id', userIds)
-  if (error) throw error
-  for (const p of (data as any[]) ?? []) {
-    map.set(p.id, { full_name: p.full_name, employee_id: p.employee_id })
-  }
-  return map
-}
-
-// ─── Flag builders ────────────────────────────────────────────────────────────
-
-async function buildNoShows(start: Date): Promise<FlaggedStaff[]> {
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
-
-  const { data: shiftsData, error: shiftsErr } = await supabase
-    .from('shifts')
-    .select('id, user_id, starts_at, user:profiles!shifts_user_id_fkey(full_name, employee_id)')
-    .eq('facility_id', FACILITY_ID)
-    .lte('starts_at', twoHoursAgo.toISOString())
-    .gte('starts_at', start.toISOString())
-  if (shiftsErr) throw shiftsErr
-
-  const { data: logsData, error: logsErr } = await supabase
-    .from('attendance_logs')
-    .select('user_id, scanned_at')
-    .eq('facility_id', FACILITY_ID)
-    .eq('log_type', 'check_in')
-    .gte('scanned_at', start.toISOString())
-  if (logsErr) throw logsErr
-
-  const checkinDatesByUser = new Map<string, Set<string>>()
-  for (const log of (logsData as any[]) ?? []) {
-    const key = localDateKey(new Date(log.scanned_at))
-    if (!checkinDatesByUser.has(log.user_id)) checkinDatesByUser.set(log.user_id, new Set())
-    checkinDatesByUser.get(log.user_id)!.add(key)
-  }
-
-  const seen = new Set<string>()
-  const result: FlaggedStaff[] = []
-  for (const shift of (shiftsData as any[]) ?? []) {
-    if (seen.has(shift.user_id)) continue
-    const shiftDateKey = localDateKey(new Date(shift.starts_at))
-    const hasCheckin = checkinDatesByUser.get(shift.user_id)?.has(shiftDateKey)
-    if (!hasCheckin) {
-      seen.add(shift.user_id)
-      result.push({
-        userId: shift.user_id,
-        name: shift.user?.full_name ?? 'Unknown',
-        employeeId: shift.user?.employee_id ?? '—',
-        flagType: 'No Show',
-        severity: 'High',
-        detail: `Shift at ${formatTime(shift.starts_at)}, no check-in recorded`,
-        timestamp: shift.starts_at,
-      })
-    }
-  }
-  return result
-}
-
-async function buildLateArrivals(start: Date): Promise<FlaggedStaff[]> {
-  const { data: logsData, error: logsErr } = await supabase
-    .from('attendance_logs')
-    .select('user_id, scanned_at')
-    .eq('facility_id', FACILITY_ID)
-    .eq('log_type', 'check_in')
-    .gte('scanned_at', start.toISOString())
-  if (logsErr) throw logsErr
-
-  const { data: shiftsData, error: shiftsErr } = await supabase
-    .from('shifts')
-    .select('user_id, starts_at')
-    .eq('facility_id', FACILITY_ID)
-    .gte('starts_at', start.toISOString())
-  if (shiftsErr) throw shiftsErr
-
-  const shiftsByUserDate = new Map<string, Map<string, string>>()
-  for (const s of (shiftsData as any[]) ?? []) {
-    const key = localDateKey(new Date(s.starts_at))
-    if (!shiftsByUserDate.has(s.user_id)) shiftsByUserDate.set(s.user_id, new Map())
-    shiftsByUserDate.get(s.user_id)!.set(key, s.starts_at)
-  }
-
-  const userIds = new Set<string>()
-  const flagged: { userId: string; scannedAt: string; startsAt: string; minutesLate: number }[] = []
-  for (const log of (logsData as any[]) ?? []) {
-    const dateKey = localDateKey(new Date(log.scanned_at))
-    const startsAt = shiftsByUserDate.get(log.user_id)?.get(dateKey)
-    if (!startsAt) continue
-    const minutesLate = (new Date(log.scanned_at).getTime() - new Date(startsAt).getTime()) / 60000
-    if (minutesLate > 15) {
-      userIds.add(log.user_id)
-      flagged.push({ userId: log.user_id, scannedAt: log.scanned_at, startsAt, minutesLate })
-    }
-  }
-
-  const profileMap = await fetchProfilesMap(Array.from(userIds))
-
-  return flagged.map(f => {
-    const p = profileMap.get(f.userId)
-    return {
-      userId: f.userId,
-      name: p?.full_name ?? 'Unknown',
-      employeeId: p?.employee_id ?? '—',
-      flagType: 'Late Arrival' as const,
-      severity: 'Medium' as const,
-      detail: `${Math.round(f.minutesLate)} min late (arrived ${formatTime(f.scannedAt)}, shift started ${formatTime(f.startsAt)})`,
-      timestamp: f.scannedAt,
-    }
-  })
-}
-
-async function buildOutsideGeofence(start: Date): Promise<FlaggedStaff[]> {
-  const { data, error } = await supabase
-    .from('attendance_logs')
-    .select('user_id, scanned_at, log_type, within_geofence')
-    .eq('facility_id', FACILITY_ID)
-    .eq('within_geofence', false)
-    .gte('scanned_at', start.toISOString())
-  if (error) throw error
-
-  const rows = (data as any[]) ?? []
-  const userIds = Array.from(new Set(rows.map(r => r.user_id)))
-  const profileMap = await fetchProfilesMap(userIds)
-
-  return rows.map(r => {
-    const p = profileMap.get(r.user_id)
-    return {
-      userId: r.user_id,
-      name: p?.full_name ?? 'Unknown',
-      employeeId: p?.employee_id ?? '—',
-      flagType: 'Outside Geofence' as const,
-      severity: 'Medium' as const,
-      detail: `Clocked ${r.log_type === 'check_in' ? 'in' : 'out'} outside facility perimeter`,
-      timestamp: r.scanned_at,
-    }
-  })
-}
-
-async function buildLowAttendance(): Promise<FlaggedStaff[]> {
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-
-  const { data: shiftsData, error: shiftsErr } = await supabase
-    .from('shifts')
-    .select('user_id')
-    .eq('facility_id', FACILITY_ID)
-    .gte('starts_at', thirtyDaysAgo.toISOString())
-  if (shiftsErr) throw shiftsErr
-
-  const { data: logsData, error: logsErr } = await supabase
-    .from('attendance_logs')
-    .select('user_id')
-    .eq('facility_id', FACILITY_ID)
-    .eq('log_type', 'check_in')
-    .gte('scanned_at', thirtyDaysAgo.toISOString())
-  if (logsErr) throw logsErr
-
-  const scheduledCount = new Map<string, number>()
-  for (const s of (shiftsData as any[]) ?? []) {
-    scheduledCount.set(s.user_id, (scheduledCount.get(s.user_id) ?? 0) + 1)
-  }
-  const checkinCount = new Map<string, number>()
-  for (const l of (logsData as any[]) ?? []) {
-    checkinCount.set(l.user_id, (checkinCount.get(l.user_id) ?? 0) + 1)
-  }
-
-  const userIds = Array.from(scheduledCount.keys())
-  const profileMap = await fetchProfilesMap(userIds)
-
-  const result: FlaggedStaff[] = []
-  for (const [userId, scheduled] of scheduledCount) {
-    if (scheduled <= 0) continue
-    const checkins = checkinCount.get(userId) ?? 0
-    const rate = checkins / scheduled
-    if (rate < 0.8) {
-      const p = profileMap.get(userId)
-      result.push({
-        userId,
-        name: p?.full_name ?? 'Unknown',
-        employeeId: p?.employee_id ?? '—',
-        flagType: 'Low Attendance',
-        severity: 'High',
-        detail: `${Math.round(rate * 100)}% attendance over last 30 days (${checkins}/${scheduled} shifts)`,
-        timestamp: thirtyDaysAgo.toISOString(),
-      })
-    }
-  }
-  return result
-}
-
-// ─── Config ───────────────────────────────────────────────────────────────────
-
-const FLAG_TYPE_BADGE: Record<FlaggedStaff['flagType'], string> = {
-  'No Show':          'bg-red-100 text-red-700',
-  'Late Arrival':     'bg-orange-100 text-orange-700',
-  'Outside Geofence': 'bg-amber-100 text-amber-700',
-  'Low Attendance':   'bg-blue-100 text-blue-700',
-}
-
-const SEVERITY_BADGE: Record<FlaggedStaff['severity'], string> = {
-  High:   'bg-red-100 text-red-700',
-  Medium: 'bg-yellow-100 text-yellow-800',
-}
-
-const FLAG_RULES = [
-  {
-    icon: UserX,
-    iconClass: 'text-red-500 bg-red-50',
-    title: 'No Show',
-    desc: 'Staff member has no clock-in recorded 2 hours after their scheduled shift start.',
-  },
-  {
-    icon: Clock,
-    iconClass: 'text-orange-500 bg-orange-50',
-    title: 'Late Arrival',
-    desc: 'Clock-in time is 15 or more minutes after the scheduled shift start.',
-  },
-  {
-    icon: MapPin,
-    iconClass: 'text-amber-500 bg-amber-50',
-    title: 'Geofence Breach',
-    desc: 'GPS location at clock-in was outside the 150 m facility radius.',
-  },
-  {
-    icon: TrendingDown,
-    iconClass: 'text-blue-500 bg-blue-50',
-    title: 'Low Attendance',
-    desc: 'Staff attendance rate fell below 80% over the last 30 days.',
-  },
-]
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -299,16 +71,16 @@ export default function Flags() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
 
+  const { rules, loading: rulesLoading, error: rulesError } = useFlagRules()
+
   const [period, setPeriod]               = useState<Period>('Today')
-  const [loading, setLoading]             = useState(true)
+  const [dataLoading, setDataLoading]     = useState(true)
   const [error, setError]                 = useState<string | null>(null)
   const [flagsExpanded, setFlagsExpanded] = useState(false)
-  const [activeFilter, setActiveFilter]   = useState<FlaggedStaff['flagType'] | null>(null)
+  const [activeFilter, setActiveFilter]   = useState<RuleType | null>(null)
 
-  const [noShows,         setNoShows]         = useState<FlaggedStaff[]>([])
-  const [lateArrivals,    setLateArrivals]    = useState<FlaggedStaff[]>([])
-  const [outsideGeofence, setOutsideGeofence] = useState<FlaggedStaff[]>([])
-  const [lowAttendance,   setLowAttendance]   = useState<FlaggedStaff[]>([])
+  const [flags, setFlags]                 = useState<Flag[]>([])
+  const [employeeIds, setEmployeeIds]     = useState<Map<string, string>>(new Map())
 
   const PERIODS: { value: Period; label: string }[] = [
     { value: 'Today',      label: 'Today' },
@@ -317,27 +89,74 @@ export default function Flags() {
   ]
 
   const loadFlags = useCallback(async () => {
-    setLoading(true); setError(null)
+    if (rulesLoading) return
+    setDataLoading(true); setError(null)
     try {
-      const { start } = getPeriodRange(period)
-      const [ns, la, og, lowAtt] = await Promise.all([
-        buildNoShows(start),
-        buildLateArrivals(start),
-        buildOutsideGeofence(start),
-        buildLowAttendance(),
+      const now = new Date()
+      const { start: periodStart } = getPeriodRange(period)
+
+      const lowAttendanceLookback = rules
+        .filter(r => r.is_active && r.rule_type === 'low_attendance')
+        .map(r => r.threshold_days ?? DEFAULT_LOW_ATTENDANCE_LOOKBACK_DAYS)
+      const lookbackDays = Math.max(
+        WEEKLY_HOURS_LOOKBACK_DAYS,
+        DEFAULT_LOW_ATTENDANCE_LOOKBACK_DAYS,
+        ...lowAttendanceLookback,
+      )
+      const lookbackStart = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000)
+      const fetchStart = periodStart < lookbackStart ? periodStart : lookbackStart
+
+      const [staffRes, shiftsRes, logsRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, employee_id, role, department_id, is_active, created_at')
+          .eq('is_active', true),
+        supabase
+          .from('shifts')
+          .select('id, user_id, starts_at, ends_at, department_id, status')
+          .eq('facility_id', FACILITY_ID)
+          .gte('starts_at', fetchStart.toISOString())
+          .lte('starts_at', now.toISOString()),
+        supabase
+          .from('attendance_logs')
+          .select('id, user_id, attendance_type, scanned_at, within_geofence')
+          .eq('facility_id', FACILITY_ID)
+          .gte('scanned_at', fetchStart.toISOString()),
       ])
-      setNoShows(ns)
-      setLateArrivals(la)
-      setOutsideGeofence(og)
-      setLowAttendance(lowAtt)
+
+      if (staffRes.error) throw staffRes.error
+      if (shiftsRes.error) throw shiftsRes.error
+      if (logsRes.error) throw logsRes.error
+
+      const staffRows = (staffRes.data as any[]) ?? []
+      const staff: StaffLite[] = staffRows.map(p => ({
+        id: p.id,
+        full_name: p.full_name,
+        role: p.role,
+        department_id: p.department_id,
+        started_at: p.created_at,
+        is_active: p.is_active,
+      }))
+      const idMap = new Map<string, string>(staffRows.map(p => [p.id, p.employee_id ?? '—']))
+
+      const shifts = ((shiftsRes.data as any[]) ?? []) as ShiftLite[]
+      const logs = ((logsRes.data as any[]) ?? []) as AttendanceLite[]
+
+      const allFlags = detectFlags({ rules, staff, shifts, logs, now })
+      const periodFlags = allFlags.filter(f => new Date(f.occurred_at).getTime() >= periodStart.getTime())
+
+      setFlags(periodFlags)
+      setEmployeeIds(idMap)
     } catch {
       setError('Failed to load flags data. Please refresh.')
     } finally {
-      setLoading(false)
+      setDataLoading(false)
     }
-  }, [period])
+  }, [period, rules, rulesLoading])
 
   useEffect(() => { loadFlags() }, [loadFlags])
+
+  const loading = rulesLoading || dataLoading
 
   // Access guard
   if (!ALLOWED_ROLES.includes(role)) {
@@ -350,31 +169,39 @@ export default function Flags() {
     )
   }
 
-  const SUMMARY_CARDS: {
-    label: string; filterKey: FlaggedStaff['flagType']; icon: React.ComponentType<{ className?: string }>
-    card: string; icon_: string; count: string; items: FlaggedStaff[]
-  }[] = [
-    { label: 'No Shows',         filterKey: 'No Show',           icon: UserX,        card: 'border-red-200 bg-red-50',       icon_: 'text-red-500',    count: 'text-red-600',    items: noShows },
-    { label: 'Late Arrivals',    filterKey: 'Late Arrival',      icon: Clock,        card: 'border-orange-200 bg-orange-50', icon_: 'text-orange-500', count: 'text-orange-600', items: lateArrivals },
-    { label: 'Outside Geofence', filterKey: 'Outside Geofence',  icon: MapPin,       card: 'border-amber-200 bg-amber-50',   icon_: 'text-amber-500',  count: 'text-amber-600',  items: outsideGeofence },
-    { label: 'Low Attendance',   filterKey: 'Low Attendance',    icon: TrendingDown, card: 'border-blue-200 bg-blue-50',     icon_: 'text-blue-500',   count: 'text-blue-600',   items: lowAttendance },
-  ]
+  const activeRuleTypes = Array.from(new Set(rules.filter(r => r.is_active).map(r => r.rule_type)))
 
-  const allFlags: FlaggedStaff[] = [...noShows, ...lateArrivals, ...outsideGeofence, ...lowAttendance]
-    .sort((a, b) => {
-      const sevRank = (s: FlaggedStaff['severity']) => (s === 'High' ? 0 : 1)
-      const sevDiff = sevRank(a.severity) - sevRank(b.severity)
-      if (sevDiff !== 0) return sevDiff
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    })
+  const SUMMARY_CARDS = activeRuleTypes.map(type => {
+    const meta = RULE_META[type]
+    const typeRules = rules.filter(r => r.is_active && r.rule_type === type)
+    const worstSeverity = typeRules.reduce<Severity>(
+      (worst, r) => (SEVERITY_RANK[r.severity] > SEVERITY_RANK[worst] ? r.severity : worst),
+      'low',
+    )
+    return {
+      type,
+      label: meta?.label ?? type,
+      icon: RULE_ICONS[type] ?? AlertTriangle,
+      badgeClass: SEVERITY_STYLES[worstSeverity],
+      items: flags.filter(f => f.rule_type === type),
+    }
+  })
 
-  const canExport    = CAN_EXPORT.includes(role)
-  const filteredFlags = activeFilter ? allFlags.filter(f => f.flagType === activeFilter) : allFlags
+  const filteredFlags = activeFilter ? flags.filter(f => f.rule_type === activeFilter) : flags
+
+  const canExport = CAN_EXPORT.includes(role)
 
   function exportFlags() {
     const header = 'Staff Name,Employee ID,Flag Type,Detail,Severity,Date/Time'
     const rows = filteredFlags.map(f =>
-      [f.name, f.employeeId, f.flagType, `"${f.detail.replace(/"/g, '""')}"`, f.severity, formatDateTime(f.timestamp)].join(',')
+      [
+        f.staff_name,
+        employeeIds.get(f.user_id) ?? '—',
+        f.rule_name,
+        `"${f.detail.replace(/"/g, '""')}"`,
+        f.severity,
+        formatDateTime(f.occurred_at),
+      ].join(',')
     )
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -429,48 +256,53 @@ export default function Flags() {
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {SUMMARY_CARDS.map(({ label, filterKey, icon: Icon, card, icon_, count, items }) => {
-          const isLowAttendance = label === 'Low Attendance'
-          const isActive = activeFilter === filterKey
+        {SUMMARY_CARDS.map(({ type, label, icon: Icon, badgeClass, items }) => {
+          const isActive = activeFilter === type
           return (
             <button
-              key={label}
+              key={type}
               onClick={() => {
                 if (isActive) {
                   setActiveFilter(null)
                 } else {
-                  setActiveFilter(filterKey)
+                  setActiveFilter(type)
                   setFlagsExpanded(true)
                 }
               }}
-              className={`rounded-xl border-2 p-5 flex flex-col gap-2 text-left w-full transition-all ${card} ${isActive ? 'ring-2 ring-teal-500 ring-offset-1' : 'hover:opacity-90'}`}
+              className={`rounded-xl border-2 p-5 flex flex-col gap-2 text-left w-full transition-all ${badgeClass} ${isActive ? 'ring-2 ring-teal-500 ring-offset-1' : 'hover:opacity-90'}`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-600">{label}</p>
-                <Icon className={`w-5 h-5 ${icon_}`} />
+                <p className="text-sm font-medium">{label}</p>
+                <Icon className="w-5 h-5" />
               </div>
               {loading ? (
-                <div className="h-9 w-12 rounded bg-gray-200 animate-pulse" />
+                <div className="h-9 w-12 rounded bg-black/10 animate-pulse" />
               ) : (
-                <p className={`text-3xl font-bold ${count}`}>{items.length}</p>
+                <p className="text-3xl font-bold">{items.length}</p>
               )}
-              <p className="text-xs font-medium text-gray-400">
-                {isLowAttendance ? '(30-day)' : period}
-              </p>
+              <p className="text-xs font-medium opacity-70">{period}</p>
             </button>
           )
         })}
+        {!loading && SUMMARY_CARDS.length === 0 && (
+          <p className="col-span-2 lg:col-span-4 text-sm text-gray-400 py-4">
+            No active flag rules configured. Add rules from Admin &gt; Flag rules.
+          </p>
+        )}
       </div>
 
       {error && (
         <p className="text-sm text-red-600">{error}</p>
+      )}
+      {rulesError && (
+        <p className="text-sm text-red-600">Flag rules could not be loaded: {rulesError}</p>
       )}
 
       {/* ── Active filter pill ── */}
       {activeFilter && (
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1.5 bg-teal-100 text-teal-800 text-sm font-medium px-3 py-1 rounded-full">
-            Showing: {activeFilter}
+            Showing: {RULE_META[activeFilter]?.label ?? activeFilter}
             <button onClick={() => setActiveFilter(null)} className="text-teal-600 hover:text-teal-800 ml-0.5">
               <X className="w-3.5 h-3.5" />
             </button>
@@ -486,7 +318,7 @@ export default function Flags() {
         >
           <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400" />
-            Active Flags ({allFlags.length})
+            Active Flags ({flags.length})
           </h2>
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${flagsExpanded ? 'rotate-180' : ''}`} />
         </button>
@@ -511,30 +343,30 @@ export default function Flags() {
               <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                 <ShieldCheck className="w-12 h-12 text-teal-300 mb-4" />
                 <p className="text-sm font-medium text-gray-500">
-                  {activeFilter ? `No ${activeFilter} flags for this period` : 'No flags detected for this period'}
+                  {activeFilter ? `No ${RULE_META[activeFilter]?.label ?? activeFilter} flags for this period` : 'No flags detected for this period'}
                 </p>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {filteredFlags.map((flag, i) => (
+                {filteredFlags.map((flag) => (
                   <div
-                    key={`${flag.userId}-${flag.flagType}-${flag.timestamp}-${i}`}
+                    key={flag.key}
                     className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1.3fr_2fr_1fr_1.5fr] gap-1 md:gap-4 px-5 py-3 text-sm"
                   >
-                    <span className="font-medium text-gray-800">{flag.name}</span>
-                    <span className="text-gray-500">{flag.employeeId}</span>
+                    <span className="font-medium text-gray-800">{flag.staff_name}</span>
+                    <span className="text-gray-500">{employeeIds.get(flag.user_id) ?? '—'}</span>
                     <span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${FLAG_TYPE_BADGE[flag.flagType]}`}>
-                        {flag.flagType}
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700 border-gray-200">
+                        {flag.rule_name}
                       </span>
                     </span>
                     <span className="text-gray-600">{flag.detail}</span>
                     <span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SEVERITY_BADGE[flag.severity]}`}>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border capitalize ${SEVERITY_STYLES[flag.severity]}`}>
                         {flag.severity}
                       </span>
                     </span>
-                    <span className="text-gray-400 text-xs md:text-sm">{formatDateTime(flag.timestamp)}</span>
+                    <span className="text-gray-400 text-xs md:text-sm">{formatDateTime(flag.occurred_at)}</span>
                   </div>
                 ))}
               </div>
@@ -553,22 +385,31 @@ export default function Flags() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100">
-          {FLAG_RULES.map(({ icon: Icon, iconClass, title, desc }) => (
-            <div
-              key={title}
-              className="bg-white px-5 py-4 flex items-start gap-3"
-            >
-              <div className={`rounded-lg p-2 flex-shrink-0 ${iconClass}`}>
-                <Icon className="w-4 h-4" />
+          {rules.filter(r => r.is_active).map((rule) => {
+            const meta = RULE_META[rule.rule_type]
+            const Icon = RULE_ICONS[rule.rule_type] ?? AlertTriangle
+            return (
+              <div
+                key={rule.id}
+                className="bg-white px-5 py-4 flex items-start gap-3"
+              >
+                <div className={`rounded-lg p-2 flex-shrink-0 ${SEVERITY_STYLES[rule.severity]}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{rule.rule_name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                    {rule.description || meta?.blurb || (meta ? meta.describe(rule) : '')}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{title}</p>
-                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                  {desc}
-                </p>
-              </div>
+            )
+          })}
+          {!rulesLoading && rules.filter(r => r.is_active).length === 0 && (
+            <div className="bg-white px-5 py-4 text-sm text-gray-400">
+              No active flag rules configured.
             </div>
-          ))}
+          )}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { roleLabel } from '../lib/roles'
 import { useAuth } from '../hooks/useAuth'
 import { QRCodeSVG } from 'qrcode.react'
+import FlagRulesSection from '../components/FlagRulesSection'
 import {
   Settings, UserPlus, Building2, QrCode, X, Loader2,
   AlertCircle, CheckCircle2, Copy, RefreshCw, Trash2,
@@ -196,6 +197,7 @@ export default function Admin() {
       <DepartmentsSection />
       <QRCodesSection />
       <FeedbackSection />
+      {role === 'super_admin' && <FlagRulesSection orgId={currentUser?.facility_id ?? null} />}
     </div>
   )
 }
