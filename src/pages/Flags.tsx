@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
-  AlertTriangle, ShieldCheck, UserX, Clock, MapPin, TrendingDown, Info, Shield,
-  Download, ChevronDown, X, CalendarX, LogOut, Hourglass, Timer,
+  AlertTriangle, ShieldCheck, UserX, Clock, TrendingDown, Info, Shield,
+  Download, ChevronDown, X, Hourglass, Timer, WifiOff,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabaseClient'
 import { useFlagRules, RULE_META, SEVERITY_STYLES, type RuleType, type Severity } from '../lib/flagRules'
-import { detectFlags, type StaffLite, type ShiftLite, type AttendanceLite, type Flag } from '../lib/flagEngine'
+import { detectFlags, type StaffLite, type ShiftLite, type AttendanceLite, type HeartbeatLite, type Flag } from '../lib/flagEngine'
 
 // ─── Access control ───────────────────────────────────────────────────────────
 
@@ -24,11 +24,9 @@ const RULE_ICONS: Record<RuleType, React.ComponentType<{ className?: string }>> 
   late_arrival:            Clock,
   no_show:                 UserX,
   low_attendance:          TrendingDown,
-  geofence_breach:         MapPin,
-  unscheduled_clockin:     CalendarX,
-  missing_clockout:        LogOut,
   early_departure:         Hourglass,
   weekly_hours_shortfall:  Timer,
+  monitoring_gap:          WifiOff,
   custom:                  AlertTriangle,
 }
 
@@ -142,7 +140,22 @@ export default function Flags() {
       const shifts = ((shiftsRes.data as any[]) ?? []) as ShiftLite[]
       const logs = ((logsRes.data as any[]) ?? []) as AttendanceLite[]
 
-      const allFlags = detectFlags({ rules, staff, shifts, logs, now })
+      const clockedInUserIds = Array.from(
+        new Set(logs.filter(l => l.attendance_type === 'clock_in').map(l => l.user_id))
+      )
+
+      let heartbeats: HeartbeatLite[] = []
+      if (clockedInUserIds.length) {
+        const heartbeatsRes = await supabase
+          .from('device_heartbeats')
+          .select('id, user_id, pinged_at')
+          .in('user_id', clockedInUserIds)
+          .gte('pinged_at', periodStart.toISOString())
+        if (heartbeatsRes.error) throw heartbeatsRes.error
+        heartbeats = ((heartbeatsRes.data as any[]) ?? []) as HeartbeatLite[]
+      }
+
+      const allFlags = detectFlags({ rules, staff, shifts, logs, heartbeats, now })
       const periodFlags = allFlags.filter(f => new Date(f.occurred_at).getTime() >= periodStart.getTime())
 
       setFlags(periodFlags)

@@ -33,6 +33,12 @@ export interface AttendanceLite {
   distance_m?: number | null
 }
 
+export interface HeartbeatLite {
+  id: string
+  user_id: string
+  pinged_at: string
+}
+
 export interface Flag {
   key: string
   rule_id: string
@@ -60,9 +66,10 @@ export function detectFlags(input: {
   staff: StaffLite[]
   shifts: ShiftLite[]
   logs: AttendanceLite[]
+  heartbeats: HeartbeatLite[]
   now?: Date
 }): Flag[] {
-  const { rules, staff, shifts, logs } = input
+  const { rules, staff, shifts, logs, heartbeats } = input
   const now = input.now ?? new Date()
   const byId = new Map(staff.map((s) => [s.id, s]))
   const flags: Flag[] = []
@@ -127,42 +134,6 @@ export function detectFlags(input: {
         push(early, person, outLog.scanned_at, `Clocked out ${earlyBy} min before shift end`, `early:${shift.id}`)
       }
     }
-
-    const missingOut = resolveRule(rules, 'missing_clockout', person)
-    if (missingOut && inLog && !outLog) {
-      const cutoff = end + (missingOut.threshold_minutes ?? 60) * MIN
-      if (now.getTime() > cutoff) {
-        push(missingOut, person, shift.ends_at, 'Shift ended with no clock-out', `noout:${shift.id}`)
-      }
-    }
-  }
-
-  // --- log-anchored rules ---------------------------------------------
-  for (const log of logs) {
-    const person = byId.get(log.user_id)
-    if (!person) continue
-
-    const geo = resolveRule(rules, 'geofence_breach', person)
-    if (geo && log.attendance_type === 'clock_in') {
-      const beyond =
-        log.distance_m != null
-          ? log.distance_m > (geo.threshold_meters ?? 150)
-          : log.within_geofence === false
-      if (beyond) {
-        const dist = log.distance_m != null ? `${Math.round(log.distance_m)} m from site` : 'Outside site radius'
-        push(geo, person, log.scanned_at, dist, `geo:${log.id}`)
-      }
-    }
-
-    const unscheduled = resolveRule(rules, 'unscheduled_clockin', person)
-    if (unscheduled && log.attendance_type === 'clock_in') {
-      const hasShift = shifts.some(
-        (s) => s.user_id === log.user_id && sameDay(s.starts_at, log.scanned_at)
-      )
-      if (!hasShift) {
-        push(unscheduled, person, log.scanned_at, 'Clock-in with no shift scheduled', `unsched:${log.id}`)
-      }
-    }
   }
 
   // --- person-anchored rules ------------------------------------------
@@ -214,6 +185,50 @@ export function detectFlags(input: {
           `${hours.toFixed(1)} of ${target} verified hours this week`,
           `weekly:${person.id}`
         )
+      }
+    }
+
+    const gapRule = resolveRule(rules, 'monitoring_gap', person)
+    if (gapRule) {
+      const threshold = gapRule.threshold_minutes ?? 30
+      const personLogs = logs
+        .filter((l) => l.user_id === person.id)
+        .sort((a, b) => t(a.scanned_at) - t(b.scanned_at))
+
+      const sessions: { start: number; end: number }[] = []
+      let sessionStart: number | null = null
+      for (const l of personLogs) {
+        if (l.attendance_type === 'clock_in') {
+          sessionStart = t(l.scanned_at)
+        } else if (sessionStart != null) {
+          sessions.push({ start: sessionStart, end: t(l.scanned_at) })
+          sessionStart = null
+        }
+      }
+      if (sessionStart != null) {
+        sessions.push({ start: sessionStart, end: now.getTime() })
+      }
+
+      for (const session of sessions) {
+        const pings = heartbeats
+          .filter((h) => h.user_id === person.id && t(h.pinged_at) >= session.start && t(h.pinged_at) <= session.end)
+          .sort((a, b) => t(a.pinged_at) - t(b.pinged_at))
+
+        const marks = [session.start, ...pings.map((p) => t(p.pinged_at)), session.end]
+        let maxGap = 0
+        for (let i = 1; i < marks.length; i++) {
+          maxGap = Math.max(maxGap, marks[i] - marks[i - 1])
+        }
+        const maxGapMin = Math.round(maxGap / MIN)
+        if (maxGapMin > threshold) {
+          push(
+            gapRule,
+            person,
+            new Date(session.end).toISOString(),
+            `Phone unreachable for ${maxGapMin} min while on shift`,
+            `gap:${person.id}:${session.start}`
+          )
+        }
       }
     }
   }

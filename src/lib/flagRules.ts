@@ -8,11 +8,9 @@ export type RuleType =
   | 'late_arrival'
   | 'no_show'
   | 'low_attendance'
-  | 'geofence_breach'
-  | 'unscheduled_clockin'
-  | 'missing_clockout'
   | 'early_departure'
   | 'weekly_hours_shortfall'
+  | 'monitoring_gap'
   | 'custom'
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
@@ -114,29 +112,6 @@ export const RULE_META: Record<RuleType, RuleMeta> = {
     ],
     describe: (r) => `Below ${r.threshold_percent ?? 0}% over ${r.threshold_days ?? 0} days`,
   },
-  geofence_breach: {
-    label: 'Outside geofence',
-    blurb: 'How far from the site a scan can be recorded before it is flagged.',
-    fields: [
-      { key: 'threshold_meters', label: 'Allowed radius (metres)', min: 20, max: 2000,
-        help: 'Overrides the site radius for flagging purposes.' },
-    ],
-    describe: (r) => `Scan recorded beyond ${r.threshold_meters ?? 0} m`,
-  },
-  unscheduled_clockin: {
-    label: 'Unscheduled clock-in',
-    blurb: 'Flags attendance on a day with no shift assigned. No threshold to set.',
-    fields: [],
-    describe: () => 'Any clock-in with no scheduled shift',
-  },
-  missing_clockout: {
-    label: 'Missing clock-out',
-    blurb: 'How long after shift end an open attendance record is flagged.',
-    fields: [
-      { key: 'threshold_minutes', label: 'Window after shift end (minutes)', min: 15, max: 720 },
-    ],
-    describe: (r) => `Still clocked in ${hrs(r.threshold_minutes)} after shift end`,
-  },
   early_departure: {
     label: 'Early departure',
     blurb: 'How early a clock-out may be before the scheduled shift end.',
@@ -153,6 +128,15 @@ export const RULE_META: Record<RuleType, RuleMeta> = {
         help: 'Ethiopian labour law sets 48 hours.' },
     ],
     describe: (r) => `Under ${r.threshold_hours ?? 0} verified hours in a week`,
+  },
+  monitoring_gap: {
+    label: 'Monitoring gap',
+    blurb: 'How long a phone can go unreachable during a shift before it is flagged.',
+    fields: [
+      { key: 'threshold_minutes', label: 'Silence threshold (minutes)', min: 5, max: 240,
+        help: 'Longest gap allowed between heartbeat pings while clocked in.' },
+    ],
+    describe: (r) => `Phone unreachable for ${r.threshold_minutes ?? 0} min while on shift`,
   },
   custom: {
     label: 'Custom rule',
